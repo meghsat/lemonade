@@ -794,6 +794,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#4-how-do-i-uninstall-lemonade-server-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. How do I uninstall Lemonade Server? (Windows)
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1138,6 +1147,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#4-how-do-i-uninstall-lemonade-server-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. How do I uninstall Lemonade Server? (Windows)
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1386,6 +1404,21 @@
 <p>For more information on Hybrid/NPU Support, see the section <a href="#hybrid--npu-specific-questions">Hybrid/NPU</a>.</p>
 <h3 id="3-is-linux-supported">3. <strong>Is Linux supported?</strong></h3>
 <p>Yes! To install Lemonade on Linux, visit https://lemonade-server.ai/ and check the "Developer Setup" section for installation instructions. Visit the <a href="https://github.com/lemonade-sdk/lemonade?tab=readme-ov-file#supported-configurations">Supported Configurations</a> section to see the support matrix for CPU, GPU, and NPU.</p>
+<h3 id="4-how-do-i-uninstall-lemonade-server-windows">4. <strong>How do I uninstall Lemonade Server? (Windows)</strong></h3>
+<p>To completely uninstall Lemonade Server from your system, follow these steps:</p>
+<p><strong>Step 1: Remove cached files</strong>
+   - Open File Explorer and navigate to <code>%USERPROFILE%\.cache</code>
+   - Delete the <code>lemonade</code> folder if it exists
+   - [Optional] To remove downloaded models, delete the <code>huggingface</code> folder</p>
+<p><strong>Step 2: Remove from PATH environment variable</strong>
+   - Press <code>Win + I</code> to open Windows Settings
+   - Search for "environment variables" and select "Edit environment variables for your account"
+   - Find "Path" in the list and click "Edit"
+   - Look for the entry containing <code>lemonade_server\bin</code> and select it
+   - Click "Delete" then "OK"</p>
+<p><strong>Step 3: Delete installation folder</strong>
+   - Navigate to <code>%LOCALAPPDATA%\lemonade_server</code>
+   - Delete the entire <code>lemonade_server</code> folder</p>
 <h2 id="models-performance">Models &amp; Performance</h2>
 <h3 id="1-what-models-are-supported">1. <strong>What models are supported?</strong></h3>
 <p>Lemonade supports a wide range of LLMs including LLaMA, DeepSeek, Qwen, Gemma, Phi, and gpt-oss. Most GGUF models can also be added to Lemonade Server by users using the Model Manager interface.</p>
