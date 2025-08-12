@@ -888,6 +888,9 @@
 <p><strong>Result:</strong> This will generate a quantized safetensors model in your output directory.</p>
 <h2 id="step-2-export-to-onnx-for-ryzen-ai">Step 2: Export to ONNX for Ryzen AI</h2>
 <p>Lemonade handles export and device specialization automatically. It detects model type and target device, exporting optimally for AMD hardware.</p>
+<p>Install support in Lemonade with:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>lemonade-sdk<span class="o">[</span>dev,oga-ryzenai,model-generate<span class="o">]</span><span class="w"> </span>--extra-index-url<span class="w"> </span>https://pypi.amd.com/simple
+</code></pre></div>
 <h3 id="usage">Usage</h3>
 <div class="highlight"><pre><span></span><code>lemonade<span class="w"> </span>-i<span class="w"> </span>&lt;quantized_checkpoint&gt;<span class="w"> </span>oga-load<span class="w"> </span>--device<span class="w"> </span>&lt;hybrid<span class="p">|</span>npu&gt;<span class="w"> </span>--dtype<span class="w"> </span>int4<span class="w"> </span><span class="o">[</span>options<span class="o">]</span>
 </code></pre></div>
