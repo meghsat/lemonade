@@ -1051,11 +1051,6 @@
 <p>You can also prevent the server from showing a system tray icon by using the <code>--no-tray</code> flag:</p>
 <div class="highlight"><pre><span></span><code>lemonade-server<span class="w"> </span>serve<span class="w"> </span>--no-tray
 </code></pre></div>
-<p>Regardless of how Lemonade Server is installed or launched, it can read its host,
-port, log level, Llama.cpp backend, and context size from environment variables.
-Set <code>LEMONADE_HOST</code>, <code>LEMONADE_PORT</code>, <code>LEMONADE_LOG_LEVEL</code>, <code>LEMONADE_LLAMACPP</code>,
-or <code>LEMONADE_CTX_SIZE</code> before launching <code>lemonade-server</code> by any method to
-override the default settings without editing the startup script.</p>
 <p>You can also run the server as a background process using a subprocess or any preferred method.</p>
 <p>To stop the server, you may use the <code>lemonade-server stop</code> command, or simply terminate the process you created by keeping track of its PID. Please do not run the <code>lemonade-server stop</code> command if your application has not started the server, as the server may be used by other applications.</p>
 <h3 id="silent-installation">Silent Installation</h3>
