@@ -869,10 +869,9 @@
  - <a href="#maintenance-and-troubleshooting">Maintenance and Troubleshooting</a>
     - <a href="#check-your-runners-status">Check your runner's status</a>
     - <a href="#actions-are-failing-unexpectedly">Actions are failing unexpectedly</a>
-    - <a href="#take-a-laptop-off-nimbys">Take a laptop off NIMBYS</a>
+    - <a href="#take-a-laptop-offline">Take a laptop offline</a>
 - <a href="#creating-workflows">Creating Workflows</a>
-    - <a href="#capabilities-and-limitations">Capabilities and Limitations</a>
-    - <a href="#workflow-examples">Workflow Examples</a></p>
+    - <a href="#capabilities-and-limitations">Capabilities and Limitations</a></p>
 <h2 id="what-are-self-hosted-runners">What are Self-Hosted Runners?</h2>
 <p>A "runner" is a computer that has installed GitHub's runner software, which runs a service that makes the laptop available to run GitHub Actions. In turn, Actions are defined by Workflows, which specify when the Action should run (manual trigger, CI, CD, etc.) and what the Action does (run tests, build packages, run an experiment, etc.). </p>
 <p>You can read about all this here: <a href="https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners">GitHub: About self-hosted runners</a>.</p>
@@ -984,10 +983,7 @@
 <li>Only map a workflow with <code>runs on: stx</code> if it actually requires Ryzen AI compute. If a step in your workflow can use generic compute (e.g., running a Hugging Face LLM on CPU), put that step on a generic non-NIMBYS runner like <code>runs on: windows-latest</code>.</li>
 <li>Be very considerate about installing software on to the runners:<ul>
 <li>Installing software into the CWD (e.g., a path of <code>.\</code>) is always ok, because that will end up in <code>C:\actions-runner\_work\REPO</code>, which is always wiped between tests.</li>
-<li>Installing software into <code>AppData</code>, <code>Program Files</code>, etc. is not advisable because that software will persist across tests. See the <a href="#npu-runner-setup">setup</a> section to see which software is already expected on the system.<ul>
-<li>⚠️ NOTE: GAIA tests do install some software, see <a href="#workflow-examples">Workflow Examples</a> for an example of why these specific cases are ok.</li>
-</ul>
-</li>
+<li>Installing software into <code>AppData</code>, <code>Program Files</code>, etc. is not advisable because that software will persist across tests. See the <a href="#npu-runner-setup">setup</a> section to see which software is already expected on the system.</li>
 </ul>
 </li>
 <li>Always create new conda environments in the CWD, for example <code>conda create -p .\my-env</code>.<ul>
@@ -1027,7 +1023,7 @@
 </li>
 </ul>
 <h1 id="license">License</h1>
-<p><a href="../LICENSE.md">MIT License</a></p>
+<p><a href="../LICENSE">Apache 2.0 License</a></p>
 <p>Copyright(C) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
 SPDX-License-Identifier: MIT</p>
 
