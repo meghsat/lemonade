@@ -19,7 +19,7 @@ class Bench(Tool, ABC):
     Abstract parent class for tools that benchmark the performance of the generate()
     method of an LLM.
     """
-
+                
     def __init__(self, monitor_message="Benchmarking LLM"):
         super().__init__(monitor_message)
 
