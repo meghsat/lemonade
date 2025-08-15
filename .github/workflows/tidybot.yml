@@ -18,7 +18,7 @@ jobs:
         id: check
         run: |
           COMMENT="${{ github.event.comment.body }}"
-          if [[ "$COMMENT" =~ @tidybot ]]; then
+          if [[ "$COMMENT" =~ ^\!tidybot ]]; then
             echo "run_tidy=true" >> $GITHUB_OUTPUT
           else
             echo "run_tidy=false" >> $GITHUB_OUTPUT
@@ -50,3 +50,11 @@ jobs:
           commit_message: "chore: format code with Black via tidybot"
           branch: ${{ github.event.pull_request.head.ref }}
           skip_fetch: true
+
+      - name: Post comment back to PR
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            ✅ !tidybot has formatted this PR with Black.
