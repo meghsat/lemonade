@@ -18,20 +18,36 @@ jobs:
         id: check
         run: |
           COMMENT="${{ github.event.comment.body }}"
+          echo "Comment body: $COMMENT"
           if [[ "$COMMENT" =~ ^\!tidybot ]]; then
             echo "run_tidy=true" >> $GITHUB_OUTPUT
+            echo "Command detected, will run tidybot"
           else
             echo "run_tidy=false" >> $GITHUB_OUTPUT
+            echo "Command not detected, skipping"
           fi
 
       - name: Exit if not triggered
         if: ${{ steps.check.outputs.run_tidy == 'false' }}
         run: echo "Not triggered, exiting" && exit 0
 
+      - name: Get PR details
+        id: pr
+        run: |
+          PR_URL="${{ github.event.issue.pull_request.url }}"
+          PR_DATA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$PR_URL")
+          PR_HEAD_REF=$(echo "$PR_DATA" | jq -r '.head.ref')
+          PR_HEAD_SHA=$(echo "$PR_DATA" | jq -r '.head.sha')
+          echo "head_ref=$PR_HEAD_REF" >> $GITHUB_OUTPUT
+          echo "head_sha=$PR_HEAD_SHA" >> $GITHUB_OUTPUT
+          echo "PR branch: $PR_HEAD_REF"
+          echo "PR head SHA: $PR_HEAD_SHA"
+
       - name: Check out PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ steps.pr.outputs.head_ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -48,7 +64,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: format code with Black via tidybot"
-          branch: ${{ github.event.pull_request.head.ref }}
+          branch: ${{ steps.pr.outputs.head_ref }}
           skip_fetch: true
 
       - name: Post comment back to PR
