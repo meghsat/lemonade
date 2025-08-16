@@ -85,7 +85,10 @@ def identify_hip_id() -> str:
     hip_devices = get_hip_devices()
     logging.debug(f"HIP devices found: {hip_devices}")
     if len(hip_devices) == 0:
-        raise ValueError("No HIP devices found when identifying HIP ID")
+        logging.debug(
+            "No HIP devices found when identifying HIP ID. Falling back to 0."
+        )
+        return 0
 
     # Identify HIP devices that are compatible with our ROCm builds
     rocm_devices = []
