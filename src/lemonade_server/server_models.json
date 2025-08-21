@@ -324,5 +324,16 @@
         "recipe": "llamacpp",
         "suggested": true,
         "labels": ["reasoning","hot"]
+    },
+    "Llama-3.2-1B-FLM": {
+        "checkpoint": "llama3.2:1b",
+        "recipe": "flm",
+        "suggested": true
+    },
+    "Gemma-3-4b-it-FLM": {
+        "checkpoint": "gemma3:4b",
+        "recipe": "flm",
+        "suggested": true,
+        "labels": ["hot","vision"]
     }
 }

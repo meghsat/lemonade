@@ -457,6 +457,12 @@ class Install:
             choices=["rocm", "vulkan"],
         )
 
+        parser.add_argument(
+            "--flm",
+            action="store_true",
+            help="Install FLM (FastFlowLM) for running local language models",
+        )
+
         return parser
 
     @staticmethod
@@ -758,19 +764,30 @@ class Install:
 
         install_llamacpp(backend)
 
+    @staticmethod
+    def _install_flm():
+        """
+        Install FLM (FastFlowLM) for running local language models.
+        """
+
+        from lemonade.tools.flm.utils import install_flm
+
+        install_flm()
+
     def run(
         self,
         ryzenai: Optional[str] = None,
         build_model: Optional[str] = None,
         quark: Optional[str] = None,
         llamacpp: Optional[str] = None,
+        flm: bool = False,
         yes: bool = False,
         token: Optional[str] = None,
     ):
-        if ryzenai is None and quark is None and llamacpp is None:
+        if ryzenai is None and quark is None and llamacpp is None and not flm:
             raise ValueError(
                 "You must select something to install, "
-                "for example `--ryzenai`, `--quark`, or `--llamacpp`"
+                "for example `--ryzenai`, `--quark`, `--llamacpp`, or `--flm`"
             )
 
         if ryzenai is not None:
@@ -781,6 +798,9 @@ class Install:
 
         if llamacpp is not None:
             self._install_llamacpp(llamacpp)
+
+        if flm:
+            self._install_flm()
 
 
 def main():

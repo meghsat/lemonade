@@ -1,6 +1,7 @@
 import json
 import os
-from typing import Optional
+import subprocess
+from typing import Optional, List
 import shutil
 import huggingface_hub
 from importlib.metadata import distributions
@@ -10,6 +11,10 @@ from lemonade.tools.llamacpp.utils import parse_checkpoint, download_gguf
 from lemonade.common.network import custom_snapshot_download
 
 USER_MODELS_FILE = os.path.join(DEFAULT_CACHE_DIR, "user_models.json")
+
+
+# Import FLM utilities from the new location
+from lemonade.tools.flm.utils import get_flm_installed_models, is_flm_available
 
 
 class ModelManager:
@@ -80,12 +85,23 @@ class ModelManager:
         """
         downloaded_models = {}
         downloaded_checkpoints = self.downloaded_hf_checkpoints
+
+        # Get FLM installed model checkpoints
+        flm_installed_checkpoints = get_flm_installed_models()
+
         for model in self.supported_models:
-            base_checkpoint = parse_checkpoint(
-                self.supported_models[model]["checkpoint"]
-            )[0]
-            if base_checkpoint in downloaded_checkpoints:
-                downloaded_models[model] = self.supported_models[model]
+            model_info = self.supported_models[model]
+
+            # Handle FLM models
+            if model_info.get("recipe") == "flm":
+                if model_info["checkpoint"] in flm_installed_checkpoints:
+                    downloaded_models[model] = model_info
+            else:
+                # Handle other models (existing logic)
+                base_checkpoint = parse_checkpoint(model_info["checkpoint"])[0]
+                if base_checkpoint in downloaded_checkpoints:
+                    downloaded_models[model] = model_info
+
         return downloaded_models
 
     @property
@@ -177,7 +193,19 @@ class ModelManager:
                 gguf_model_config = PullConfig(**self.supported_models[model])
             print(f"Downloading {model} ({checkpoint_to_download})")
 
-            if "gguf" in checkpoint_to_download.lower():
+            # Handle FLM models
+            if self.supported_models[model].get("recipe") == "flm":
+                try:
+                    command = ["flm", "pull", checkpoint_to_download]
+                    subprocess.run(
+                        command, check=True, encoding="utf-8", errors="replace"
+                    )
+                    print(f"Successfully downloaded FLM model: {model}")
+                except subprocess.CalledProcessError as e:
+                    raise RuntimeError(
+                        f"Failed to download FLM model {model}: {e}"
+                    ) from e
+            elif "gguf" in checkpoint_to_download.lower():
                 download_gguf(
                     gguf_model_config.checkpoint,
                     gguf_model_config.mmproj,
@@ -217,6 +245,7 @@ class ModelManager:
             "onnxruntime-vitisai" in installed_packages
             and "onnxruntime-genai-directml-ryzenai" in installed_packages
         )
+
         filtered = {}
         for model, value in models.items():
             if value.get("recipe") == "oga-hybrid":
@@ -225,6 +254,12 @@ class ModelManager:
             else:
                 filtered[model] = value
         return filtered
+
+    def _is_flm_available(self) -> bool:
+        """
+        Check if FLM is available on the system.
+        """
+        return is_flm_available()
 
     def delete_model(self, model_name: str):
         """
@@ -236,8 +271,19 @@ class ModelManager:
                 f"{list(self.supported_models.keys())}"
             )
 
-        checkpoint = self.supported_models[model_name]["checkpoint"]
+        model_info = self.supported_models[model_name]
+        checkpoint = model_info["checkpoint"]
         print(f"Deleting {model_name} ({checkpoint})")
+
+        # Handle FLM models
+        if model_info.get("recipe") == "flm":
+            try:
+                command = ["flm", "remove", checkpoint]
+                subprocess.run(command, check=True, encoding="utf-8", errors="replace")
+                print(f"Successfully deleted FLM model: {model_name}")
+                return
+            except subprocess.CalledProcessError as e:
+                raise ValueError(f"Failed to delete FLM model {model_name}: {e}") from e
 
         # Handle GGUF models that have the format "checkpoint:variant"
         base_checkpoint = parse_checkpoint(checkpoint)[0]

@@ -48,6 +48,7 @@ from openai.types.responses import (
 import lemonade.api as lemonade_api
 from lemonade.tools.server.wrapped_server import WrappedServer
 from lemonade.tools.server.llamacpp import LlamaServer
+from lemonade.tools.server.flm import FlmServer
 from lemonade.tools.server.tool_calls import extract_tool_calls, get_tool_call_pattern
 from lemonade.tools.server.webapp import get_webapp_html
 from lemonade.tools.server.utils.port import lifespan
@@ -517,7 +518,7 @@ class Server:
         # Load the model if it's different from the currently loaded one
         await self.load_llm(lc)
 
-        if self.llm_loaded.recipe == "llamacpp":
+        if self.llm_loaded.recipe == "llamacpp" or self.llm_loaded.recipe == "flm":
             return self.wrapped_server.completion(completion_request)
 
         # Check if the model supports reasoning
@@ -652,7 +653,7 @@ class Server:
         # Load the model if it's different from the currently loaded one
         await self.load_llm(lc)
 
-        if self.llm_loaded.recipe == "llamacpp":
+        if self.llm_loaded.recipe == "llamacpp" or self.llm_loaded.recipe == "flm":
             return self.wrapped_server.chat_completion(chat_completion_request)
 
         # Convert chat messages to text using the model's chat template
@@ -1146,7 +1147,9 @@ class Server:
             self.input_tokens = len(input_ids[0])
 
         # For non-llamacpp recipes, truncate inputs to ctx_size if needed
-        if self.llm_loaded.recipe != "llamacpp" and self.input_tokens > self.ctx_size:
+        if (
+            self.llm_loaded.recipe != "llamacpp" and self.llm_loaded.recipe != "flm"
+        ) and self.input_tokens > self.ctx_size:
             # Truncate input ids
             truncate_amount = self.input_tokens - self.ctx_size
             input_ids = input_ids[: self.ctx_size]
@@ -1280,8 +1283,10 @@ class Server:
         """
         Send performance statistics to the client.
         """
-        # If using llama server, get telemetry from the telemetry instance
-        if self.llm_loaded and self.llm_loaded.recipe == "llamacpp":
+        # If using wrapped server, get telemetry from the telemetry instance
+        if self.llm_loaded and (
+            self.llm_loaded.recipe == "llamacpp" or self.llm_loaded.recipe == "flm"
+        ):
             return self.wrapped_server.telemetry.get_telemetry_data()
 
         # For built-in server, use the existing telemetry
@@ -1461,8 +1466,8 @@ class Server:
             ):
                 if (
                     self.llm_loaded.recipe == "llamacpp"
-                    and self.wrapped_server.process.poll()
-                ):
+                    or self.llm_loaded.recipe == "flm"
+                ) and self.wrapped_server.process.poll():
                     # wrapped server process has gone away for some reason, so we should
                     # proceed with loading to get it back
                     pass
@@ -1480,6 +1485,14 @@ class Server:
             try:
                 if config_to_use.recipe == "llamacpp":
                     self.wrapped_server = LlamaServer(self.llamacpp_backend)
+                    self.wrapped_server.load(
+                        model_config=config_to_use,
+                        ctx_size=self.ctx_size,
+                        do_not_upgrade=True,
+                    )
+
+                elif config_to_use.recipe == "flm":
+                    self.wrapped_server = FlmServer()
                     self.wrapped_server.load(
                         model_config=config_to_use,
                         ctx_size=self.ctx_size,
@@ -1522,7 +1535,7 @@ class Server:
                 for _ in range(self.max_concurrent_generations):
                     await self._generate_semaphore.acquire()
 
-            if self.llm_loaded.recipe == "llamacpp":
+            if self.llm_loaded.recipe == "llamacpp" or self.llm_loaded.recipe == "flm":
                 self.wrapped_server.process.terminate()
 
             self.llm_loaded = None

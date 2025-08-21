@@ -13,6 +13,7 @@ from lemonade_server.pydantic_models import (
 )
 
 from lemonade.tools.server.wrapped_server import WrappedServerTelemetry, WrappedServer
+from lemonade.tools.flm.utils import install_flm
 from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
 
@@ -55,8 +56,11 @@ class FlmServer(WrappedServer):
         return f"http://localhost:{self.port}/v1"
 
     def install_server(self):
-        # TODO
-        pass
+        """
+        Check if FLM is installed and at minimum version.
+        If not, download and run the GUI installer, then wait for completion.
+        """
+        install_flm()
 
     def download_model(
         self, config_checkpoint, config_mmproj=None, do_not_upgrade=False
