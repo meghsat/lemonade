@@ -655,7 +655,7 @@ def main():
             port=args.port,
             host=args.host,
             log_level=args.log_level,
-            tray=not args.no_tray,
+            tray=False,
             llamacpp_backend=args.llamacpp,
             ctx_size=args.ctx_size,
         )
