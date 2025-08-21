@@ -14,7 +14,11 @@ USER_MODELS_FILE = os.path.join(DEFAULT_CACHE_DIR, "user_models.json")
 
 
 # Import FLM utilities from the new location
-from lemonade.tools.flm.utils import get_flm_installed_models, is_flm_available
+from lemonade.tools.flm.utils import (
+    get_flm_installed_models,
+    is_flm_available,
+    install_flm,
+)
 
 
 class ModelManager:
@@ -195,6 +199,13 @@ class ModelManager:
 
             # Handle FLM models
             if self.supported_models[model].get("recipe") == "flm":
+                # Check if FLM is available, and install it if not
+                if not is_flm_available():
+                    print(
+                        "FLM is not installed or not at the minimum required version. Installing FLM..."
+                    )
+                    install_flm()
+
                 try:
                     command = ["flm", "pull", checkpoint_to_download]
                     subprocess.run(
@@ -204,6 +215,12 @@ class ModelManager:
                 except subprocess.CalledProcessError as e:
                     raise RuntimeError(
                         f"Failed to download FLM model {model}: {e}"
+                    ) from e
+                except FileNotFoundError as e:
+                    # This shouldn't happen after install_flm(), but just in case
+                    raise RuntimeError(
+                        f"FLM command not found even after installation attempt. "
+                        f"Please manually install FLM using 'lemonade-install --flm'."
                     ) from e
             elif "gguf" in checkpoint_to_download.lower():
                 download_gguf(
