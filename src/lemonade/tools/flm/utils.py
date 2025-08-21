@@ -65,9 +65,7 @@ def refresh_environment():
                 r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
             ) as key:
                 path_value, _ = winreg.QueryValueEx(key, "PATH")
-                os.environ["PATH"] = (
-                    path_value + ";" + os.environ.get("PATH", "")
-                )
+                os.environ["PATH"] = path_value + ";" + os.environ.get("PATH", "")
         except Exception as e:  # pylint: disable=broad-except
             logging.debug("Could not refresh PATH from registry: %s", e)
 
@@ -163,9 +161,7 @@ def install_flm():
         for attempt in range(max_retries):
             new_version = check_flm_version()
             if new_version and version_compare(new_version, FLM_MINIMUM_VERSION):
-                logging.info(
-                    "FLM v%s successfully installed and verified", new_version
-                )
+                logging.info("FLM v%s successfully installed and verified", new_version)
                 return
 
             if attempt < max_retries - 1:
@@ -241,4 +237,6 @@ def get_flm_installed_models() -> List[str]:
 def is_flm_available() -> bool:
     """Check if FLM is available and meets minimum version requirements."""
     current_version = check_flm_version()
-    return current_version is not None and version_compare(current_version, FLM_MINIMUM_VERSION)
+    return current_version is not None and version_compare(
+        current_version, FLM_MINIMUM_VERSION
+    )
