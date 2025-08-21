@@ -208,13 +208,49 @@ class ModelManager:
 
                 try:
                     command = ["flm", "pull", checkpoint_to_download]
-                    subprocess.run(
-                        command, check=True, encoding="utf-8", errors="replace"
+                    print(f"Starting download of FLM model: {model} (this may take several minutes for large models)")
+                    
+                    # Use Popen for better control and output handling
+                    process = subprocess.Popen(
+                        command, 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        encoding="utf-8", 
+                        errors="replace"
                     )
-                    print(f"Successfully downloaded FLM model: {model}")
+                    
+                    # Read output line by line to provide progress feedback
+                    while True:
+                        output = process.stdout.readline()
+                        if output == '' and process.poll() is not None:
+                            break
+                        if output:
+                            stripped_output = output.strip()
+                            # Only show progress lines and important status messages
+                            if stripped_output and ("[FLM]  Downloading:" in stripped_output or 
+                                                  "[FLM]  Model:" in stripped_output or
+                                                  "[FLM]  Name:" in stripped_output or
+                                                  "Successfully" in stripped_output or
+                                                  "Error" in stripped_output or
+                                                  "Failed" in stripped_output):
+                                # Clear the line and show progress
+                                print(f"\r{' ' * 100}\r{stripped_output}", end="", flush=True)
+                    
+                    # Wait for completion and check return code
+                    return_code = process.wait(timeout=3600)
+                    if return_code != 0:
+                        raise subprocess.CalledProcessError(return_code, command)
+                        
+                    print(f"\nSuccessfully downloaded FLM model: {model}")
                 except subprocess.CalledProcessError as e:
                     raise RuntimeError(
                         f"Failed to download FLM model {model}: {e}"
+                    ) from e
+                except subprocess.TimeoutExpired as e:
+                    raise RuntimeError(
+                        f"FLM model download timed out after 60 minutes for {model}. "
+                        f"This may be due to a slow internet connection or large model size."
                     ) from e
                 except FileNotFoundError as e:
                     # This shouldn't happen after install_flm(), but just in case
