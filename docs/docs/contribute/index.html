@@ -772,6 +772,69 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#code-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Code Formatting
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Code Formatting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#running-black-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running Black formatting
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running Black formatting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#alternative-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Alternative Setup
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Linting
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Linting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#running-linters-locally" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running Linters Locally
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#testing" class="md-nav__link">
     <span class="md-ellipsis">
       Testing
@@ -860,6 +923,69 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#code-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Code Formatting
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Code Formatting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#running-black-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running Black formatting
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running Black formatting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#alternative-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Alternative Setup
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Linting
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Linting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#running-linters-locally" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running Linters Locally
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#testing" class="md-nav__link">
     <span class="md-ellipsis">
       Testing
@@ -926,9 +1052,51 @@
 <p>Submit a PR to contribute code. Maintainers:
 - @danielholanda
 - @jeremyfowers
-- @ramkrishna
+- @ramkrishna2910
 - @vgodsoe</p>
 <p>Discuss major changes via an Issue first.</p>
+<h2 id="code-formatting">Code Formatting</h2>
+<p>We require that all Python files in this repo adhere to black formatting. This is enforced with a black check in CI workflows.</p>
+<h3 id="running-black-formatting">Running Black formatting</h3>
+<p>The easiest way to ensure proper formatting is to enable the black formatter in VSCode with format-on-save:</p>
+<ol>
+<li>
+<p><strong>Install the Python extension</strong>: Install the Python extension for VSCode if you haven't already.</p>
+</li>
+<li>
+<p><strong>Set black as the default formatter</strong>: </p>
+</li>
+<li>Open VSCode settings (Ctrl/Cmd + ,)</li>
+<li>Search for "Formatter"</li>
+<li>
+<p>Set the Python default formatter to "black"</p>
+</li>
+<li>
+<p><strong>Enable format-on-save</strong>:</p>
+</li>
+<li>In VSCode settings, search for "format on save"</li>
+<li>Check the "Format On Save" option</li>
+</ol>
+<p>This will automatically format your code according to black standards whenever you save a file.</p>
+<h4 id="alternative-setup">Alternative Setup</h4>
+<p>You can also install black directly and run it manually:
+<div class="highlight"><pre><span></span><code><span class="c1"># Install black (if not already installed)</span>
+pip<span class="w"> </span>install<span class="w"> </span>black
+
+<span class="c1"># Run black formatter on your file</span>
+black<span class="w"> </span>your_file.py
+</code></pre></div></p>
+<h3 id="linting">Linting</h3>
+<p>We use linting tools to maintain code quality and catch potential issues. The project uses standard Python linting tools that are automatically run in CI.</p>
+<h4 id="running-linters-locally">Running Linters Locally</h4>
+<p>To run linting checks locally before submitting a PR:</p>
+<p><div class="highlight"><pre><span></span><code><span class="c1"># Install linting dependencies (if not already installed)</span>
+pip<span class="w"> </span>install<span class="w"> </span>pylint
+
+<span class="c1"># Run pylint from the root of the repo</span>
+pylint<span class="w"> </span>src/lemonade<span class="w"> </span>--rcfile<span class="w"> </span>.pylintrc<span class="w"> </span>--disable<span class="w"> </span>E0401
+</code></pre></div>
+This will show linting warnings and errors in your terminal.</p>
 <h2 id="testing">Testing</h2>
 <p>Tests are run automatically on each PR. These include:
 - Linting
