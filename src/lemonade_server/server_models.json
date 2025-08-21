@@ -335,5 +335,17 @@
         "recipe": "flm",
         "suggested": true,
         "labels": ["hot","vision"]
+    },
+    "Qwen3-8b-FLM": {
+        "checkpoint": "qwen3:8b",
+        "recipe": "flm",
+        "suggested": true,
+        "labels": ["hot"]
+    },
+    "Llama-3.1-8B-FLM": {
+        "checkpoint": "llama3.1:8b",
+        "recipe": "flm",
+        "suggested": true,
+        "labels": ["hot"]
     }
 }
