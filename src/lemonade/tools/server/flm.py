@@ -241,11 +241,36 @@ class FlmServer(WrappedServer):
                 # Streaming response
                 def event_stream():
                     try:
-                        response = requests.post(
-                            ollama_url, json=ollama_request, stream=True, timeout=None
-                        )
+                        # Retry logic for 503 Service Unavailable errors
+                        max_retries = 3
+                        retry_delay = 2  # seconds
 
-                        response.raise_for_status()
+                        for attempt in range(max_retries):
+                            try:
+                                response = requests.post(
+                                    ollama_url,
+                                    json=ollama_request,
+                                    stream=True,
+                                    timeout=None,
+                                )
+                                response.raise_for_status()
+                                break  # Success, exit retry loop
+                            except requests.exceptions.HTTPError as e:
+                                if (
+                                    response.status_code == 503
+                                    and attempt < max_retries - 1
+                                ):
+                                    logging.debug(
+                                        "FLM server returned 503, retrying in %d seconds... (attempt %d/%d)",
+                                        retry_delay,
+                                        attempt + 1,
+                                        max_retries,
+                                    )
+                                    time.sleep(retry_delay)
+                                    continue
+                                else:
+                                    # Re-raise if it's not a 503 or we've exhausted retries
+                                    raise
 
                         for line in response.iter_lines():
                             if line:
@@ -286,9 +311,30 @@ class FlmServer(WrappedServer):
                     },
                 )
             else:
-                # Non-streaming response
-                response = requests.post(ollama_url, json=ollama_request, timeout=None)
-                response.raise_for_status()
+                # Non-streaming response with retry logic for 503 errors
+                max_retries = 3
+                retry_delay = 2  # seconds
+
+                for attempt in range(max_retries):
+                    try:
+                        response = requests.post(
+                            ollama_url, json=ollama_request, timeout=None
+                        )
+                        response.raise_for_status()
+                        break  # Success, exit retry loop
+                    except requests.exceptions.HTTPError as e:
+                        if response.status_code == 503 and attempt < max_retries - 1:
+                            logging.debug(
+                                "FLM server returned 503, retrying in %d seconds... (attempt %d/%d)",
+                                retry_delay,
+                                attempt + 1,
+                                max_retries,
+                            )
+                            time.sleep(retry_delay)
+                            continue
+                        else:
+                            # Re-raise if it's not a 503 or we've exhausted retries
+                            raise
 
                 ollama_response = response.json()
                 openai_response = self._convert_ollama_to_openai_response(
