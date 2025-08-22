@@ -156,8 +156,11 @@ class Testing(unittest.IsolatedAsyncioTestCase):
         # Run the async health check
         start_time = time.time()
         while True:
+            # Keep track of the stdout and stderr of the server process
             print(server_process.stdout.readline())
             print(server_process.stderr.readline())
+
+            # Keep checking the status until the model is loaded or the timeout is reached
             if time.time() - start_time > 180:
                 raise TimeoutError("Model failed to load")
             try:
