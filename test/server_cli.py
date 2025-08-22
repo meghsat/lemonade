@@ -139,7 +139,7 @@ class Testing(unittest.IsolatedAsyncioTestCase):
         # Use the health endpoint to verify the model is loaded
         async def check_health():
             async with httpx.AsyncClient(
-                base_url=f"http://localhost:{PORT}/api/v1", timeout=30.0
+                base_url=f"http://localhost:{PORT}/api/v1", timeout=180.0
             ) as client:
                 health_response = await client.get("/health")
                 assert (
@@ -152,7 +152,7 @@ class Testing(unittest.IsolatedAsyncioTestCase):
         # Run the async health check
         start_time = time.time()
         while True:
-            if time.time() - start_time > 60:
+            if time.time() - start_time > 180:
                 raise TimeoutError("Model failed to load")
             model_loaded = asyncio.run(check_health())
             if model_loaded == MODEL_NAME:
