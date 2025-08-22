@@ -304,7 +304,7 @@ def run(
     # Open the webapp with the specified model
     url = f"http://{host}:{port}/?model={model_name}#llm-chat"
     print(f"You can now chat with {model_name} at {url}")
-    
+
     # Only open browser if not disabled via environment variable
     if not os.environ.get("LEMONADE_DISABLE_BROWSER"):
         webbrowser.open(url)
