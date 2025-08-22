@@ -336,16 +336,28 @@
         "suggested": true,
         "labels": ["hot","vision"]
     },
+    "Llama-3.1-8B-FLM": {
+        "checkpoint": "llama3.1:8b",
+        "recipe": "flm",
+        "suggested": true,
+        "labels": ["hot"]
+    },
+    "Qwen3-1.7b-FLM": {
+        "checkpoint": "qwen3:1.7b",
+        "recipe": "flm",
+        "suggested": true,
+        "labels": ["hot"]
+    },
+    "Qwen3-4b-FLM": {
+        "checkpoint": "qwen3:4b",
+        "recipe": "flm",
+        "suggested": true,
+        "labels": ["hot"]
+    },
     "Qwen3-8b-FLM": {
         "checkpoint": "qwen3:8b",
         "recipe": "flm",
         "suggested": true,
         "labels": ["hot"]
     },
-    "Llama-3.1-8B-FLM": {
-        "checkpoint": "llama3.1:8b",
-        "recipe": "flm",
-        "suggested": true,
-        "labels": ["hot"]
-    }
 }
