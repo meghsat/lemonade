@@ -115,8 +115,12 @@ class Testing(unittest.IsolatedAsyncioTestCase):
         """
         Test the run command functionality.
         """
+        # Run the server with the specified model and port
+        cmd = ["lemonade-server-dev", "run", MODEL_NAME, "--port", str(PORT)]
+        if os.name == "nt":
+            cmd.append("--no-tray")
         server_process = subprocess.Popen(
-            ["lemonade-server-dev", "run", MODEL_NAME, "--no-tray", "--port", str(PORT)],
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
