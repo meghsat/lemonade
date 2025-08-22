@@ -150,10 +150,6 @@ class Testing(unittest.IsolatedAsyncioTestCase):
                 base_url=f"http://localhost:{PORT}/api/v1", timeout=180.0
             ) as client:
                 health_response = await client.get("/health")
-                assert (
-                    health_response.status_code == 200
-                ), f"Health endpoint failed with status {health_response.status_code}"
-
                 health_data = health_response.json()
                 return health_data["model_loaded"]
 
@@ -164,10 +160,14 @@ class Testing(unittest.IsolatedAsyncioTestCase):
             print(server_process.stderr.readline())
             if time.time() - start_time > 180:
                 raise TimeoutError("Model failed to load")
-            model_loaded = asyncio.run(check_health())
+            try:
+                model_loaded = asyncio.run(check_health())
+            except httpx.ConnectError as e:  # pylint: disable=broad-exception-caught
+                print(f"Health check failed: {e}... trying again")
             if model_loaded == MODEL_NAME:
                 break
             time.sleep(1)
+
 
     def test_004_system_info_command(self):
         """
