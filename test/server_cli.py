@@ -150,7 +150,6 @@ class Testing(unittest.IsolatedAsyncioTestCase):
         # Wait for model to be loaded
         time.sleep(10)
 
-        # Check if the correct model is loaded
         # Use the health endpoint to verify the model is loaded
         async def check_health():
             async with httpx.AsyncClient(
