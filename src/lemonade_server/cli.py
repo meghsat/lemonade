@@ -277,6 +277,7 @@ def run(
     """
     import webbrowser
     import time
+    import os
 
     # Start the server if not running
     _, running_port = get_server_info()
@@ -303,7 +304,10 @@ def run(
     # Open the webapp with the specified model
     url = f"http://{host}:{port}/?model={model_name}#llm-chat"
     print(f"You can now chat with {model_name} at {url}")
-    webbrowser.open(url)
+    
+    # Only open browser if not disabled via environment variable
+    if not os.environ.get("LEMONADE_DISABLE_BROWSER"):
+        webbrowser.open(url)
 
     # Keep the server running if we started it
     if not server_previously_running:

@@ -14,13 +14,14 @@ import asyncio
 import socket
 import time
 import json
+import os
 from threading import Thread
 import sys
 import io
 import httpx
 from lemonade import __version__ as version_number
 
-from utils.server_base import kill_process_on_port, PORT
+from utils.server_base import kill_process_on_port, PORT, MODEL_NAME
 
 try:
     from openai import OpenAI, AsyncOpenAI
@@ -64,18 +65,25 @@ class Testing(unittest.IsolatedAsyncioTestCase):
         # Now, start the server
         NON_DEFAULT_PORT = PORT + 1
         process = subprocess.Popen(
-            [
-                "lemonade-server-dev",
-                "serve",
-                "--port",
-                str(NON_DEFAULT_PORT),
-            ],
+            ["lemonade-server-dev", "serve", "--port", str(NON_DEFAULT_PORT)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
 
-        # Wait a few seconds after the port is available
+        # Wait for the server to start by checking the port
+        start_time = time.time()
+        while True:
+            if time.time() - start_time > 60:
+                raise TimeoutError("Server failed to start within 60 seconds")
+            try:
+                conn = socket.create_connection(("localhost", NON_DEFAULT_PORT))
+                conn.close()
+                break
+            except socket.error:
+                time.sleep(1)
+
+        # Wait a few other seconds after the port is available
         time.sleep(20)
 
         # Now, ensure we can correctly detect that the server is running
@@ -94,7 +102,7 @@ class Testing(unittest.IsolatedAsyncioTestCase):
             capture_output=True,
             text=True,
         )
-        assert result.stdout == "Lemonade Server stopped successfully.\n", result.stdout
+        assert result.stdout == "Lemonade Server stopped successfully.\n"
 
         # Ensure the server is not running
         result = subprocess.run(
@@ -102,7 +110,67 @@ class Testing(unittest.IsolatedAsyncioTestCase):
             capture_output=True,
             text=True,
         )
-        assert result.stdout == "Server is not running\n", result.stdout
+        assert result.stdout == "Server is not running\n"
+
+    def test_003_run_command(self):
+        """
+        Test the run command functionality.
+        """
+        result = subprocess.Popen(
+            ["lemonade-server-dev", "run", MODEL_NAME, "--no-tray"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env={"LEMONADE_DISABLE_BROWSER": "1", **os.environ},
+        )
+
+        # Wait for the server to start by checking the port
+        start_time = time.time()
+        while True:
+            print("Waiting for server to start")
+            if time.time() - start_time > 60:
+                raise TimeoutError("Server failed to start within 60 seconds")
+            try:
+                conn = socket.create_connection(("localhost", PORT))
+                conn.close()
+                break
+            except socket.error:
+                time.sleep(1)
+
+        # Now, ensure we can correctly detect that the server is running
+        result = subprocess.run(
+            ["lemonade-server-dev", "status"],
+            capture_output=True,
+            text=True,
+        )
+        assert (
+            result.stdout == f"Server is running on port {PORT}\n"
+        ), f"Expected stdout to end with '{PORT}', but got: '{result.stdout}' {result.stderr}"
+
+        # Wait for model to be loaded
+        time.sleep(10)
+
+        # Check if the correct model is loaded
+        # Use the health endpoint to verify the model is loaded
+        async def check_health():
+            async with httpx.AsyncClient(
+                base_url=f"http://localhost:{PORT}/api/v1", timeout=30.0
+            ) as client:
+                health_response = await client.get("/health")
+                assert (
+                    health_response.status_code == 200
+                ), f"Health endpoint failed with status {health_response.status_code}"
+
+                health_data = health_response.json()
+                assert (
+                    "model_loaded" in health_data
+                ), "Health response missing 'model_loaded' field"
+                assert (
+                    health_data["model_loaded"] == MODEL_NAME
+                ), f"Expected model {MODEL_NAME} to be loaded, but got {health_data['model_loaded']}"
+
+        # Run the async health check
+        asyncio.run(check_health())
 
     def test_003_system_info_command(self):
         """
