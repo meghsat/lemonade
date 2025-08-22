@@ -51,7 +51,6 @@ class Testing(unittest.IsolatedAsyncioTestCase):
         ), f"Expected stdout to end with '{version_number}', but got: '{result.stdout}'"
 
     def test_002_serve_status_and_stop(self):
-
         # First, ensure we can correctly detect that the server is not running
         result = subprocess.run(
             ["lemonade-server-dev", "status"],
@@ -116,39 +115,28 @@ class Testing(unittest.IsolatedAsyncioTestCase):
         """
         Test the run command functionality.
         """
-        result = subprocess.Popen(
-            ["lemonade-server-dev", "run", MODEL_NAME, "--no-tray"],
+        server_process = subprocess.Popen(
+            ["lemonade-server-dev", "run", MODEL_NAME, "--no-tray", "--port", str(PORT)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             env={"LEMONADE_DISABLE_BROWSER": "1", **os.environ},
         )
 
-        # Wait for the server to start by checking the port
+        # Wait for server to start
         start_time = time.time()
         while True:
-            print("Waiting for server to start")
+            result = subprocess.run(
+                ["lemonade-server-dev", "status"],
+                capture_output=True,
+                text=True,
+            )
+            print(result.stdout)
+            if result.stdout == f"Server is running on port {PORT}\n":
+                break
             if time.time() - start_time > 60:
                 raise TimeoutError("Server failed to start within 60 seconds")
-            try:
-                conn = socket.create_connection(("localhost", PORT))
-                conn.close()
-                break
-            except socket.error:
-                time.sleep(1)
-
-        # Now, ensure we can correctly detect that the server is running
-        result = subprocess.run(
-            ["lemonade-server-dev", "status"],
-            capture_output=True,
-            text=True,
-        )
-        assert (
-            result.stdout == f"Server is running on port {PORT}\n"
-        ), f"Expected stdout to end with '{PORT}', but got: '{result.stdout}' {result.stderr}"
-
-        # Wait for model to be loaded
-        time.sleep(10)
+            time.sleep(1)
 
         # Use the health endpoint to verify the model is loaded
         async def check_health():
@@ -161,21 +149,22 @@ class Testing(unittest.IsolatedAsyncioTestCase):
                 ), f"Health endpoint failed with status {health_response.status_code}"
 
                 health_data = health_response.json()
-                assert (
-                    "model_loaded" in health_data
-                ), "Health response missing 'model_loaded' field"
-                assert (
-                    health_data["model_loaded"] == MODEL_NAME
-                ), f"Expected model {MODEL_NAME} to be loaded, but got {health_data['model_loaded']}"
+                return health_data["model_loaded"]
 
         # Run the async health check
-        asyncio.run(check_health())
+        start_time = time.time()
+        while True:
+            if time.time() - start_time > 60:
+                raise TimeoutError("Model failed to load")
+            model_loaded = asyncio.run(check_health())
+            if model_loaded == MODEL_NAME:
+                break
+            time.sleep(1)
 
-    def test_003_system_info_command(self):
+    def test_004_system_info_command(self):
         """
         Test the system-info CLI command with both default and verbose modes.
         """
-
         # Test default (non-verbose) table output
         result = subprocess.run(
             ["lemonade", "system-info"], capture_output=True, text=True, timeout=60
@@ -248,7 +237,6 @@ class Testing(unittest.IsolatedAsyncioTestCase):
             assert isinstance(system_info, dict)
         except json.JSONDecodeError:
             assert False, f"Invalid verbose JSON output: {result.stdout}"
-
 
 if __name__ == "__main__":
     unittest.main()
