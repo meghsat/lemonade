@@ -511,6 +511,13 @@ def _add_server_arguments(parser):
         default=DEFAULT_CTX_SIZE,
     )
 
+    if os.name == "nt":
+        parser.add_argument(
+            "--no-tray",
+            action="store_true",
+            help="Do not show a tray icon when the server is running",
+        )
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -531,12 +538,6 @@ def main():
     # Serve command
     serve_parser = subparsers.add_parser("serve", help="Start server")
     _add_server_arguments(serve_parser)
-    if os.name == "nt":
-        serve_parser.add_argument(
-            "--no-tray",
-            action="store_true",
-            help="Do not show a tray icon when the server is running",
-        )
 
     # Status command
     status_parser = subparsers.add_parser("status", help="Check if server is running")
