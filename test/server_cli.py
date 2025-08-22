@@ -144,9 +144,6 @@ class Testing(unittest.IsolatedAsyncioTestCase):
                 raise TimeoutError("Server failed to start within 60 seconds")
             time.sleep(1)
 
-        # Print the stdout of the server process
-        print(server_process.stdout.readline())
-
         # Use the health endpoint to verify the model is loaded
         async def check_health():
             async with httpx.AsyncClient(
@@ -163,6 +160,8 @@ class Testing(unittest.IsolatedAsyncioTestCase):
         # Run the async health check
         start_time = time.time()
         while True:
+            print(server_process.stdout.readline())
+            print(server_process.stderr.readline())
             if time.time() - start_time > 180:
                 raise TimeoutError("Model failed to load")
             model_loaded = asyncio.run(check_health())
