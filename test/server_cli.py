@@ -109,6 +109,14 @@ class Testing(unittest.IsolatedAsyncioTestCase):
         """
         Test the run command functionality.
         """
+
+        # Close the server (if it's still running)
+        result = subprocess.run(
+            ["lemonade-server-dev", "stop"],
+            capture_output=True,
+            text=True,
+        )
+
         # Run the server with the specified model and port
         cmd = ["lemonade-server-dev", "run", MODEL_NAME, "--port", str(PORT)]
         if os.name == "nt":
