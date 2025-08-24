@@ -25,7 +25,7 @@ jobs:
             pip_install: "lemonade-sdk[oga-cpu]"
             post_install: ""
           - scenario: oga-ryzenai
-            pip_install: "lemonade-sdk[oga-ryzenai]"
+            pip_install: "lemonade-sdk[oga-ryzenai] --extra-index-url https://pypi.amd.com/simple"
             post_install: ""
         exclude:
           - os: ubuntu-latest
@@ -57,11 +57,13 @@ jobs:
             ${{ matrix.post_install }}
           fi
           END=$(date +%s)
+          INSTALL_TIME=$((END-START))
           echo "## Installation Report" | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "Total install time: $((END-START)) seconds" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Total install time: ${INSTALL_TIME} seconds" | tee -a "$GITHUB_STEP_SUMMARY"
           TOTAL_SIZE=$(python .github/workflows/install_report.py | tee -a "$GITHUB_STEP_SUMMARY" | sed -n 's/^Total installation size: \(.*\) MB/\1/p')
           echo "total_size=$TOTAL_SIZE" >> "$GITHUB_OUTPUT"
-          printf '%s,%s,%.2f\n' "${{ matrix.os }}" "${{ matrix.scenario }}" "$TOTAL_SIZE" > size.csv
+          echo "install_time=$INSTALL_TIME" >> "$GITHUB_OUTPUT"
+          printf '%s,%s,%.2f,%d\n' "${{ matrix.os }}" "${{ matrix.scenario }}" "$TOTAL_SIZE" "$INSTALL_TIME" > size.csv
       - uses: actions/upload-artifact@v4
         with:
           name: size-${{ matrix.os }}-${{ matrix.scenario }}
@@ -90,12 +92,12 @@ jobs:
           rows = []
           for file in pathlib.Path('sizes').glob('size-*/size.csv'):
             with open(file) as f:
-              os, scenario, size = next(csv.reader(f))
-            rows.append((os, scenario, float(size)))
+              os, scenario, size, time = next(csv.reader(f))
+            rows.append((os, scenario, float(size), int(time)))
           rows.sort()
-          table = tabulate(rows, headers=['OS', 'Scenario', 'Total Size (MB)'], tablefmt='github', floatfmt='.2f')
+          table = tabulate(rows, headers=['OS', 'Scenario', 'Total Size (MB)', 'Install Time (s)'], tablefmt='github', floatfmt='.2f')
           with open('$GITHUB_STEP_SUMMARY', 'a') as f:
-            f.write('### Total Installation Sizes\n\n')
+            f.write('### Total Installation Stats\n\n')
             f.write(table)
             f.write('\n')
           PY
