@@ -41,15 +41,15 @@ jobs:
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             PY_URL="https://www.python.org/ftp/python/3.10.9/python-3.10.9-embed-amd64.zip"
             mkdir python
-            curl -sSLo python/python.zip "$PY_URL"
+            curl -fsSLo python/python.zip "$PY_URL"
             unzip -q python/python.zip -d python
-            curl -sSLo get-pip.py https://bootstrap.pypa.io/get-pip.py
+            curl -fsSLo get-pip.py https://bootstrap.pypa.io/get-pip.py
             ./python/python.exe get-pip.py --no-warn-script-location
             printf '\nLib\nLib/site-packages\nLib/site-packages/win32\nLib/site-packages/win32/lib\nLib/site-packages/Pythonwin\n' >> python/python310._pth
             echo "PYTHON=./python/python.exe" >> "$GITHUB_ENV"
           else
             PY_URL="https://github.com/astral-sh/python-build-standalone/releases/download/20240524/cpython-3.10.14%2B20240524-x86_64-unknown-linux-gnu-install_only.tar.gz"
-            curl -sSLo python.tar.gz "$PY_URL"
+            curl -fsSLo python.tar.gz "$PY_URL"
             mkdir python
             tar -xzf python.tar.gz -C python --strip-components=1
             ./python/bin/python3 -m ensurepip
@@ -71,8 +71,9 @@ jobs:
               ;;
             llama-rocm)
               $PYTHON -m pip install lemonade-sdk
-              PYTHONPATH=src LEMONADE_CI_MODE=1 LEMONADE_ROCM_OVERRIDE=gfx1151 \
-                $PYTHON -m lemonade_install.install --llamacpp rocm
+              export PYTHONPATH=src
+              export LEMONADE_CI_MODE=1
+              $PYTHON -m lemonade_install.install --llamacpp rocm
               ;;
             oga-cpu)
               $PYTHON -m pip install 'lemonade-sdk[oga-cpu]'
