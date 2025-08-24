@@ -12,17 +12,34 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        scenario: [plain, llama-vulkan, oga-cpu, oga-ryzenai]
-        exclude:
+        include:
           - os: ubuntu-latest
+            scenario: plain
+            python: '3.x'
+          - os: ubuntu-latest
+            scenario: llama-vulkan
+            python: '3.x'
+          - os: ubuntu-latest
+            scenario: oga-cpu
+            python: '3.x'
+          - os: windows-latest
+            scenario: plain
+            python: '3.x'
+          - os: windows-latest
+            scenario: llama-vulkan
+            python: '3.x'
+          - os: windows-latest
+            scenario: oga-cpu
+            python: '3.x'
+          - os: windows-latest
             scenario: oga-ryzenai
+            python: '3.10'
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: ${{ matrix.python }}
       - name: Measure installation stats
         shell: bash
         run: |
