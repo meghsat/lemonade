@@ -68,7 +68,13 @@ jobs:
               ;;
             llama-rocm)
               python -m pip install lemonade-sdk
-              lemonade-install --llamacpp rocm
+              python - <<'PY'
+import os, subprocess
+os.environ["LEMONADE_CI_MODE"] = "1"
+import lemonade.tools.llamacpp.utils as utils
+utils.identify_rocm_arch = lambda: "gfx1151"
+subprocess.run("lemonade-install --llamacpp rocm", shell=True, check=True)
+PY
               ;;
             oga-cpu)
               python -m pip install 'lemonade-sdk[oga-cpu]'
@@ -90,11 +96,15 @@ jobs:
 
   summary:
     needs: install-report
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - run: mkdir -p artifacts
       - uses: actions/download-artifact@v4
+        if: ${{ always() }}
         with:
           path: artifacts
+        continue-on-error: true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
@@ -106,7 +116,8 @@ jobs:
           import json, pathlib
           from tabulate import tabulate
           rows = []
-          for p in pathlib.Path('artifacts').glob('stats-*'):
+          artifacts_path = pathlib.Path('artifacts')
+          for p in artifacts_path.glob('stats-*'):
               data = json.load(open(p/'stats.json'))
               label = p.name[6:]
               if label.startswith('ubuntu-latest-'):
@@ -123,5 +134,8 @@ jobs:
               (os_, scenario, f"{size:.2f}", f"{(size/total_size*100):.1f}%", time)
               for os_, scenario, size, time in rows
           ]
-          print(tabulate(table, headers=['OS', 'Scenario', 'Size (MB)', '% of Total', 'Install Time (s)'], tablefmt='github'))
+          if table:
+              print(tabulate(table, headers=['OS', 'Scenario', 'Size (MB)', '% of Total', 'Install Time (s)'], tablefmt='github'))
+          else:
+              print('No artifacts to summarize.')
           PY
