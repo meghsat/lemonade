@@ -69,13 +69,6 @@ def identify_rocm_arch() -> str:
         )
         return override
 
-    ci_mode = os.environ.get("LEMONADE_CI_MODE")
-    if ci_mode:
-        logging.info(
-            "LEMONADE_CI_MODE enabled; forcing Strix Halo target architecture (gfx1151)"
-        )
-        return "gfx1151"
-
     # Check for integrated and discrete AMD GPUs
     system_info = get_system_info()
     amd_igpu = system_info.get_amd_igpu_device()
