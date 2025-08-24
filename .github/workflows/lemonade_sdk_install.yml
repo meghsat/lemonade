@@ -11,6 +11,7 @@ jobs:
   install-report:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -68,6 +69,7 @@ jobs:
               ;;
             llama-rocm)
               python -m pip install lemonade-sdk
+              export LEMONADE_CI_MODE=1
               export LEMONADE_ROCM_OVERRIDE=gfx1151
               lemonade-install --llamacpp rocm
               ;;
