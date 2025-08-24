@@ -74,7 +74,8 @@ print(
 
 zip_size = None
 if args.zip_env:
-    archive = shutil.make_archive("venv", "zip", root_dir=args.zip_env)
+    env_path = Path(args.zip_env)
+    archive = shutil.make_archive(env_path.name, "zip", root_dir=env_path)
     zip_size = Path(archive).stat().st_size
     print(f"\nEnvironment zip size: {zip_size/1024/1024:.2f} MB")
 
