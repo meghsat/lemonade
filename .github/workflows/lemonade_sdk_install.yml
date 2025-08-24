@@ -20,6 +20,9 @@ jobs:
             scenario: llama-vulkan
             python: '3.x'
           - os: ubuntu-latest
+            scenario: llama-rocm
+            python: '3.x'
+          - os: ubuntu-latest
             scenario: oga-cpu
             python: '3.x'
           - os: windows-latest
@@ -27,6 +30,9 @@ jobs:
             python: '3.x'
           - os: windows-latest
             scenario: llama-vulkan
+            python: '3.x'
+          - os: windows-latest
+            scenario: llama-rocm
             python: '3.x'
           - os: windows-latest
             scenario: oga-cpu
@@ -60,11 +66,16 @@ jobs:
               python -m pip install lemonade-sdk
               lemonade-install --llamacpp vulkan
               ;;
+            llama-rocm)
+              python -m pip install lemonade-sdk
+              lemonade-install --llamacpp rocm
+              ;;
             oga-cpu)
               python -m pip install 'lemonade-sdk[oga-cpu]'
               ;;
             oga-ryzenai)
-              python -m pip install 'lemonade-sdk[oga-ryzenai]' --extra-index-url https://pkg.amd.com/lemonade
+              python -m pip install -e .
+              python -m pip install -e .[oga-ryzenai] --extra-index-url https://pypi.amd.com/simple
               ;;
           esac
           END=$(date +%s)
@@ -98,7 +109,14 @@ jobs:
           for p in pathlib.Path('artifacts').glob('stats-*'):
               data = json.load(open(p/'stats.json'))
               label = p.name[6:]
-              os_, scenario = label.rsplit('-', 1)
+              if label.startswith('ubuntu-latest-'):
+                  os_ = 'ubuntu-latest'
+                  scenario = label[len('ubuntu-latest-'):]
+              elif label.startswith('windows-latest-'):
+                  os_ = 'windows-latest'
+                  scenario = label[len('windows-latest-'):]
+              else:
+                  os_, scenario = label.split('-', 1)
               rows.append((os_, scenario, data['size']/1024/1024, data['time']))
           total_size = sum(size for _, _, size, _ in rows)
           table = [
