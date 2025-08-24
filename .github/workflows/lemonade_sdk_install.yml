@@ -83,7 +83,7 @@ jobs:
           END=$(date +%s)
           INSTALL_TIME=$((END-START))
           echo "Total install time: ${INSTALL_TIME} seconds" | tee -a "$GITHUB_STEP_SUMMARY"
-          python .github/workflows/install_report.py --stats stats.json --install-time "$INSTALL_TIME" | tee -a "$GITHUB_STEP_SUMMARY"
+          python .github/workflows/install_report.py --stats stats.json --install-time "$INSTALL_TIME" --zip-env venv | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload stats
         uses: actions/upload-artifact@v4
         with:

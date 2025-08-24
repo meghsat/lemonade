@@ -1,6 +1,7 @@
 import argparse
 import importlib.metadata
 import json
+import shutil
 import sys
 from pathlib import Path
 from tabulate import tabulate
@@ -31,6 +32,7 @@ def dir_size(path: Path) -> int:
 parser = argparse.ArgumentParser()
 parser.add_argument("--stats", help="Write JSON stats to this file")
 parser.add_argument("--install-time", type=int, help="Installation time in seconds")
+parser.add_argument("--zip-env", help="Path to environment directory to zip")
 args = parser.parse_args()
 
 rows = [(d.metadata["Name"], dist_size(d)) for d in importlib.metadata.distributions()]
@@ -70,6 +72,15 @@ print(
     )
 )
 
+zip_size = None
+if args.zip_env:
+    archive = shutil.make_archive("venv", "zip", root_dir=args.zip_env)
+    zip_size = Path(archive).stat().st_size
+    print(f"\nEnvironment zip size: {zip_size/1024/1024:.2f} MB")
+
 if args.stats:
+    data = {"size": total, "time": args.install_time}
+    if zip_size is not None:
+        data["zip"] = zip_size
     with open(args.stats, "w") as f:
-        json.dump({"size": total, "time": args.install_time}, f)
+        json.dump(data, f)
