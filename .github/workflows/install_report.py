@@ -1,4 +1,6 @@
 import importlib.metadata
+from tabulate import tabulate
+
 
 def dist_size(dist):
     total = 0
@@ -8,15 +10,27 @@ def dist_size(dist):
             total += p.stat().st_size
     return total
 
-rows = []
-for d in importlib.metadata.distributions():
-    rows.append((d.metadata['Name'], dist_size(d)))
+
+rows = [(d.metadata["Name"], dist_size(d)) for d in importlib.metadata.distributions()]
 rows.sort(key=lambda x: x[1], reverse=True)
 
 total = sum(size for _, size in rows)
-print("\n### Installation Size Breakdown\n")
-print("| Package | Size (MB) |")
-print("| --- | ---: |")
+
+print(f"Total installation size: {total/1024/1024:.2f} MB\n")
+print("### Installation Size Breakdown\n")
+
+table_data = []
 for name, size in rows:
-    print(f"| {name} | {size/1024/1024:.2f} |")
-print(f"| **Total** | **{total/1024/1024:.2f}** |")
+    mb = size / 1024 / 1024
+    pct = (size / total * 100) if total else 0
+    table_data.append((name, mb, pct))
+table_data.append(("**Total**", total / 1024 / 1024, 100.0))
+
+print(
+    tabulate(
+        table_data,
+        headers=["Package", "Size (MB)", "% of Total"],
+        tablefmt="github",
+        floatfmt=".2f",
+    )
+)

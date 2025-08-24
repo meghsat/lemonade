@@ -2,6 +2,7 @@ name: Report lemonade-sdk install size
 
 on:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -9,6 +10,22 @@ permissions:
 jobs:
   install-report:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: no-extras
+            pip_install: "lemonade-sdk"
+            post_install: ""
+          - name: no-extras-llamacpp-vulkan
+            pip_install: "lemonade-sdk"
+            post_install: "lemonade-install --llamacpp vulkan"
+          - name: oga-cpu
+            pip_install: "lemonade-sdk[oga-cpu]"
+            post_install: ""
+          - name: oga-ryzenai
+            pip_install: "lemonade-sdk[oga-ryzenai]"
+            post_install: ""
+    name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -21,8 +38,12 @@ jobs:
           python -m venv venv
           source venv/bin/activate
           python -m pip install --upgrade pip
+          python -m pip install tabulate
           START=$(date +%s)
-          python -m pip install lemonade-sdk
+          python -m pip install ${{ matrix.pip_install }}
+          if [ -n "${{ matrix.post_install }}" ]; then
+            ${{ matrix.post_install }}
+          fi
           END=$(date +%s)
           echo "## Installation Report" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "Total install time: $((END-START)) seconds" | tee -a "$GITHUB_STEP_SUMMARY"
