@@ -68,13 +68,8 @@ jobs:
               ;;
             llama-rocm)
               python -m pip install lemonade-sdk
-              python - <<'PY'
-import os, subprocess
-os.environ["LEMONADE_CI_MODE"] = "1"
-import lemonade.tools.llamacpp.utils as utils
-utils.identify_rocm_arch = lambda: "gfx1151"
-subprocess.run("lemonade-install --llamacpp rocm", shell=True, check=True)
-PY
+              export LEMONADE_ROCM_OVERRIDE=gfx1151
+              lemonade-install --llamacpp rocm
               ;;
             oga-cpu)
               python -m pip install 'lemonade-sdk[oga-cpu]'
