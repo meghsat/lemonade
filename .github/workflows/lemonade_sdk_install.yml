@@ -1,0 +1,28 @@
+name: Report lemonade-sdk install size
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  install-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Measure installation stats
+        run: |
+          set -euo pipefail
+          python -m venv venv
+          source venv/bin/activate
+          python -m pip install --upgrade pip
+          START=$(date +%s)
+          python -m pip install lemonade-sdk
+          END=$(date +%s)
+          echo "## Installation Report" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Total install time: $((END-START)) seconds" | tee -a "$GITHUB_STEP_SUMMARY"
+          python .github/workflows/install_report.py | tee -a "$GITHUB_STEP_SUMMARY"
