@@ -75,18 +75,18 @@ jobs:
         run: |
           echo '## Installation Summary' >> "$GITHUB_STEP_SUMMARY"
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-import json, pathlib
-from tabulate import tabulate
-rows = []
-for p in pathlib.Path('artifacts').glob('stats-*'):
-    data = json.load(open(p/'stats.json'))
-    label = p.name[6:]
-    os_, scenario = label.rsplit('-', 1)
-    rows.append((os_, scenario, data['size']/1024/1024, data['time']))
-total_size = sum(size for _, _, size, _ in rows)
-table = [
-    (os_, scenario, f"{size:.2f}", f"{(size/total_size*100):.1f}%", time)
-    for os_, scenario, size, time in rows
-]
-print(tabulate(table, headers=['OS', 'Scenario', 'Size (MB)', '% of Total', 'Install Time (s)'], tablefmt='github'))
-PY
+          import json, pathlib
+          from tabulate import tabulate
+          rows = []
+          for p in pathlib.Path('artifacts').glob('stats-*'):
+              data = json.load(open(p/'stats.json'))
+              label = p.name[6:]
+              os_, scenario = label.rsplit('-', 1)
+              rows.append((os_, scenario, data['size']/1024/1024, data['time']))
+          total_size = sum(size for _, _, size, _ in rows)
+          table = [
+              (os_, scenario, f"{size:.2f}", f"{(size/total_size*100):.1f}%", time)
+              for os_, scenario, size, time in rows
+          ]
+          print(tabulate(table, headers=['OS', 'Scenario', 'Size (MB)', '% of Total', 'Install Time (s)'], tablefmt='github'))
+          PY
