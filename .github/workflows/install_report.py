@@ -1,6 +1,8 @@
 import argparse
 import importlib.metadata
 import json
+import sys
+from pathlib import Path
 from tabulate import tabulate
 
 
@@ -13,12 +15,27 @@ def dist_size(dist):
     return total
 
 
+def dir_size(path: Path) -> int:
+    total = 0
+    for p in path.rglob("*"):
+        if p.is_file():
+            total += p.stat().st_size
+    return total
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--stats", help="Write JSON stats to this file")
 parser.add_argument("--install-time", type=int, help="Installation time in seconds")
 args = parser.parse_args()
 
 rows = [(d.metadata["Name"], dist_size(d)) for d in importlib.metadata.distributions()]
+
+base_dir = Path(sys.executable).resolve().parent
+for name in ("vulkan", "rocm"):
+    extra = base_dir / name
+    if extra.is_dir():
+        rows.append((name, dir_size(extra)))
+
 rows.sort(key=lambda x: x[1], reverse=True)
 
 total = sum(size for _, size in rows)

@@ -22,11 +22,10 @@ for p in artifacts_path.glob('stats-*'):
     rows.append((os_, scenario, data['size'] / 1024 / 1024, data['time']))
 
 if rows:
-    total_size = sum(size for _, _, size, _ in rows)
     table = [
-        (os_, scenario, f"{size:.2f}", f"{(size / total_size * 100):.1f}%", time)
+        (os_, scenario, f"{size:.2f}", time)
         for os_, scenario, size, time in rows
     ]
-    print(tabulate(table, headers=['OS', 'Scenario', 'Size (MB)', '% of Total', 'Install Time (s)'], tablefmt='github'))
+    print(tabulate(table, headers=['OS', 'Scenario', 'Size (MB)', 'Install Time (s)'], tablefmt='github'))
 else:
     print('No artifacts to summarize.')
