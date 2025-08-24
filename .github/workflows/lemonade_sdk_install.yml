@@ -69,9 +69,8 @@ jobs:
               ;;
             llama-rocm)
               python -m pip install lemonade-sdk
-              export LEMONADE_CI_MODE=1
-              export LEMONADE_ROCM_OVERRIDE=gfx1151
-              lemonade-install --llamacpp rocm
+              PYTHONPATH=src LEMONADE_CI_MODE=1 LEMONADE_ROCM_OVERRIDE=gfx1151 \
+                python -m lemonade_install.install --llamacpp rocm
               ;;
             oga-cpu)
               python -m pip install 'lemonade-sdk[oga-cpu]'
@@ -96,6 +95,7 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - run: mkdir -p artifacts
       - uses: actions/download-artifact@v4
         if: ${{ always() }}
