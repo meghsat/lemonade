@@ -72,8 +72,14 @@ jobs:
               ;;
             llama-rocm)
               $PYTHON -m pip install lemonade-sdk
-              PYTHONPATH="$GITHUB_WORKSPACE/src" LEMONADE_ROCM_OVERRIDE=gfx1151 \
-                $PYTHON -m lemonade_install.install --llamacpp rocm
+              if [[ "$RUNNER_OS" == "Windows" ]]; then
+                wpath=$(cygpath -w "$GITHUB_WORKSPACE")
+                PYTHONPATH="$wpath\\src" LEMONADE_ROCM_OVERRIDE=gfx1151 \
+                  $PYTHON -m lemonade_install.install --llamacpp rocm
+              else
+                PYTHONPATH="$GITHUB_WORKSPACE/src" LEMONADE_ROCM_OVERRIDE=gfx1151 \
+                  $PYTHON -m lemonade_install.install --llamacpp rocm
+              fi
               ;;
             oga-cpu)
               $PYTHON -m pip install 'lemonade-sdk[oga-cpu]'
