@@ -34,7 +34,12 @@ jobs:
             scenario: oga-ryzenai
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare portable Python
+      - name: Set up Python
+        if: runner.os != 'Windows'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Prepare environment
         shell: bash
         run: |
           set -euo pipefail
@@ -48,12 +53,8 @@ jobs:
             printf '\nLib\nLib/site-packages\nLib/site-packages/win32\nLib/site-packages/win32/lib\nLib/site-packages/Pythonwin\n' >> python/python310._pth
             echo "PYTHON=./python/python.exe" >> "$GITHUB_ENV"
           else
-            PY_URL="https://github.com/astral-sh/python-build-standalone/releases/download/20240524/cpython-3.10.14%2B20240524-x86_64-unknown-linux-gnu-install_only.tar.gz"
-            curl -fsSLo python.tar.gz "$PY_URL"
-            mkdir python
-            tar -xzf python.tar.gz -C python --strip-components=1
-            ./python/bin/python3 -m ensurepip
-            echo "PYTHON=./python/bin/python3" >> "$GITHUB_ENV"
+            python -m venv venv
+            echo "PYTHON=./venv/bin/python" >> "$GITHUB_ENV"
           fi
       - name: Measure installation stats
         shell: bash
@@ -97,6 +98,7 @@ jobs:
           name: stats-${{ matrix.os }}-${{ matrix.scenario }}
           path: stats.json
       - name: Upload environment
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: env-${{ matrix.os }}-${{ matrix.scenario }}
