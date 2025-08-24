@@ -9,23 +9,29 @@ permissions:
 
 jobs:
   install-report:
-    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
+        scenario: [no-extras, no-extras-llamacpp-vulkan, oga-cpu, oga-ryzenai]
         include:
-          - name: no-extras
+          - scenario: no-extras
             pip_install: "lemonade-sdk"
             post_install: ""
-          - name: no-extras-llamacpp-vulkan
+          - scenario: no-extras-llamacpp-vulkan
             pip_install: "lemonade-sdk"
             post_install: "lemonade-install --llamacpp vulkan"
-          - name: oga-cpu
+          - scenario: oga-cpu
             pip_install: "lemonade-sdk[oga-cpu]"
             post_install: ""
-          - name: oga-ryzenai
+          - scenario: oga-ryzenai
             pip_install: "lemonade-sdk[oga-ryzenai]"
             post_install: ""
-    name: ${{ matrix.name }}
+        exclude:
+          - os: ubuntu-latest
+            scenario: oga-ryzenai
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os }} - ${{ matrix.scenario }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -33,10 +39,16 @@ jobs:
         with:
           python-version: '3.x'
       - name: Measure installation stats
+        id: report
+        shell: bash
         run: |
           set -euo pipefail
           python -m venv venv
-          source venv/bin/activate
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            source venv/Scripts/activate
+          else
+            source venv/bin/activate
+          fi
           python -m pip install --upgrade pip
           python -m pip install tabulate
           START=$(date +%s)
@@ -47,4 +59,43 @@ jobs:
           END=$(date +%s)
           echo "## Installation Report" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "Total install time: $((END-START)) seconds" | tee -a "$GITHUB_STEP_SUMMARY"
-          python .github/workflows/install_report.py | tee -a "$GITHUB_STEP_SUMMARY"
+          TOTAL_SIZE=$(python .github/workflows/install_report.py | tee -a "$GITHUB_STEP_SUMMARY" | sed -n 's/^Total installation size: \(.*\) MB/\1/p')
+          echo "total_size=$TOTAL_SIZE" >> "$GITHUB_OUTPUT"
+          printf '%s,%s,%.2f\n' "${{ matrix.os }}" "${{ matrix.scenario }}" "$TOTAL_SIZE" > size.csv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: size-${{ matrix.os }}-${{ matrix.scenario }}
+          path: size.csv
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: install-report
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: pip install tabulate
+      - uses: actions/download-artifact@v4
+        with:
+          path: sizes
+          pattern: size-*
+          merge-multiple: true
+      - name: Summarize sizes
+        run: |
+          python - <<'PY'
+          import csv, pathlib
+          from tabulate import tabulate
+          rows = []
+          for file in pathlib.Path('sizes').glob('size-*/size.csv'):
+            with open(file) as f:
+              os, scenario, size = next(csv.reader(f))
+            rows.append((os, scenario, float(size)))
+          rows.sort()
+          table = tabulate(rows, headers=['OS', 'Scenario', 'Total Size (MB)'], tablefmt='github', floatfmt='.2f')
+          with open('$GITHUB_STEP_SUMMARY', 'a') as f:
+            f.write('### Total Installation Sizes\n\n')
+            f.write(table)
+            f.write('\n')
+          PY
