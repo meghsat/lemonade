@@ -1,0 +1,52 @@
+name: Report lemonade-sdk install size
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  install-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Measure installation stats
+        run: |
+          set -euo pipefail
+          python -m venv venv
+          source venv/bin/activate
+          python -m pip install --upgrade pip
+          START=$(date +%s)
+          python -m pip install lemonade-sdk
+          END=$(date +%s)
+          echo "## Installation Report" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Total install time: $((END-START)) seconds" | tee -a "$GITHUB_STEP_SUMMARY"
+          python - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+import importlib.metadata
+from pathlib import Path
+
+def dist_size(dist):
+    total = 0
+    for f in dist.files or []:
+        p = dist.locate_file(f)
+        if p.is_file():
+            total += p.stat().st_size
+    return total
+
+rows = []
+for d in importlib.metadata.distributions():
+    rows.append((d.metadata['Name'], dist_size(d)))
+rows.sort(key=lambda x: x[1], reverse=True)
+
+total = sum(size for _, size in rows)
+print("\n### Installation Size Breakdown\n")
+print("| Package | Size (MB) |")
+print("| --- | ---: |")
+for name, size in rows:
+    print(f"| {name} | {size/1024/1024:.2f} |")
+print(f"| **Total** | **{total/1024/1024:.2f}** |")
+PY
