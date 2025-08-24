@@ -5,6 +5,11 @@ import sys
 from pathlib import Path
 from tabulate import tabulate
 
+try:  # optional import; lemonadesdk may not provide llamacpp utils
+    from lemonade.tools.llamacpp.utils import get_llama_folder_path
+except Exception:  # pylint: disable=broad-except
+    get_llama_folder_path = None
+
 
 def dist_size(dist):
     total = 0
@@ -30,11 +35,17 @@ args = parser.parse_args()
 
 rows = [(d.metadata["Name"], dist_size(d)) for d in importlib.metadata.distributions()]
 
-base_dir = Path(sys.executable).resolve().parent
-for name in ("vulkan", "rocm"):
-    extra = base_dir / name
-    if extra.is_dir():
-        rows.append((name, dir_size(extra)))
+if get_llama_folder_path:
+    for backend in ("vulkan", "rocm"):
+        backend_dir = Path(get_llama_folder_path(backend)).parent
+        if backend_dir.is_dir():
+            rows.append((backend, dir_size(backend_dir)))
+else:
+    base_dir = Path(sys.executable).resolve().parent
+    for name in ("vulkan", "rocm"):
+        extra = base_dir / name
+        if extra.is_dir():
+            rows.append((name, dir_size(extra)))
 
 rows.sort(key=lambda x: x[1], reverse=True)
 
