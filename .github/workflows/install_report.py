@@ -1,4 +1,6 @@
+import argparse
 import importlib.metadata
+import json
 from tabulate import tabulate
 
 
@@ -10,6 +12,11 @@ def dist_size(dist):
             total += p.stat().st_size
     return total
 
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--stats", help="Write JSON stats to this file")
+parser.add_argument("--install-time", type=int, help="Installation time in seconds")
+args = parser.parse_args()
 
 rows = [(d.metadata["Name"], dist_size(d)) for d in importlib.metadata.distributions()]
 rows.sort(key=lambda x: x[1], reverse=True)
@@ -34,3 +41,7 @@ print(
         floatfmt=".2f",
     )
 )
+
+if args.stats:
+    with open(args.stats, "w") as f:
+        json.dump({"size": total, "time": args.install_time}, f)

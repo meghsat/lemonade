@@ -2,13 +2,21 @@ name: Report lemonade-sdk install size
 
 on:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   install-report:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        scenario: [plain, llama-vulkan, oga-cpu, oga-ryzenai]
+        exclude:
+          - os: ubuntu-latest
+            scenario: oga-ryzenai
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -16,18 +24,69 @@ jobs:
         with:
           python-version: '3.x'
       - name: Measure installation stats
+        shell: bash
         run: |
           set -euo pipefail
           python -m venv venv
-          source venv/bin/activate
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            source venv/Scripts/activate
+          else
+            source venv/bin/activate
+          fi
           python -m pip install --upgrade pip tabulate
           START=$(date +%s)
-          python -m pip install lemonade-sdk
+          case "${{ matrix.scenario }}" in
+            plain)
+              python -m pip install lemonade-sdk
+              ;;
+            llama-vulkan)
+              python -m pip install lemonade-sdk
+              lemonade-install --llamacpp vulkan
+              ;;
+            oga-cpu)
+              python -m pip install 'lemonade-sdk[oga-cpu]'
+              ;;
+            oga-ryzenai)
+              python -m pip install 'lemonade-sdk[oga-ryzenai]' --extra-index-url https://pkg.amd.com/lemonade
+              ;;
+          esac
           END=$(date +%s)
           INSTALL_TIME=$((END-START))
-          {
-            echo "## Installation Report"
-            echo "Total install time: ${INSTALL_TIME} seconds"
-            python .github/workflows/install_report.py
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Total install time: ${INSTALL_TIME} seconds" | tee -a "$GITHUB_STEP_SUMMARY"
+          python .github/workflows/install_report.py --stats stats.json --install-time "$INSTALL_TIME" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload stats
+        uses: actions/upload-artifact@v4
+        with:
+          name: stats-${{ matrix.os }}-${{ matrix.scenario }}
+          path: stats.json
 
+  summary:
+    needs: install-report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python -m pip install tabulate
+      - name: Generate summary
+        run: |
+          echo '## Installation Summary' >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+import json, pathlib
+from tabulate import tabulate
+rows = []
+for p in pathlib.Path('artifacts').glob('stats-*'):
+    data = json.load(open(p/'stats.json'))
+    label = p.name[6:]
+    os_, scenario = label.rsplit('-', 1)
+    rows.append((os_, scenario, data['size']/1024/1024, data['time']))
+total_size = sum(size for _, _, size, _ in rows)
+table = [
+    (os_, scenario, f"{size:.2f}", f"{(size/total_size*100):.1f}%", time)
+    for os_, scenario, size, time in rows
+]
+print(tabulate(table, headers=['OS', 'Scenario', 'Size (MB)', '% of Total', 'Install Time (s)'], tablefmt='github'))
+PY
