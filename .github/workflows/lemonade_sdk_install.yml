@@ -60,6 +60,7 @@ jobs:
         shell: bash
         env:
           PYTHONPATH: ${{ github.workspace }}/src
+          LEMONADE_ROCM_OVERRIDE: gfx1151
         run: |
           set -euo pipefail
           $PYTHON -m pip install --upgrade pip tabulate
