@@ -75,8 +75,7 @@ jobs:
               ;;
             llama-rocm)
               $PYTHON -m pip install lemonade-sdk
-              export LEMONADE_ROCM_OVERRIDE=gfx1151
-              $PYTHON -m lemonade_install.install --llamacpp rocm
+              export LEMONADE_ROCM_OVERRIDE=gfx1151 && $PYTHON -m lemonade_install.install --llamacpp rocm
               ;;
             oga-cpu)
               $PYTHON -m pip install 'lemonade-sdk[oga-cpu]'
