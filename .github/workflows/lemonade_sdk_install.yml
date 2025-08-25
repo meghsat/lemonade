@@ -60,7 +60,6 @@ jobs:
         shell: bash
         env:
           PYTHONPATH: ${{ github.workspace }}/src
-          LEMONADE_ROCM_OVERRIDE: gfx1151
         run: |
           set -euo pipefail
           $PYTHON -m pip install --upgrade pip tabulate
@@ -75,7 +74,7 @@ jobs:
               ;;
             llama-rocm)
               $PYTHON -m pip install lemonade-sdk
-              $PYTHON -m lemonade_install.install --llamacpp rocm
+              LEMONADE_ROCM_OVERRIDE=$LEMONADE_ROCM_OVERRIDE $PYTHON -m lemonade_install.install --llamacpp rocm
               ;;
             oga-cpu)
               $PYTHON -m pip install 'lemonade-sdk[oga-cpu]'
