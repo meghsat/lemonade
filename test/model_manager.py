@@ -116,21 +116,21 @@ class TestModelManagerDeletion(unittest.TestCase):
         with open(self.user_models_file, 'w') as f:
             json.dump(models_data, f)
 
-    @patch.object(ModelManager, 'supported_models', new_callable=PropertyMock)
-    def test_delete_nonexistent_model_raises_error(self, mock_supported_models):
+    @patch.object(ModelManager, 'registered_models', new_callable=PropertyMock)
+    def test_delete_nonexistent_model_raises_error(self, mock_registered_models):
         """Test that deleting a non-existent model raises ValueError."""
-        mock_supported_models.return_value = {}
+        mock_registered_models.return_value = {}
         
         with self.assertRaises(ValueError) as context:
             self.model_manager.delete_model("nonexistent-model")
             
         self.assertIn("is not supported", str(context.exception))
 
-    @patch.object(ModelManager, 'supported_models', new_callable=PropertyMock)
+    @patch.object(ModelManager, 'registered_models', new_callable=PropertyMock)
     @patch('lemonade.common.network.custom_snapshot_download')
-    def test_delete_model_with_manual_cache_removal(self, mock_snapshot_download, mock_supported_models):
+    def test_delete_model_with_manual_cache_removal(self, mock_snapshot_download, mock_registered_models):
         """Test Bug Fix #1: Graceful handling when cache files are manually removed."""
-        mock_supported_models.return_value = self.sample_models
+        mock_registered_models.return_value = self.sample_models
         
         # Mock LocalEntryNotFoundError when trying to find cache
         mock_snapshot_download.side_effect = Exception("LocalEntryNotFoundError: not found in cache")
@@ -150,11 +150,11 @@ class TestModelManagerDeletion(unittest.TestCase):
         self.assertFalse(os.path.exists(repo_cache_dir), 
                         "Cache directory should be deleted after manual path construction")
 
-    @patch.object(ModelManager, 'supported_models', new_callable=PropertyMock)
+    @patch.object(ModelManager, 'registered_models', new_callable=PropertyMock)
     @patch('lemonade.common.network.custom_snapshot_download')
-    def test_delete_model_cache_already_manually_deleted(self, mock_snapshot_download, mock_supported_models):
+    def test_delete_model_cache_already_manually_deleted(self, mock_snapshot_download, mock_registered_models):
         """Test handling when cache directory doesn't exist (already manually deleted)."""
-        mock_supported_models.return_value = self.sample_models
+        mock_registered_models.return_value = self.sample_models
         
         # Mock the error and don't create any cache structure  
         mock_snapshot_download.side_effect = Exception("cannot find an appropriate cached snapshot")
@@ -168,12 +168,12 @@ class TestModelManagerDeletion(unittest.TestCase):
         self.assertTrue(any("may have been manually deleted" in call for call in print_calls),
                        "Should print message about manual deletion")
 
-    @patch.object(ModelManager, 'supported_models', new_callable=PropertyMock)
+    @patch.object(ModelManager, 'registered_models', new_callable=PropertyMock)
     @patch('lemonade.common.network.custom_snapshot_download')
     @patch('lemonade.tools.llamacpp.utils.identify_gguf_models')
-    def test_gguf_variant_selective_deletion(self, mock_identify_gguf, mock_snapshot_download, mock_supported_models):
+    def test_gguf_variant_selective_deletion(self, mock_identify_gguf, mock_snapshot_download, mock_registered_models):
         """Test Bug Fix #2: GGUF variant selective deletion (not cross-deletion)."""
-        mock_supported_models.return_value = self.sample_models
+        mock_registered_models.return_value = self.sample_models
         
         # Create cache with multiple variants
         repo_cache_dir, snapshot_dir = self.create_mock_hf_cache_structure("unsloth/test-model-GGUF",
@@ -205,12 +205,12 @@ class TestModelManagerDeletion(unittest.TestCase):
         self.assertTrue(any("Successfully deleted variant files" in call for call in print_calls))
         self.assertTrue(any("Other variants still exist" in call for call in print_calls))
 
-    @patch.object(ModelManager, 'supported_models', new_callable=PropertyMock)
+    @patch.object(ModelManager, 'registered_models', new_callable=PropertyMock)
     @patch('lemonade.common.network.custom_snapshot_download')
     @patch('lemonade.tools.llamacpp.utils.identify_gguf_models')
-    def test_gguf_last_variant_deletion_removes_repository(self, mock_identify_gguf, mock_snapshot_download, mock_supported_models):
+    def test_gguf_last_variant_deletion_removes_repository(self, mock_identify_gguf, mock_snapshot_download, mock_registered_models):
         """Test that deleting the last GGUF variant removes the entire repository."""
-        mock_supported_models.return_value = self.sample_models
+        mock_registered_models.return_value = self.sample_models
         
         # Create cache with only one variant
         repo_cache_dir, snapshot_dir = self.create_mock_hf_cache_structure("unsloth/test-model-GGUF", 
@@ -234,11 +234,11 @@ class TestModelManagerDeletion(unittest.TestCase):
         self.assertTrue(any("No other variants remain" in call for call in print_calls))
         self.assertTrue(any("deleting entire repository cache" in call for call in print_calls))
 
-    @patch.object(ModelManager, 'supported_models', new_callable=PropertyMock)
+    @patch.object(ModelManager, 'registered_models', new_callable=PropertyMock)
     @patch('lemonade.common.network.custom_snapshot_download')
-    def test_non_gguf_model_deletion(self, mock_snapshot_download, mock_supported_models):
+    def test_non_gguf_model_deletion(self, mock_snapshot_download, mock_registered_models):
         """Test that non-GGUF models are deleted entirely (existing behavior preserved)."""
-        mock_supported_models.return_value = self.sample_models
+        mock_registered_models.return_value = self.sample_models
         
         # Create cache for non-GGUF model
         repo_cache_dir, snapshot_dir = self.create_mock_hf_cache_structure("amd/test-model-onnx",
@@ -261,11 +261,11 @@ class TestModelManagerDeletion(unittest.TestCase):
         print_calls = [call[0][0] for call in mock_print.call_args_list]  
         self.assertTrue(any("Successfully deleted model test-non-gguf-model" in call for call in print_calls))
 
-    @patch.object(ModelManager, 'supported_models', new_callable=PropertyMock)
+    @patch.object(ModelManager, 'registered_models', new_callable=PropertyMock)
     @patch('lemonade.common.network.custom_snapshot_download')
-    def test_user_model_registry_cleanup(self, mock_snapshot_download, mock_supported_models):
+    def test_user_model_registry_cleanup(self, mock_snapshot_download, mock_registered_models):
         """Test that user models are properly removed from user_models.json registry."""
-        mock_supported_models.return_value = self.sample_models
+        mock_registered_models.return_value = self.sample_models
         
         # Create user_models.json file
         user_models_data = {
@@ -296,12 +296,12 @@ class TestModelManagerDeletion(unittest.TestCase):
         self.assertIn("another-user-model", remaining_models,
                      "Other user models should remain in registry")
 
-    @patch.object(ModelManager, 'supported_models', new_callable=PropertyMock)
+    @patch.object(ModelManager, 'registered_models', new_callable=PropertyMock)
     @patch('lemonade.common.network.custom_snapshot_download')
     @patch('lemonade.tools.llamacpp.utils.identify_gguf_models')
-    def test_gguf_variant_deletion_error_handling(self, mock_identify_gguf, mock_snapshot_download, mock_supported_models):
+    def test_gguf_variant_deletion_error_handling(self, mock_identify_gguf, mock_snapshot_download, mock_registered_models):
         """Test error handling during variant-specific deletion."""
-        mock_supported_models.return_value = self.sample_models
+        mock_registered_models.return_value = self.sample_models
         
         repo_cache_dir, snapshot_dir = self.create_mock_hf_cache_structure("unsloth/test-model-GGUF")
         mock_snapshot_download.return_value = snapshot_dir
@@ -317,9 +317,9 @@ class TestModelManagerDeletion(unittest.TestCase):
         self.assertTrue(any("Warning: Could not perform selective variant deletion" in call for call in print_calls))
         self.assertTrue(any("This may indicate the files were already manually deleted" in call for call in print_calls))
 
-    @patch.object(ModelManager, 'supported_models', new_callable=PropertyMock)
+    @patch.object(ModelManager, 'registered_models', new_callable=PropertyMock)
     @patch('lemonade.common.network.custom_snapshot_download') 
-    def test_backward_compatibility_no_variant_gguf(self, mock_snapshot_download, mock_supported_models):
+    def test_backward_compatibility_no_variant_gguf(self, mock_snapshot_download, mock_registered_models):
         """Test backward compatibility: GGUF models without variants are deleted entirely."""
         # Model without variant specification
         models_no_variant = {
@@ -329,7 +329,7 @@ class TestModelManagerDeletion(unittest.TestCase):
                 "model_name": "test-gguf-no-variant"
             }
         }
-        mock_supported_models.return_value = models_no_variant
+        mock_registered_models.return_value = models_no_variant
         
         repo_cache_dir, snapshot_dir = self.create_mock_hf_cache_structure("unsloth/test-model-GGUF")
         mock_snapshot_download.return_value = snapshot_dir
@@ -354,18 +354,18 @@ class TestModelManagerIntegration(unittest.TestCase):
         """Clean up integration test environment."""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch.object(ModelManager, 'supported_models', new_callable=PropertyMock)
+    @patch.object(ModelManager, 'registered_models', new_callable=PropertyMock)
     @patch.object(ModelManager, 'downloaded_hf_checkpoints', new_callable=PropertyMock)
     @patch('lemonade.common.network.custom_snapshot_download')
     @patch('lemonade.tools.llamacpp.utils.identify_gguf_models')
     @patch('os.path.exists')
     def test_downloaded_models_with_gguf_variants(self, mock_exists, mock_identify_gguf, 
                                                  mock_snapshot_download, mock_downloaded_checkpoints, 
-                                                 mock_supported_models):
+                                                 mock_registered_models):
         """Test that downloaded_models only shows variants that actually exist locally."""
         
         # Set up mock models - two variants of the same base model
-        mock_supported_models.return_value = {
+        mock_registered_models.return_value = {
             "Qwen3-0.6B-GGUF-Q4_0": {
                 "checkpoint": "unsloth/Qwen3-0.6B-GGUF:Q4_0",
                 "recipe": "llamacpp",

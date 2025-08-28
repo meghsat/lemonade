@@ -419,13 +419,13 @@ def list_models():
     model_manager = ModelManager()
 
     # Get all supported models and downloaded models
-    supported_models = model_manager.supported_models
+    registered_models = model_manager.registered_models
     downloaded_models = model_manager.downloaded_models
 
     # Filter to only show recommended models
     recommended_models = {
         model_name: model_info
-        for model_name, model_info in supported_models.items()
+        for model_name, model_info in registered_models.items()
         if model_info.get("suggested", False)
     }
 

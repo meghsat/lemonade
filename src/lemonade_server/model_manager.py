@@ -15,7 +15,7 @@ USER_MODELS_FILE = os.path.join(DEFAULT_CACHE_DIR, "user_models.json")
 class ModelManager:
 
     @property
-    def supported_models(self) -> dict:
+    def registered_models(self) -> dict:
         """
         Returns a dictionary of supported models.
         Note: Models must be downloaded before they are locally available.
@@ -81,8 +81,8 @@ class ModelManager:
         """
         downloaded_models = {}
         downloaded_checkpoints = self.downloaded_hf_checkpoints
-        for model in self.supported_models:
-            model_info = self.supported_models[model]
+        for model in self.registered_models:
+            model_info = self.registered_models[model]
             checkpoint = model_info["checkpoint"]
             base_checkpoint, variant = parse_checkpoint(checkpoint)
 
@@ -147,7 +147,7 @@ class ModelManager:
             from the Hugging Face Hub.
         """
         for model in models:
-            if model not in self.supported_models:
+            if model not in self.registered_models:
                 # Register the model as a user model if the model name
                 # is not already registered
 
@@ -208,8 +208,8 @@ class ModelManager:
                 checkpoint_to_download = checkpoint
                 gguf_model_config = new_registration_model_config
             else:
-                checkpoint_to_download = self.supported_models[model]["checkpoint"]
-                gguf_model_config = PullConfig(**self.supported_models[model])
+                checkpoint_to_download = self.registered_models[model]["checkpoint"]
+                gguf_model_config = PullConfig(**self.registered_models[model])
             print(f"Downloading {model} ({checkpoint_to_download})")
 
             if "gguf" in checkpoint_to_download.lower():
@@ -266,13 +266,13 @@ class ModelManager:
         Deletes the specified model from local storage.
         For GGUF models with variants, only deletes the specific variant files.
         """
-        if model_name not in self.supported_models:
+        if model_name not in self.registered_models:
             raise ValueError(
                 f"Model {model_name} is not supported. Please choose from the following: "
-                f"{list(self.supported_models.keys())}"
+                f"{list(self.registered_models.keys())}"
             )
 
-        checkpoint = self.supported_models[model_name]["checkpoint"]
+        checkpoint = self.registered_models[model_name]["checkpoint"]
         print(f"Deleting {model_name} ({checkpoint})")
 
         # Parse checkpoint to get base and variant
@@ -328,7 +328,7 @@ class ModelManager:
                 core_files, sharded_files = identify_gguf_models(
                     base_checkpoint,
                     variant,
-                    self.supported_models[model_name].get("mmproj", ""),
+                    self.registered_models[model_name].get("mmproj", ""),
                 )
                 all_variant_files = list(core_files.values()) + sharded_files
 

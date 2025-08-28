@@ -222,7 +222,7 @@ class OgaLoad(FirstTool):
         Returns True if device, dtype, and model are consistent.
         """
 
-        hf_supported_models = {
+        hf_registered_models = {
             "cpu": {"int4": "*/*", "fp32": "*/*"},
             "igpu": {"int4": "*/*", "fp16": "*/*"},
             "npu": {"int4": "*/*"},
@@ -231,9 +231,9 @@ class OgaLoad(FirstTool):
         }
 
         hf_supported = (
-            device in hf_supported_models
-            and dtype in hf_supported_models[device]
-            and fnmatch(checkpoint, hf_supported_models[device][dtype])
+            device in hf_registered_models
+            and dtype in hf_registered_models[device]
+            and fnmatch(checkpoint, hf_registered_models[device][dtype])
         )
         return hf_supported
 

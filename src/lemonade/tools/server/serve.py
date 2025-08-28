@@ -859,7 +859,7 @@ class Server:
                 return self.wrapped_server.embeddings(embeddings_request)
             except Exception as e:  # pylint: disable=broad-exception-caught
                 # Check if model has embeddings label
-                model_info = ModelManager().supported_models.get(
+                model_info = ModelManager().registered_models.get(
                     self.llm_loaded.model_name, {}
                 )
                 if "embeddings" not in model_info.get("labels", []):
@@ -892,7 +892,7 @@ class Server:
                 return self.wrapped_server.reranking(reranking_request)
             except Exception as e:  # pylint: disable=broad-exception-caught
                 # Check if model has reranking label
-                model_info = ModelManager().supported_models.get(
+                model_info = ModelManager().registered_models.get(
                     self.llm_loaded.model_name, {}
                 )
                 if "reranking" not in model_info.get("labels", []):
@@ -1435,13 +1435,13 @@ class Server:
                 await self._generate_semaphore.acquire()
 
             # Make sure the model is already registered
-            supported_models = ModelManager().supported_models
+            registered_models = ModelManager().registered_models
 
             # The `custom` name allows run-as-thread servers to bypass loading
             if config.model_name == "custom":
                 config_to_use = config
             else:
-                if config.model_name not in supported_models.keys():
+                if config.model_name not in registered_models.keys():
                     self.model_load_failure(
                         config.model_name,
                         message=(
@@ -1452,7 +1452,7 @@ class Server:
                     )
 
                 # Get additional properties from the model registry
-                config_to_use = LoadConfig(**supported_models[config.model_name])
+                config_to_use = LoadConfig(**registered_models[config.model_name])
 
             # Caching mechanism: if the checkpoint is already loaded there is nothing else to do
             if (

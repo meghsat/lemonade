@@ -278,8 +278,8 @@ class WrappedServer(ABC):
         logging.debug(f"Model file paths: {snapshot_files}")
 
         # Check if model supports embeddings
-        supported_models = ModelManager().supported_models
-        model_info = supported_models.get(model_config.model_name, {})
+        registered_models = ModelManager().registered_models
+        model_info = registered_models.get(model_config.model_name, {})
         supports_embeddings = "embeddings" in model_info.get("labels", [])
         supports_reranking = "reranking" in model_info.get("labels", [])
 

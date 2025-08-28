@@ -9,7 +9,7 @@ def get_webapp_html(port=8000):
     Show Lemonade Web App for LLM chat and model management.
     """
     # Load server models from JSON
-    server_models = ModelManager().supported_models
+    server_models = ModelManager().registered_models
 
     # Use shared filter function from model_manager.py
     filtered_models = ModelManager().filter_models_by_backend(server_models)
