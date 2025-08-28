@@ -13,11 +13,10 @@ USER_MODELS_FILE = os.path.join(DEFAULT_CACHE_DIR, "user_models.json")
 
 
 class ModelManager:
-
     @property
     def registered_models(self) -> dict:
         """
-        Returns a dictionary of supported models.
+        Returns a dictionary of registered models.
         Note: Models must be downloaded before they are locally available.
         """
         # Load the models dictionary from the built-in JSON file
@@ -131,6 +130,16 @@ class ModelManager:
         """
         return self.filter_models_by_backend(self.downloaded_models)
 
+    def is_huggingface_model(self, model_name: str) -> bool:
+        """
+        Returns True if the model is a Hugging Face model, False otherwise.
+        """
+        try:
+            info = huggingface_hub.model_info(model_name)
+            return True
+        except huggingface_hub.RepositoryNotFoundError:
+            return False
+
     def download_models(
         self,
         models: list[str],
@@ -147,7 +156,12 @@ class ModelManager:
             from the Hugging Face Hub.
         """
         for model in models:
-            if model not in self.registered_models:
+
+            # We use auto recipe selection when the model is not registered
+            # and it corresponds to a Hugging Face checkpoint
+            using_auto_recipe_selection = model not in self.registered_models and recipe is None and self.is_huggingface_model(model) and checkpoint is None
+            
+            if model not in self.registered_models and not using_auto_recipe_selection:
                 # Register the model as a user model if the model name
                 # is not already registered
 
@@ -207,6 +221,12 @@ class ModelManager:
             if new_registration_model_config:
                 checkpoint_to_download = checkpoint
                 gguf_model_config = new_registration_model_config
+            elif using_auto_recipe_selection:
+                checkpoint_to_download = model
+                gguf_model_config = PullConfig(
+                    model_name=model,
+                    checkpoint=model
+                )
             else:
                 checkpoint_to_download = self.registered_models[model]["checkpoint"]
                 gguf_model_config = PullConfig(**self.registered_models[model])
