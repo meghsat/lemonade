@@ -1,3 +1,4 @@
+import os
 import sys
 import asyncio
 import statistics
@@ -1444,7 +1445,43 @@ class Server:
             elif ModelManager().using_auto_recipe_selection(config.model_name, config.recipe, config.checkpoint):
                 config_to_use = config
                 config_to_use.checkpoint = config.model_name
-                config_to_use.recipe = "llamacpp"
+
+                # List all files inside the checkpoint directory
+                from lemonade.common.network import custom_snapshot_download
+                
+                # Get the local snapshot path for this model
+                snapshot_path = custom_snapshot_download(
+                    config.model_name.split(":")[0], local_files_only=True
+                )
+
+                # FIXME: We should add markers to the model that allows us to identify the recipe
+                # instead of relying on names
+                if config.model_name.endswith("-onnx-ryzen-strix"):
+                    config_to_use.recipe = "oga-npu"
+                elif config.model_name.endswith("-onnx-hybrid"):
+                    config_to_use.recipe = "oga-hybrid"
+                else:
+                    for root, dirs, files in os.walk(snapshot_path):
+                        if config_to_use.recipe:
+                            break
+                        for file in files:
+                            if file.endswith(".gguf"):
+                                config_to_use.recipe = "llamacpp"
+                                break
+                            elif file.endswith(".onnx"):
+                                config_to_use.recipe = "oga-cpu"
+                                break
+                
+                if config_to_use.recipe is None:
+                    self.model_load_failure(
+                        config.model_name,
+                        message=(
+                            f"Could not identify recipe for {config.model_name} "
+                            "Please register the model with a `pull` request."
+                        ),
+                    )
+
+
             else:
                 if config.model_name not in registered_models.keys():
                     self.model_load_failure(
