@@ -1440,6 +1440,11 @@ class Server:
             # The `custom` name allows run-as-thread servers to bypass loading
             if config.model_name == "custom":
                 config_to_use = config
+            # FIXME: No need to check Huggingface on load, just check cache
+            elif ModelManager().using_auto_recipe_selection(config.model_name, config.recipe, config.checkpoint):
+                config_to_use = config
+                config_to_use.checkpoint = config.model_name
+                config_to_use.recipe = "llamacpp"
             else:
                 if config.model_name not in registered_models.keys():
                     self.model_load_failure(

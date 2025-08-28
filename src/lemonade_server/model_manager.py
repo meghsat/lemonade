@@ -139,6 +139,12 @@ class ModelManager:
             return True
         except huggingface_hub.RepositoryNotFoundError:
             return False
+    
+    def using_auto_recipe_selection(self, model: str, recipe: Optional[str], checkpoint: Optional[str]) -> bool:
+        """
+        Returns True if the model is not registered and it corresponds to a Hugging Face checkpoint
+        """
+        return model not in self.registered_models and recipe is None and self.is_huggingface_model(model) and checkpoint is None
 
     def download_models(
         self,
@@ -159,8 +165,8 @@ class ModelManager:
 
             # We use auto recipe selection when the model is not registered
             # and it corresponds to a Hugging Face checkpoint
-            using_auto_recipe_selection = model not in self.registered_models and recipe is None and self.is_huggingface_model(model) and checkpoint is None
-            
+            using_auto_recipe_selection = self.using_auto_recipe_selection(model, recipe, checkpoint)
+
             if model not in self.registered_models and not using_auto_recipe_selection:
                 # Register the model as a user model if the model name
                 # is not already registered
