@@ -135,7 +135,7 @@ class ModelManager:
         Returns True if the model is a Hugging Face model, False otherwise.
         """
         try:
-            info = huggingface_hub.model_info(model_name)
+            info = huggingface_hub.model_info(model_name.split(":")[0])
             return True
         except huggingface_hub.RepositoryNotFoundError:
             return False
