@@ -13,6 +13,10 @@
         <link rel="canonical" href="https://lemonade-server.ai/server/apps/open-hands/">
       
       
+        <link rel="prev" href="../mindcraft/">
+      
+      
+        <link rel="next" href="../open-webui/">
       
       
       <link rel="icon" href="../../../assets/favicon.ico">
@@ -295,20 +299,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
@@ -324,35 +328,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             Application Guides
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../open-webui/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Open WebUI
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
             
               
                 
@@ -505,6 +486,172 @@
   
   <span class="md-ellipsis">
     Mindcraft
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    OpenHands
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    OpenHands
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prerequisites
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Installation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Installation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#launch-lemonade-server-with-the-correct-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Launch Lemonade Server with the correct settings
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#installing-openhands" class="md-nav__link">
+    <span class="md-ellipsis">
+      Installing OpenHands
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#launching-openhands" class="md-nav__link">
+    <span class="md-ellipsis">
+      Launching OpenHands
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-openhands" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using OpenHands
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      Common Issues
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resources
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../open-webui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Open WebUI
     
   </span>
   
@@ -824,22 +971,20 @@
 
 <h1 id="openhands">OpenHands</h1>
 <p><a href="https://github.com/All-Hands-AI/OpenHands">OpenHands</a> is an open-source AI coding agent. This document explains how to configure OpenHands to target local AI models using Lemonade Server, enabling code generation, editing, and chat capabilities. Much of this guide uses the fantastic <a href="https://docs.all-hands.dev/usage/llms/local-llms">guide from OpenHands</a> on running local models, with added details on integrating with Lemonade Server.</p>
-<p>There are a few things to note on this integration:
-* This integration is in its early stages. We encourage you to test it and share any issues you encounter—your feedback will help us make the Lemonade–OpenHands functionality as robust as possible.</p>
+<p>There are a few things to note on this integration:</p>
 <ul>
-<li>Due to the complexity of the scaffolding of agentic software agents, the compute requirements for this application is very high. For a low latency experience, we recommend using a discrete GPU with at least 16 GB of VRAM, or a Strix Halo PC with at least 64 GB of RAM. </li>
+<li>
+<p>This integration is in its early stages. We encourage you to test it and share any issues you encounter—your feedback will help us make the Lemonade–OpenHands functionality as robust as possible.</p>
+</li>
+<li>
+<p>Due to the complexity of the scaffolding of agentic software agents, the compute requirements for this application is very high. For a low latency experience, we recommend using a discrete GPU with at least 16 GB of VRAM, or a Strix Halo PC with at least 64 GB of RAM. </p>
+</li>
 </ul>
 <h2 id="prerequisites">Prerequisites</h2>
 <ul>
-<li>
-<p><strong>Docker</strong>: OpenHands leverages Docker containers to create environments for the software agents. To see how to install docker for OpenHands, see their <a href="https://docs.all-hands.dev/usage/local-setup">documentation</a>.</p>
-</li>
-<li>
-<p><strong>Lemonade Server</strong>: Install Lemonade Server using the <a href="https://lemonade-server.ai/docs/server/">Getting Started Guide</a>.</p>
-</li>
-<li>
-<p><strong>Server running</strong>: Ensure Lemonade Server is running on <code>http://localhost:8000</code></p>
-</li>
+<li><strong>Docker</strong>: OpenHands leverages Docker containers to create environments for the software agents. To see how to install docker for OpenHands, see their <a href="https://docs.all-hands.dev/usage/local-setup">documentation</a>.</li>
+<li><strong>Lemonade Server</strong>: Install Lemonade Server using the <a href="https://lemonade-server.ai/docs/server/">Getting Started Guide</a>.</li>
+<li><strong>Server running</strong>: Ensure Lemonade Server is running on <code>http://localhost:8000</code></li>
 <li><strong>Models installed</strong>: Ensure at least one model from the <a href="https://lemonade-server.ai/docs/server/server_models/">supported models list</a> is downloaded locally. For OpenHands functionality, we recommend models denoted with the <code>coding</code> label, which can be found in your Lemonade installation's <code>Model Manager</code> or in the labels of the <a href="https://lemonade-server.ai/docs/server/server_models/">models list</a>. </li>
 </ul>
 <h2 id="installation">Installation</h2>
@@ -859,17 +1004,17 @@
 </li>
 <li>
 <p>Set the following values in the configuration:</p>
-</li>
-<li>
-<p><strong>Custom Model</strong>: <code>openai/Qwen3-Coder-30B-A3B-Instruct-GGUF</code></p>
-</li>
+<ul>
+<li><strong>Custom Model</strong>: <code>openai/Qwen3-Coder-30B-A3B-Instruct-GGUF</code></li>
 <li><strong>Base URL</strong>: <code>http://host.docker.internal:8000/api/v1/</code></li>
 <li><strong>API Key</strong>: Use a dash or any character.</li>
-</ol>
-<p>The setup should look as follows::</p>
+</ul>
+<p>The setup should look as follows:</p>
 <p><img width="953" height="502" alt="advanced-configuration" src="https://github.com/user-attachments/assets/4c710fdd-489f-4b55-8efc-faf6096a068a" /></p>
-<ol>
-<li>Click <code>Save Settings</code>. </li>
+</li>
+<li>
+<p>Click <code>Save Settings</code>. </p>
+</li>
 </ol>
 <h2 id="using-openhands">Using OpenHands</h2>
 <ol>
@@ -882,15 +1027,13 @@
 <img width="952" height="502" alt="initial-prompt-lemonade-website" src="https://github.com/user-attachments/assets/6908631f-d9f3-4c4f-95b2-51e052859b39" /></p>
 </li>
 <li>
-<p>Hit <code>Enter</code> to start the process. This will bring you to a new screen that allows you to monitor the agent operating in its environment to develop the requested application. An example of the agent working on the requested application can be seen below:</p>
+<p>Hit <code>Enter</code> to start the process. This will bring you to a new screen that allows you to monitor the agent operating in its environment to develop the requested application. An example of the agent working on the requested application can be seen below:
+<img width="950" height="502" alt="lemonade-website-in-progress" src="https://github.com/user-attachments/assets/2eb4b0fd-b24d-447f-888b-5e739d559716" /></p>
 </li>
-</ol>
-<p><img width="950" height="502" alt="lemonade-website-in-progress" src="https://github.com/user-attachments/assets/2eb4b0fd-b24d-447f-888b-5e739d559716" /></p>
-<ol>
-<li>When complete, the user can interact with the environment and artifacts created by the software agent. An image of the workspace at the end of developing the application can be seen below. In the <code>Terminal</code> at the bottom, we can see that the software agent has launched the web server hosting the newly developed website at port number <code>52877</code>.  </li>
-</ol>
-<p><img width="956" height="509" alt="finished-prompt-lemonade-website" src="https://github.com/user-attachments/assets/554b06cf-4593-4a1f-af67-f9b61dca6adb" /></p>
-<ol>
+<li>
+<p>When complete, the user can interact with the environment and artifacts created by the software agent. An image of the workspace at the end of developing the application can be seen below. In the <code>Terminal</code> at the bottom, we can see that the software agent has launched the web server hosting the newly developed website at port number <code>52877</code>.
+<img width="956" height="509" alt="finished-prompt-lemonade-website" src="https://github.com/user-attachments/assets/554b06cf-4593-4a1f-af67-f9b61dca6adb" /></p>
+</li>
 <li>
 <p>Use your browser to go to the web application developed by the software agent. Below is an image showing what was created:
 <img width="941" height="500" alt="lemonade-website" src="https://github.com/user-attachments/assets/485b33ad-773a-49d3-8740-255a3bb42bd6" /></p>
@@ -904,7 +1047,7 @@
 <h2 id="common-issues">Common Issues</h2>
 <ul>
 <li>
-<p>Certain small models can struggle with tool calling. This can be seen by the agent continously running the same command that is resulting in an error. For example, we have found that it is common for certain models to initially struggle with the tool required to create files. In our experience after multiple attempts, the model is able to figure out that it is not using the tool correctly and tries another method to use the tool. An example of this can be seen below. If this issue persists we recommend enabling native tool in OpenHands. This can be done by launching OpenHands via docker and adding  <code>-e LLM_NATIVE_TOOL_CALLING=true</code> to the <code>docker run...</code> command in the OpenHands documentation. 
+<p>Certain small models can struggle with tool calling. This can be seen by the agent continuously running the same command that is resulting in an error. For example, we have found that it is common for certain models to initially struggle with the tool required to create files. In our experience after multiple attempts, the model is able to figure out that it is not using the tool correctly and tries another method to use the tool. An example of this can be seen below. If this issue persists we recommend enabling native tool calling in OpenHands. This can be done by launching OpenHands via docker and adding <code>-e LLM_NATIVE_TOOL_CALLING=true</code> to the <code>docker run...</code> command in the OpenHands documentation. 
 <img width="1528" height="849" alt="tool-calling-struggles" src="https://github.com/user-attachments/assets/2e4cc756-4c0b-42ec-bdf8-dde541f30cf6" /></p>
 </li>
 <li>
@@ -916,12 +1059,8 @@
 </ul>
 <h2 id="resources">Resources</h2>
 <ul>
-<li>
-<p><a href="https://github.com/All-Hands-AI/OpenHands/">OpenHands GitHub</a></p>
-</li>
-<li>
-<p><a href="https://docs.all-hands.dev/">OpenHands Documentation</a></p>
-</li>
+<li><a href="https://github.com/All-Hands-AI/OpenHands/">OpenHands GitHub</a></li>
+<li><a href="https://docs.all-hands.dev/">OpenHands Documentation</a></li>
 <li><a href="https://docs.all-hands.dev/usage/llms/local-llms/">OpenHands Documentation on integrating with local models</a></li>
 </ul>
 
@@ -954,6 +1093,44 @@
       
         <footer class="md-footer">
   
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../mindcraft/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Mindcraft">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Mindcraft
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../open-webui/" class="md-footer__link md-footer__link--next" aria-label="Next: Open WebUI">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Open WebUI
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
     
   
   <div class="md-footer-meta md-typeset">
