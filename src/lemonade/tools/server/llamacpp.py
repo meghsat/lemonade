@@ -62,10 +62,6 @@ class LlamaTelemetry(WrappedServerTelemetry):
         Parse telemetry data from llama server output lines.
         """
         
-        # Debug: Log lines that might contain progress info
-        if "prompt" in line.lower() or "progress" in line.lower() or "eval" in line.lower():
-            logging.debug(f"PREFILL_DEBUG: Telemetry parsing line: {line}")
-
         # Parse prefill progress from llama.cpp server output
         # Look for "prompt processing progress" with progress value
         progress_match = re.search(
@@ -74,14 +70,12 @@ class LlamaTelemetry(WrappedServerTelemetry):
         if progress_match:
             new_progress = float(progress_match.group(1))
             self.prefill_progress = min(new_progress, 1.0)
-            logging.debug(f"PREFILL_DEBUG: Found progress: {self.prefill_progress}")
             return
         
         # Also check for "prompt done" to mark completion
         if "prompt done" in line:
             self.prefill_complete = True
             self.prefill_progress = 1.0
-            logging.debug("PREFILL_DEBUG: Prompt processing complete")
             return
 
         if "vk::PhysicalDevice::createDevice: ErrorExtensionNotPresent" in line:

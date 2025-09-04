@@ -354,16 +354,13 @@ class WrappedServer(ABC):
         while time.time() - start_time < timeout:
             # Check if prefill is complete
             if hasattr(self.telemetry, 'prefill_complete') and self.telemetry.prefill_complete:
-                logging.debug(f"MONITOR: Prefill complete, stopping monitor")
                 break
             
             # Check if we should report progress
             if hasattr(self.telemetry, 'should_report_progress'):
                 current_progress = self.telemetry.prefill_progress if hasattr(self.telemetry, 'prefill_progress') else 0.0
-                logging.debug(f"MONITOR: Current progress = {current_progress}, should_report = {self.telemetry.should_report_progress()}")
                 if self.telemetry.should_report_progress():
                     progress_chunk = create_progress_tool_call_chunk(current_progress)
-                    logging.debug(f"MONITOR: Yielding progress {current_progress}")
                     yield f"data: {progress_chunk.model_dump_json()}\n\n"
             
             # Small sleep to avoid busy waiting
@@ -383,20 +380,16 @@ class WrappedServer(ABC):
                 current_progress = self.telemetry.prefill_progress if hasattr(self.telemetry, 'prefill_progress') else 0.0
                 # Call should_report_progress() only once to avoid side effects
                 should_report = self.telemetry.should_report_progress()
-                logging.debug(f"MONITOR: Current progress = {current_progress}, should_report = {should_report}")
                 if should_report:
                     progress_chunk = create_progress_tool_call_chunk(current_progress)
-                    logging.debug(f"MONITOR: Yielding progress {current_progress}")
                     yield f"data: {progress_chunk.model_dump_json()}\n\n"
                     
                     # If we just yielded 1.0 (complete), we can stop monitoring
                     if current_progress >= 1.0:
-                        logging.debug(f"MONITOR: Progress complete (1.0), stopping monitor")
                         break
             
             # Check if prefill is complete
             if hasattr(self.telemetry, 'prefill_complete') and self.telemetry.prefill_complete:
-                logging.debug(f"MONITOR: Prefill complete, stopping monitor")
                 break
             
             # Small async sleep to avoid busy waiting
@@ -463,28 +456,23 @@ class WrappedServer(ABC):
                             # Use wait_for to allow checking both sources
                             msg_type, data = await asyncio.wait_for(queue.get(), timeout=0.1)
                             items_processed += 1
-                            logging.debug(f"QUEUE: Got item #{items_processed}: type={msg_type}, first_chunk={first_chunk_received}")
                             
                             if msg_type == "done":
-                                logging.debug("QUEUE: Got done signal, breaking")
                                 break
                             elif msg_type == "error":
                                 yield f'data: {{"error": "{str(data)}"}}\n\n'
                                 break
                             elif msg_type == "progress" and not first_chunk_received:
                                 # Only yield progress before first real chunk
-                                logging.debug(f"STREAM: Yielding progress update: {data[:100]}")
                                 yield data
                             elif msg_type == "chunk":
                                 if not first_chunk_received:
                                     first_chunk_received = True
                                     monitor_task.cancel()  # Stop monitoring once real chunks arrive
-                                    logging.debug("STREAM: First chunk received, stopping progress monitor")
                                 yield f"data: {data.model_dump_json()}\n\n"
                         except asyncio.TimeoutError:
                             # Check if tasks are still running
                             if fetch_task.done() and monitor_task.done():
-                                logging.debug(f"QUEUE: Both tasks done after {items_processed} items, breaking")
                                 break
                             continue
                     
