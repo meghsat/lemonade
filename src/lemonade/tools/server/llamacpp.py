@@ -49,7 +49,7 @@ class LlamaTelemetry(WrappedServerTelemetry):
         current_time = time.time()
         time_since_last = current_time - self.last_progress_time
         progress_change = abs(self.prefill_progress - self.last_reported_progress)
-        
+
         # Report if: significant progress change (>10%) OR enough time passed (>100ms)
         if progress_change >= 0.1 or time_since_last >= 0.1:
             self.last_progress_time = current_time
@@ -61,7 +61,7 @@ class LlamaTelemetry(WrappedServerTelemetry):
         """
         Parse telemetry data from llama server output lines.
         """
-        
+
         # Parse prefill progress from llama.cpp server output
         # Look for "prompt processing progress" with progress value
         progress_match = re.search(
@@ -71,7 +71,7 @@ class LlamaTelemetry(WrappedServerTelemetry):
             new_progress = float(progress_match.group(1))
             self.prefill_progress = min(new_progress, 1.0)
             return
-        
+
         # Also check for "prompt done" to mark completion
         if "prompt done" in line:
             self.prefill_complete = True
@@ -116,7 +116,7 @@ class LlamaTelemetry(WrappedServerTelemetry):
             self.prompt_eval_time = prompt_time_ms / 1000.0
             self.input_tokens = input_tokens
             self.time_to_first_token = prompt_time_ms / 1000.0
-            
+
             # Mark prefill as complete
             self.prefill_complete = True
             self.prefill_progress = 1.0
