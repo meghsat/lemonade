@@ -378,19 +378,26 @@ class WrappedServer(ABC):
         start_time = time.time()
         
         while time.time() - start_time < timeout:
+            # Check if we should report progress
+            if hasattr(self.telemetry, 'should_report_progress'):
+                current_progress = self.telemetry.prefill_progress if hasattr(self.telemetry, 'prefill_progress') else 0.0
+                # Call should_report_progress() only once to avoid side effects
+                should_report = self.telemetry.should_report_progress()
+                logging.debug(f"MONITOR: Current progress = {current_progress}, should_report = {should_report}")
+                if should_report:
+                    progress_chunk = create_progress_tool_call_chunk(current_progress)
+                    logging.debug(f"MONITOR: Yielding progress {current_progress}")
+                    yield f"data: {progress_chunk.model_dump_json()}\n\n"
+                    
+                    # If we just yielded 1.0 (complete), we can stop monitoring
+                    if current_progress >= 1.0:
+                        logging.debug(f"MONITOR: Progress complete (1.0), stopping monitor")
+                        break
+            
             # Check if prefill is complete
             if hasattr(self.telemetry, 'prefill_complete') and self.telemetry.prefill_complete:
                 logging.debug(f"MONITOR: Prefill complete, stopping monitor")
                 break
-            
-            # Check if we should report progress
-            if hasattr(self.telemetry, 'should_report_progress'):
-                current_progress = self.telemetry.prefill_progress if hasattr(self.telemetry, 'prefill_progress') else 0.0
-                logging.debug(f"MONITOR: Current progress = {current_progress}, should_report = {self.telemetry.should_report_progress()}")
-                if self.telemetry.should_report_progress():
-                    progress_chunk = create_progress_tool_call_chunk(current_progress)
-                    logging.debug(f"MONITOR: Yielding progress {current_progress}")
-                    yield f"data: {progress_chunk.model_dump_json()}\n\n"
             
             # Small async sleep to avoid busy waiting
             await asyncio.sleep(0.01)
