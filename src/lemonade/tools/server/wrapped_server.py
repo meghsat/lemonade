@@ -342,7 +342,9 @@ class WrappedServer(ABC):
             )
 
     def _supports_prefill_progress(self) -> bool:
-        """Check if telemetry supports prefill progress tracking."""
+        """
+        Check if telemetry supports prefill progress tracking.
+        """
         return (
             hasattr(self.telemetry, "should_report_progress")
             and hasattr(self.telemetry, "prefill_progress")
