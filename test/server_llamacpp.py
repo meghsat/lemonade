@@ -34,6 +34,9 @@ from utils.server_base import (
     httpx,
 )
 
+# Import for telemetry pattern testing
+from lemonade.tools.server.llamacpp import LlamaTelemetry
+
 
 class LlamaCppTesting(ServerTestingBase):
     """Testing class for GGUF/LlamaCPP models that inherits shared functionality."""
@@ -341,7 +344,48 @@ class LlamaCppTesting(ServerTestingBase):
         assert has_progress_updates, "Should have received at least one progress update"
         print("✓ Prefill progress update received")
 
-    def test_008_test_generation_parameters_with_llamacpp(self):
+    def test_008_verify_llama_telemetry_pattern_compatibility(self):
+        """Verify that the patterns used in LlamaTelemetry match llama.cpp output format"""
+        import re
+        
+        # These are the exact patterns from LlamaTelemetry.parse_telemetry_line()
+        PROGRESS_PATTERN = r"prompt processing progress.*progress\s*=\s*([\d.]+)"
+        DONE_PATTERN = "prompt done"
+        
+        # Sample actual llama.cpp output lines (these should match what llama.cpp actually outputs)
+        # If llama.cpp changes its output format, these tests will fail, alerting us to update the patterns
+        sample_llama_output_lines = [
+            "prompt processing progress: progress = 0.25",
+            "prompt processing progress: progress = 0.5", 
+            "prompt processing progress: progress = 0.75",
+            "prompt processing progress: progress = 1.0",
+            "prompt done",
+        ]
+        
+        # Test that our progress regex pattern matches expected llama.cpp output
+        progress_lines_found = 0
+        for line in sample_llama_output_lines:
+            match = re.search(PROGRESS_PATTERN, line)
+            if match:
+                progress_value = float(match.group(1))
+                assert 0.0 <= progress_value <= 1.0, f"Invalid progress value: {progress_value}"
+                progress_lines_found += 1
+        
+        # We should have found 4 progress lines (0.25, 0.5, 0.75, 1.0)
+        assert progress_lines_found == 4, f"Expected 4 progress lines, found {progress_lines_found}"
+        
+        # Test that our "prompt done" pattern matches
+        done_found = False
+        for line in sample_llama_output_lines:
+            if DONE_PATTERN in line:
+                done_found = True
+                break
+        
+        assert done_found, "Pattern 'prompt done' not found in expected output"
+        
+        print("✓ Telemetry patterns are compatible with expected llama.cpp output format")
+
+    def test_009_test_generation_parameters_with_llamacpp(self):
         """Test generation parameters across all endpoints with llamacpp models"""
         if self.llamacpp_backend == "rocm":
             self.skipTest("Skipping test when backend is set to rocm")

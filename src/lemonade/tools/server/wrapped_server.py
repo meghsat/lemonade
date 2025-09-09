@@ -372,12 +372,10 @@ class WrappedServer(ABC):
         if not self._supports_prefill_progress():
             return
 
-        timeout = 30  # Maximum seconds to wait
-        start_time = time.time()
-
         last_yielded_progress = -1.0  # Track what we've actually yielded
 
-        while time.time() - start_time < timeout:
+        # Monitor until prefill is complete (progress reaches 1.0)
+        while not self._is_prefill_complete() or last_yielded_progress < 1.0:
             # Check if we should report progress
             current_progress = self._get_current_progress()
 
