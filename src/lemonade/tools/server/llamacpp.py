@@ -47,7 +47,9 @@ class LlamaTelemetry(WrappedServerTelemetry):
         self.prefill_complete = False
 
     def should_report_progress(self) -> bool:
-        """Check if progress should be reported based on throttling rules."""
+        """
+        Check if progress should be reported based on throttling rules.
+        """
         current_time = time.time()
         time_since_last = current_time - self.last_progress_time
         progress_change = abs(self.prefill_progress - self.last_reported_progress)
