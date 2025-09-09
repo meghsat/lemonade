@@ -36,7 +36,9 @@ class LlamaTelemetry(WrappedServerTelemetry):
         self.prefill_complete = False  # Flag to indicate prefill completion
 
     def reset_prefill_progress(self):
-        """Reset prefill progress tracking for a new request."""
+        """
+        Reset prefill progress tracking for a new request.
+        """
         self.prefill_progress = 0.0
         self.last_reported_progress = 0.0
         self.prefill_total_tokens = 0
