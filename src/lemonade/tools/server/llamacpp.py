@@ -144,10 +144,10 @@ class LlamaTelemetry(WrappedServerTelemetry):
 
 
 class LlamaServer(WrappedServer):
-    def __init__(self, backend: str):
+    def __init__(self, llamacpp_backend: str, prefill_progress: bool = False):
         self.telemetry = LlamaTelemetry()
-        self.backend = backend
-        super().__init__(server_name="llama-server", telemetry=self.telemetry)
+        self.backend = llamacpp_backend
+        super().__init__(server_name="llama-server", telemetry=self.telemetry, prefill_progress=prefill_progress)
 
     def install_server(self, backend=None):
         """

@@ -52,6 +52,12 @@ def with_debug_logging(func):
     return func
 
 
+def with_prefill_progress(func):
+    """Decorator to enable prefill progress tracking for a specific test."""
+    func.prefill_progress = True
+    return func
+
+
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Test lemonade server")
@@ -200,15 +206,19 @@ class ServerTestingBase(unittest.IsolatedAsyncioTestCase):
         # Ensure we kill anything using port 8000
         kill_process_on_port(PORT)
         
-        # Check if the current test method has debug logging enabled
+        # Check if the current test method has debug logging or prefill progress enabled
         test_method = getattr(self, self._testMethodName)
         enable_debug = getattr(test_method, "debug_logging", False)
+        enable_prefill_progress = getattr(test_method, "prefill_progress", False)
 
         # Build the command to start the server
         cmd = ["lemonade-server-dev", "serve"]
         if enable_debug:
             cmd.extend(["--log-level", "debug"])
             print(f"Debug logging enabled for test: {self._testMethodName}")
+        if enable_prefill_progress:
+            cmd.append("--prefill-progress")
+            print(f"Prefill progress enabled for test: {self._testMethodName}")
 
         # Add --no-tray option on Windows
         if os.name == "nt":

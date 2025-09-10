@@ -29,6 +29,7 @@ import numpy as np
 from utils.server_base import (
     ServerTestingBase,
     with_debug_logging,
+    with_prefill_progress,
     run_server_tests_with_class,
     OpenAI,
     AsyncOpenAI,
@@ -312,38 +313,6 @@ class LlamaCppTesting(ServerTestingBase):
         assert chunk_count > 5
         assert len(complete_response) > 5
 
-    def test_007_test_prefill_progress_in_streaming(self):
-        """Test that prefill progress updates are received during streaming"""
-        client = OpenAI(
-            base_url=self.base_url,
-            api_key="lemonade",
-        )
-
-        # Use a longer prompt to potentially trigger prefill progress
-        long_prompt = "Please provide a detailed analysis of the following topic: " + "artificial intelligence " * 50
-        
-        stream = client.chat.completions.create(
-            model="Qwen3-0.6B-GGUF",
-            messages=[{"role": "user", "content": long_prompt}],
-            stream=True,
-            max_completion_tokens=10,
-        )
-
-        has_progress_updates = False
-        
-        for chunk in stream:
-            if chunk.choices and len(chunk.choices) > 0:
-                delta = chunk.choices[0].delta
-                
-                # Only check for progress updates (tool calls)
-                if hasattr(delta, 'tool_calls') and delta.tool_calls:
-                    has_progress_updates = True
-                    print("[Progress update detected]")
-                    break  # We found what we're looking for, can exit early
-
-        # Only test that we received a progress update
-        assert has_progress_updates, "Should have received at least one progress update"
-        print("✓ Prefill progress update received")
 
 
     def test_009_test_generation_parameters_with_llamacpp(self):
@@ -442,6 +411,7 @@ class LlamaCppTesting(ServerTestingBase):
                 ), f"{endpoint}: Different {param_name} should produce different outputs"
 
     @with_debug_logging
+    @with_prefill_progress
     def test_020_llamacpp_prefill_progress_integration(self):
         """Integration test for llamacpp prefill progress parsing through actual pipeline"""
         client = OpenAI(
@@ -507,6 +477,75 @@ class LlamaCppTesting(ServerTestingBase):
         assert chunk_count > 0, "Should have received streaming chunks"
         
         print(f"✓ Integration test passed - found prefill progress patterns in actual llamacpp output")
+
+    @with_prefill_progress
+    def test_022_lemonade_prefill_progress_streaming(self):
+        """Test that lemonade prefill progress updates are received during streaming"""
+        client = OpenAI(
+            base_url=self.base_url,
+            api_key="lemonade",
+        )
+
+        # Use a longer prompt to potentially trigger prefill progress
+        long_prompt = "Please provide a detailed analysis of the following topic: " + "artificial intelligence " * 50
+        
+        stream = client.chat.completions.create(
+            model="Qwen3-0.6B-GGUF",
+            messages=[{"role": "user", "content": long_prompt}],
+            stream=True,
+            max_completion_tokens=10,
+        )
+
+        has_progress_updates = False
+        
+        for chunk in stream:
+            if chunk.choices and len(chunk.choices) > 0:
+                delta = chunk.choices[0].delta
+                
+                # Only check for progress updates (tool calls)
+                if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                    has_progress_updates = True
+                    print("[Progress update detected]")
+                    break  # We found what we're looking for, can exit early
+
+        # Only test that we received a progress update
+        assert has_progress_updates, "Should have received at least one progress update"
+        print("✓ Lemonade prefill progress update received")
+
+    def test_023_prefill_progress_disabled_by_default(self):
+        """Test that prefill progress is disabled by default (backward compatibility)"""
+        client = OpenAI(
+            base_url=self.base_url,
+            api_key="lemonade",
+        )
+
+        # Use a longer prompt to potentially trigger prefill progress if it were enabled
+        long_prompt = "Please provide a detailed analysis of the following topic: " + "artificial intelligence " * 50
+        
+        stream = client.chat.completions.create(
+            model="Qwen3-0.6B-GGUF",
+            messages=[{"role": "user", "content": long_prompt}],
+            stream=True,
+            max_completion_tokens=10,
+        )
+
+        has_progress_updates = False
+        chunk_count = 0
+        
+        for chunk in stream:
+            if chunk.choices and len(chunk.choices) > 0:
+                delta = chunk.choices[0].delta
+                chunk_count += 1
+                
+                # Check for any tool calls (should not exist when disabled)
+                if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                    has_progress_updates = True
+                    print(f"[Unexpected progress update detected]: {delta.tool_calls}")
+
+        # Verify we received chunks but NO progress updates
+        assert chunk_count > 0, "Should have received streaming chunks"
+        assert not has_progress_updates, "Should NOT have received progress updates when feature is disabled by default"
+        print("✓ Backward compatibility verified - no progress updates when disabled by default")
 
 
 class LlamaCppVulkanTesting(LlamaCppTesting):

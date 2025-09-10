@@ -117,12 +117,13 @@ class WrappedServer(ABC):
     like llama-server.
     """
 
-    def __init__(self, server_name: str, telemetry: WrappedServerTelemetry):
+    def __init__(self, server_name: str, telemetry: WrappedServerTelemetry, prefill_progress: bool = False):
         self.port: int = None
         self.process: subprocess.Popen = None
         self.server_name: str = server_name
         self.telemetry: WrappedServerTelemetry = telemetry
         self.log_thread_exception = None
+        self.prefill_progress = prefill_progress
 
     def choose_port(self):
         """
@@ -444,9 +445,13 @@ class WrappedServer(ABC):
             async for progress_update in self._monitor_prefill_progress_async():
                 await queue.put(("progress", progress_update))
 
-        # Start both tasks concurrently
+        # Start fetch task
         fetch_task = asyncio.create_task(fetch_stream())
-        monitor_task = asyncio.create_task(monitor_progress())
+        
+        # Only start progress monitoring if enabled
+        monitor_task = None
+        if self.prefill_progress:
+            monitor_task = asyncio.create_task(monitor_progress())
 
         # Process items from queue
         first_chunk_received = False
@@ -466,11 +471,12 @@ class WrappedServer(ABC):
                 elif msg_type == "chunk":
                     if not first_chunk_received:
                         first_chunk_received = True
-                        monitor_task.cancel()  # Stop monitoring once real chunks arrive
+                        if monitor_task:  # Only cancel if monitoring was enabled
+                            monitor_task.cancel()  # Stop monitoring once real chunks arrive
                     yield f"data: {data.model_dump_json()}\n\n"
             except asyncio.TimeoutError:
                 # Check if tasks are still running
-                if fetch_task.done() and monitor_task.done():
+                if fetch_task.done() and (not monitor_task or monitor_task.done()):
                     break
                 continue
 
