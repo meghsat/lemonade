@@ -28,6 +28,7 @@ import numpy as np
 # Import all shared functionality from utils/server_base.py
 from utils.server_base import (
     ServerTestingBase,
+    with_debug_logging,
     run_server_tests_with_class,
     OpenAI,
     AsyncOpenAI,
@@ -440,64 +441,72 @@ class LlamaCppTesting(ServerTestingBase):
                     response_modified != response1
                 ), f"{endpoint}: Different {param_name} should produce different outputs"
 
+    @with_debug_logging
     def test_020_llamacpp_prefill_progress_integration(self):
         """Integration test for llamacpp prefill progress parsing through actual pipeline"""
-        import logging
-        import io
+        client = OpenAI(
+            base_url=self.base_url,
+            api_key="lemonade",
+        )
+
+        # Use a very long prompt to ensure prefill progress messages are generated
+        long_prompt = "Analyze this comprehensive topic in detail: " + "machine learning and artificial intelligence systems " * 200
         
-        # Capture debug logs to verify prefill progress messages
-        log_capture = io.StringIO()
-        handler = logging.StreamHandler(log_capture)
-        handler.setLevel(logging.DEBUG)
-        logger = logging.getLogger()
-        original_level = logger.level
-        logger.setLevel(logging.DEBUG)
-        logger.addHandler(handler)
+        stream = client.chat.completions.create(
+            model="Qwen3-0.6B-GGUF",
+            messages=[{"role": "user", "content": long_prompt}],
+            stream=True,
+            max_completion_tokens=5,
+        )
+
+        # Process the stream completely
+        chunk_count = 0
+        for chunk in stream:
+            if chunk.choices and len(chunk.choices) > 0:
+                chunk_count += 1
+
+        # Read the server output from temp files
+        combined_output = ""
         
-        try:
-            client = OpenAI(
-                base_url=self.base_url,
-                api_key="lemonade",
-            )
-
-            # Use a very long prompt to ensure prefill progress messages are generated
-            long_prompt = "Analyze this comprehensive topic in detail: " + "machine learning and artificial intelligence systems " * 200
+        # Read stdout
+        if hasattr(self, 'stdout_file'):
+            self.stdout_file.flush()
+            with open(self.stdout_file.name, 'r') as f:
+                stdout_content = f.read()
+                combined_output += stdout_content
+                
+        # Read stderr  
+        if hasattr(self, 'stderr_file'):
+            self.stderr_file.flush()
+            with open(self.stderr_file.name, 'r') as f:
+                stderr_content = f.read()
+                combined_output += stderr_content
+        
+        # Test that key prefill progress phrases appear in the server output
+        # Based on the debug output: "prompt processing progress" and "progress ="
+        has_progress_phrase = "prompt processing progress" in combined_output
+        has_progress_value = "progress =" in combined_output
+        has_prompt_done = "prompt done" in combined_output
+        
+        # Debug: print if we don't find expected patterns
+        if not (has_progress_phrase and has_progress_value and has_prompt_done):
+            print(f"\nDEBUG: Looking for prefill patterns in {len(combined_output)} chars of output")
+            print(f"  'prompt processing progress' found: {has_progress_phrase}")
+            print(f"  'progress =' found: {has_progress_value}")
+            print(f"  'prompt done' found: {has_prompt_done}")
             
-            stream = client.chat.completions.create(
-                model="Qwen3-0.6B-GGUF",
-                messages=[{"role": "user", "content": long_prompt}],
-                stream=True,
-                max_completion_tokens=5,
-            )
-
-            # Process the stream completely to ensure all debug logs are captured
-            chunk_count = 0
-            for chunk in stream:
-                if chunk.choices and len(chunk.choices) > 0:
-                    chunk_count += 1
-
-            # Get the captured log output
-            log_output = log_capture.getvalue()
-            
-            # Test that key prefill progress phrases appear in the logs
-            # Based on your sample: "prompt processing progress" and "progress ="
-            has_progress_phrase = "prompt processing progress" in log_output
-            has_progress_value = "progress =" in log_output
-            has_prompt_done = "prompt done" in log_output
-            
-            # Verify the essential prefill progress elements exist
-            assert has_progress_phrase, "Should contain 'prompt processing progress' in debug logs"
-            assert has_progress_value, "Should contain 'progress =' in debug logs"  
-            assert has_prompt_done, "Should contain 'prompt done' in debug logs"
-            assert chunk_count > 0, "Should have received streaming chunks"
-            
-            print(f"✓ Integration test passed - found prefill progress patterns in actual llamacpp output")
-            
-        finally:
-            # Restore original logging configuration
-            logger.removeHandler(handler)
-            logger.setLevel(original_level)
-            handler.close()
+            # Show some relevant lines containing 'prompt' or 'progress'
+            for line in combined_output.split('\n'):
+                if 'prompt' in line.lower() or 'progress' in line.lower():
+                    print(f"  Found line: {line[:200]}")
+        
+        # Verify the essential prefill progress elements exist
+        assert has_progress_phrase, "Should contain 'prompt processing progress' in server output"
+        assert has_progress_value, "Should contain 'progress =' in server output"  
+        assert has_prompt_done, "Should contain 'prompt done' in server output"
+        assert chunk_count > 0, "Should have received streaming chunks"
+        
+        print(f"✓ Integration test passed - found prefill progress patterns in actual llamacpp output")
 
 
 class LlamaCppVulkanTesting(LlamaCppTesting):
