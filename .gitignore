@@ -167,3 +167,4 @@ cython_debug/
 .claude/
 CLAUDE.md
 CLAUDE.local.md
+.aider*
