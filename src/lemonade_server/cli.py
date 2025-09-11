@@ -451,6 +451,7 @@ def list_models():
     headers = ["Model Name", "Downloaded", "Details"]
     print(tabulate(table_data, headers=headers, tablefmt="simple"))
 
+
 def _add_server_arguments(parser):
     """Add common server arguments to a parser"""
 
