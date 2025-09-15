@@ -458,7 +458,7 @@ class WrappedServer(ABC):
         while True:
             try:
                 # Use wait_for to allow checking both sources
-                msg_type, data = await asyncio.wait_for(queue.get(), timeout=0.1)
+                msg_type, data = await asyncio.wait_for(queue.get(), timeout=0.001)
 
                 if msg_type == "done":
                     break
