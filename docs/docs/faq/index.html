@@ -809,9 +809,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-is-linux-supported" class="md-nav__link">
+  <a href="#3-is-linux-supported-what-about-macos" class="md-nav__link">
     <span class="md-ellipsis">
-      3. Is Linux supported?
+      3. Is Linux supported? What about macOS?
     </span>
   </a>
   
@@ -1162,9 +1162,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-is-linux-supported" class="md-nav__link">
+  <a href="#3-is-linux-supported-what-about-macos" class="md-nav__link">
     <span class="md-ellipsis">
-      3. Is Linux supported?
+      3. Is Linux supported? What about macOS?
     </span>
   </a>
   
@@ -1412,7 +1412,7 @@
 <h3 id="1-what-is-lemonade-sdk-and-what-does-it-include">1. <strong>What is Lemonade SDK and what does it include?</strong></h3>
 <p>Lemonade is an open-source SDK that provides high-level APIs, CLI tools, and a server interface to deploy and benchmark LLMs using ONNX Runtime GenAI (OGA), Hugging Face Transformers, and llama.cpp backends.</p>
 <h3 id="2-what-is-lemonade-server-and-how-is-it-different-from-the-sdk">2. <strong>What is Lemonade Server and how is it different from the SDK?</strong></h3>
-<p>Lemonade Server is a component of the SDK that enables local LLM deployment via an OpenAI-compatible API. It allows integration with apps like chatbots and coding assistants without requiring code changes. It's available as a standalone Windows GUI installer or via command line for Linux.</p>
+<p>Lemonade Server is a component of the SDK that enables local LLM deployment via an OpenAI-compatible API. It allows integration with apps like chatbots and coding assistants without requiring code changes. It's available as a standalone Windows GUI installer or via command line for Linux and macOS.</p>
 <h3 id="3-what-are-the-use-cases-for-different-audiences">3. <strong>What are the use cases for different audiences?</strong></h3>
 <ul>
 <li><strong>End Users</strong>: Use <a href="https://github.com/amd/gaia">GAIA</a> for a Chatbot experience locally.</li>
@@ -1425,8 +1425,13 @@
 <h3 id="2-which-devices-are-supported">2. <strong>Which devices are supported?</strong></h3>
 <p>👉 <a href="https://github.com/lemonade-sdk/lemonade?tab=readme-ov-file#supported-configurations">Supported Configurations</a></p>
 <p>For more information on Hybrid/NPU Support, see the section <a href="#hybrid-and-npu-questions">Hybrid/NPU</a>.</p>
-<h3 id="3-is-linux-supported">3. <strong>Is Linux supported?</strong></h3>
-<p>Yes! To install Lemonade on Linux, visit https://lemonade-server.ai/ and check the "Developer Setup" section for installation instructions. Visit the <a href="https://github.com/lemonade-sdk/lemonade?tab=readme-ov-file#supported-configurations">Supported Configurations</a> section to see the support matrix for CPU, GPU, and NPU.</p>
+<h3 id="3-is-linux-supported-what-about-macos">3. <strong>Is Linux supported? What about macOS?</strong></h3>
+<p>Yes! Both Linux and macOS are supported:</p>
+<ul>
+<li><strong>Linux</strong>: Visit https://lemonade-server.ai/ and check the "Developer Setup" section for installation instructions.</li>
+<li><strong>macOS</strong>: Requires macOS 14+ with Apple Silicon (arm64/aarch64). Intel Macs are not supported.</li>
+</ul>
+<p>Visit the <a href="https://github.com/lemonade-sdk/lemonade?tab=readme-ov-file#supported-configurations">Supported Configurations</a> section to see the support matrix for CPU, GPU, and NPU.</p>
 <h3 id="4-how-do-i-uninstall-lemonade-server-windows">4. <strong>How do I uninstall Lemonade Server? (Windows)</strong></h3>
 <p>To completely uninstall Lemonade Server from your system, follow these steps:</p>
 <p><strong>Step 1: Remove cached files</strong>
@@ -1516,7 +1521,7 @@
 </code></pre></div>
 <h2 id="support-roadmap">Support &amp; Roadmap</h2>
 <h3 id="1-what-if-i-encounter-installation-or-runtime-errors">1. <strong>What if I encounter installation or runtime errors?</strong></h3>
-<p>Check the Lemonade Server logs via the tray icon. Common issues include model compatibility or outdated versions.</p>
+<p>Check the Lemonade Server logs via the tray icon (Windows and macOS). Common issues include model compatibility or outdated versions.</p>
 <p>👉 <a href="https://github.com/lemonade-sdk/lemonade/issues">Open an Issue on GitHub</a></p>
 <h3 id="2-lemonade-is-missing-a-feature-i-really-want-what-should-i-do">2. <strong>Lemonade is missing a feature I really want. What should I do?</strong></h3>
 <p>Open a feature request on GitHub. We're actively shaping the roadmap based on user feedback.</p>

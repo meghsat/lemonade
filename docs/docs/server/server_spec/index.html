@@ -2939,7 +2939,7 @@ In case of an error, the status will be <code>error</code> and the message will 
 </ul>
 <h1 id="experimental-gguf-support">Experimental GGUF Support</h1>
 <p>The OGA models (<code>*-CPU</code>, <code>*-Hybrid</code>) available in Lemonade Server use Lemonade's built-in server implementation. However, Lemonade SDK v7.0.1 introduced experimental support for <a href="https://github.com/ggml-org/llama.cpp">llama.cpp's</a> Vulkan <code>llama-server</code> as an alternative backend for CPU and GPU.</p>
-<p>The <code>llama-server</code> backend works with Lemonade's suggested <code>*-GGUF</code> models, as well as any .gguf model from Hugging Face. Windows and Ubuntu Linux are supported. Details:
+<p>The <code>llama-server</code> backend works with Lemonade's suggested <code>*-GGUF</code> models, as well as any .gguf model from Hugging Face. Windows, Ubuntu Linux, and macOS are supported. Details:
 - Lemonade Server wraps <code>llama-server</code> with support for the <code>lemonade-server</code> CLI, client web app, and endpoints (e.g., <code>models</code>, <code>pull</code>, <code>load</code>, etc.).
   - The <code>chat/completions</code>, <code>embeddings</code>, and <code>reranking</code> endpoints are supported. 
   - Non-chat <code>completions</code>, and <code>responses</code> are not supported at this time.
@@ -2953,25 +2953,30 @@ In case of an error, the status will be <code>error</code> and the message will 
 <thead>
 <tr>
 <th>Platform</th>
-<th>Vulkan GPU</th>
-<th>x64 CPU</th>
+<th>GPU Acceleration</th>
+<th>CPU Architecture</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Windows</td>
-<td>✅</td>
-<td>✅</td>
+<td>✅ Vulkan</td>
+<td>✅ x64</td>
 </tr>
 <tr>
 <td>Ubuntu</td>
-<td>✅</td>
-<td>✅</td>
+<td>✅ Vulkan</td>
+<td>✅ x64</td>
+</tr>
+<tr>
+<td>macOS</td>
+<td>✅ Metal</td>
+<td>✅ Apple Silicon</td>
 </tr>
 <tr>
 <td>Other Linux</td>
-<td>⚠️*</td>
-<td>⚠️*</td>
+<td>⚠️* Vulkan</td>
+<td>⚠️* x64</td>
 </tr>
 </tbody>
 </table>
