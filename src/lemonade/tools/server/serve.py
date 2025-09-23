@@ -1628,7 +1628,6 @@ class Server:
     def setup_middleware_timer(self):
         logging.info("Middleware set up")
 
-        # Wrap middleware setup in try-catch to handle "Cannot add middleware after an application has started" error
         try:
 
             @self.app.middleware("http")
