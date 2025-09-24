@@ -529,22 +529,16 @@ async function deleteModel(modelId) {
 
 // Create model name with labels
 function createModelNameWithLabels(modelId, serverModels) {
-    const modelData = serverModels[modelId];
     const container = document.createElement('div');
     container.className = 'model-labels-container';
     
     // Model name
     const nameSpan = document.createElement('span');
-
-    // Append size if available
-    let displayName = modelId;
-    if (modelData && typeof modelData.size === 'number') {
-        displayName += ` (${modelData.size} GB)`;
-    }
-    nameSpan.textContent = displayName;
+    nameSpan.textContent = modelId;
     container.appendChild(nameSpan);
     
     // Labels
+    const modelData = serverModels[modelId];
     if (modelData && modelData.labels && Array.isArray(modelData.labels)) {
         modelData.labels.forEach(label => {
             const labelLower = label.toLowerCase();
@@ -905,14 +899,13 @@ function setupRegisterModelForm() {
             const checkpoint = document.getElementById('register-checkpoint').value.trim();
             const recipe = document.getElementById('register-recipe').value;
             const reasoning = document.getElementById('register-reasoning').checked;
-            const vision = document.getElementById('register-vision').checked;
             const mmproj = document.getElementById('register-mmproj').value.trim();
             
             if (!name || !recipe) { 
                 return; 
             }
             
-            const payload = { model_name: name, recipe, reasoning, vision };
+            const payload = { model_name: name, recipe, reasoning };
             if (checkpoint) payload.checkpoint = checkpoint;
             if (mmproj) payload.mmproj = mmproj;
             

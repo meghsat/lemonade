@@ -75,7 +75,8 @@ from lemonade_server.settings import save_setting
 # Tests should use the max_new_tokens argument to set a lower value
 DEFAULT_MAX_NEW_TOKENS = 1500
 
-if platform.system() in ["Windows", "Darwin"]:
+# Only import tray on Windows
+if platform.system() == "Windows":
     # pylint: disable=ungrouped-imports
     from lemonade.tools.server.tray import LemonadeTray, OutputDuplicator
 
@@ -202,12 +203,6 @@ class Server:
             allow_methods=["*"],  # Allows all methods
             allow_headers=["*"],  # Allows all headers
         )
-
-        # Set up debug middleware if debug logging is enabled
-        # This must be done during app initialization, not at runtime
-        self.debug_logging_enabled = log_level == "debug"
-        if self.debug_logging_enabled:
-            self.setup_middleware_timer()
 
         # Set up custom routes
         self.setup_routes(["/api/v0", "/api/v1"])
@@ -425,6 +420,10 @@ class Server:
                 self.log_file, self.port, lambda: self, log_level=self.log_level
             ).run()
             sys.exit(0)
+
+        if self.debug_logging_enabled:
+            # Print the elapsed time for each request
+            self.setup_middleware_timer()
 
         # Let the app know what port it's running on, so
         # that the lifespan can access it
@@ -1415,7 +1414,6 @@ class Server:
             checkpoint=config.checkpoint,
             recipe=config.recipe,
             reasoning=config.reasoning,
-            vision=config.vision,
             mmproj=config.mmproj,
             # The pull endpoint will download an upgraded model if available, even
             # if we already have a local copy of the model
