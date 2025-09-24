@@ -96,7 +96,7 @@ jobs:
           - backend: rocm
             runner: [stx-halo, Linux]
           - backend: vulkan
-            runner: [stx, Linux]
+            runner: [debug, Linux]
 
     runs-on: ${{ matrix.runner }}
     defaults:
