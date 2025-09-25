@@ -206,8 +206,8 @@ class LMEvalHarness(Tool):
                         if isinstance(value, (int, float)) and not metric.startswith(
                             "alias"
                         ):
-                            # Format metric name for stats
-                            clean_metric = metric.replace(",", "_")
+                            # Format metric name for stats - remove ,none suffix
+                            clean_metric = metric.split(",")[0]  # Remove ,none suffix
                             stat_name = f"lm_eval_{task_name}_{clean_metric}"
 
                             # Scale metric appropriately
