@@ -281,8 +281,6 @@ class LMEvalHarness(Tool):
                 "Please install it using one of the following commands:\n"
                 "  pip install lemonade-sdk[dev]\n"
                 "  pip install -e .[dev]\n"
-                "Or install lm-eval directly:\n"
-                "  pip install lm-eval[api]"
             )
             printing.log_error(error_msg)
             raise ImportError(error_msg)
