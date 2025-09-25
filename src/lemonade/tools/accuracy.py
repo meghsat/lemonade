@@ -213,7 +213,7 @@ class LMEvalHarness(Tool):
 
         # Check if lm-eval is available
         try:
-            import lm_eval
+            import lm_eval  # noqa: F401
         except ImportError:
             error_msg = (
                 "lm-eval-harness is required but not installed. "
