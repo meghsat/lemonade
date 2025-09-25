@@ -83,6 +83,53 @@ class LMEvalHarness(Tool):
 
         return parser
 
+    def _scale_metric(self, metric_name, value):
+        """
+        Scale metric value appropriately based on type and range
+
+        Args:
+            metric_name: Name of the metric (e.g., "acc,none", "ppl")
+            value: Numeric value of the metric
+
+        Returns:
+            tuple: (scaled_value, units, display_string)
+        """
+        fraction_metrics = {
+            "acc",
+            "accuracy",
+            "f1",
+            "exact_match",
+            "em",
+            "win_rate",
+            "recall",
+            "precision",
+            "rouge",
+            "bleu",
+            "meteor",
+            "bertscore",
+            "match",
+            "correct",
+            "pass",
+            "success_rate",
+        }
+
+        metric_base = metric_name.split(",")[0].lower()
+        is_fraction = any(
+            frac_metric in metric_base for frac_metric in fraction_metrics
+        )
+        is_in_unit_range = 0 <= value <= 1
+
+        if is_fraction and is_in_unit_range:
+            scaled_value = float(value) * 100
+            units = "%"
+            display_str = f"{value:.4f} ({scaled_value:.2f}%)"
+        else:
+            scaled_value = float(value)
+            units = "raw"
+            display_str = f"{value:.4f}"
+
+        return scaled_value, units, display_str
+
     def _process_results(self, results_path, state):
         """
         Process evaluation results and save to state stats
@@ -163,14 +210,17 @@ class LMEvalHarness(Tool):
                             clean_metric = metric.replace(",", "_")
                             stat_name = f"lm_eval_{task_name}_{clean_metric}"
 
-                            # Save to state stats as percentage
-                            state.save_stat(stat_name, float(value) * 100)
-                            state.save_stat(f"{stat_name}_units", "%")
+                            # Scale metric appropriately
+                            scaled_value, units, value_str = self._scale_metric(
+                                metric, value
+                            )
+                            display_str = f"  {metric}: {value_str}"
+
+                            state.save_stat(stat_name, scaled_value)
+                            state.save_stat(f"{stat_name}_units", units)
                             self.status_stats.append(stat_name)
 
-                            printing.log_info(
-                                f"  {metric}: {value:.4f} ({value*100:.2f}%)"
-                            )
+                            printing.log_info(display_str)
 
                 # Save summary metrics if available
                 avg_metrics = {}
@@ -194,12 +244,17 @@ class LMEvalHarness(Tool):
                     if values:
                         avg_value = sum(values) / len(values)
                         stat_name = f"lm_eval_average_{metric}"
-                        state.save_stat(stat_name, float(avg_value) * 100)
-                        state.save_stat(f"{stat_name}_units", "%")
-                        self.status_stats.append(stat_name)
-                        printing.log_info(
-                            f"Average {metric}: {avg_value:.4f} ({avg_value*100:.2f}%)"
+
+                        # Apply same scaling logic as individual metrics
+                        scaled_avg, units, value_str = self._scale_metric(
+                            metric, avg_value
                         )
+                        display_str = f"Average {metric}: {value_str}"
+
+                        state.save_stat(stat_name, scaled_avg)
+                        state.save_stat(f"{stat_name}_units", units)
+                        self.status_stats.append(stat_name)
+                        printing.log_info(display_str)
 
         except (IOError, json.JSONDecodeError) as e:
             printing.log_error(f"Error processing results: {e}")
