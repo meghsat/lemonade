@@ -83,12 +83,51 @@ class LMEvalHarness(Tool):
 
         return parser
 
-    def _process_results_direct(self, results_file_path, state):
-        """Process evaluation results directly from JSON file and save to state stats"""
-        # Handle case where lm-eval adds timestamp to filename
-        if not os.path.exists(results_file_path):
-            # Look for any .json file in the results directory (there should only be one per build)
-            results_dir = os.path.dirname(results_file_path)
+    def _process_results(self, results_path, state):
+        """
+        Process evaluation results and save to state stats
+
+        Args:
+            results_path: Can be either a direct JSON file path or a directory path
+            state: State object to save metrics to
+        """
+        results_file_path = None
+
+        # Determine if this is a file or directory and find the JSON file
+        if os.path.isfile(results_path) and results_path.endswith(".json"):
+            # Direct JSON file path (modern format)
+            results_file_path = results_path
+        elif os.path.isdir(results_path):
+            # Look for model subdirectories
+            model_dirs = [
+                d
+                for d in os.listdir(results_path)
+                if os.path.isdir(os.path.join(results_path, d))
+            ]
+
+            if model_dirs:
+                # Format: results_dir/model_name/results_*.json
+                model_dir = os.path.join(results_path, model_dirs[0])
+                printing.log_info(f"Found model directory: {model_dir}")
+
+                results_files = [
+                    f
+                    for f in os.listdir(model_dir)
+                    if f.startswith("results_") and f.endswith(".json")
+                ]
+
+                if results_files:
+                    results_files.sort(reverse=True)
+                    results_file_path = os.path.join(model_dir, results_files[0])
+                else:
+                    printing.log_warning(f"No results files found in {model_dir}")
+                    return
+            else:
+                printing.log_warning(f"No model directories found in {results_path}")
+                return
+        else:
+            # Handle case where lm-eval adds timestamp to expected filename
+            results_dir = os.path.dirname(results_path)
             if os.path.exists(results_dir):
                 json_files = [f for f in os.listdir(results_dir) if f.endswith(".json")]
                 if json_files:
@@ -98,12 +137,15 @@ class LMEvalHarness(Tool):
                     printing.log_warning(f"No JSON results file found in {results_dir}")
                     return
             else:
-                printing.log_warning(f"Results file not found at {results_file_path}")
+                printing.log_warning(f"Results path not found at {results_path}")
                 return
+
+        if not results_file_path or not os.path.exists(results_file_path):
+            printing.log_warning(f"Results file not found at {results_file_path}")
+            return
 
         printing.log_info(f"Processing results from {results_file_path}")
 
-        # Read and process results
         try:
             with open(results_file_path, "r", encoding="utf-8") as f:
                 results = json.load(f)
@@ -162,43 +204,6 @@ class LMEvalHarness(Tool):
         except (IOError, json.JSONDecodeError) as e:
             printing.log_error(f"Error processing results: {e}")
 
-    def _process_results(self, results_dir, state):
-        """Process evaluation results and save to state stats (legacy method for backwards compatibility)"""
-        if not os.path.exists(results_dir) or not os.path.isdir(results_dir):
-            printing.log_warning(f"Results directory not found at {results_dir}")
-            return
-
-        model_dirs = [
-            d
-            for d in os.listdir(results_dir)
-            if os.path.isdir(os.path.join(results_dir, d))
-        ]
-
-        if not model_dirs:
-            printing.log_warning(f"No model directories found in {results_dir}")
-            return
-
-        model_dir = os.path.join(results_dir, model_dirs[0])
-        printing.log_info(f"Found model directory: {model_dir}")
-
-        # Find the results JSON file with timestamp
-        results_files = [
-            f
-            for f in os.listdir(model_dir)
-            if f.startswith("results_") and f.endswith(".json")
-        ]
-
-        if not results_files:
-            printing.log_warning(f"No results files found in {model_dir}")
-            return
-
-        # Sort by timestamp
-        results_files.sort(reverse=True)
-        results_file_path = os.path.join(model_dir, results_files[0])
-
-        # Use the direct processing method
-        self._process_results_direct(results_file_path, state)
-
     def run(
         self,
         state: State,
@@ -213,7 +218,8 @@ class LMEvalHarness(Tool):
 
         # Check if lm-eval is available
         try:
-            import lm_eval  # noqa: F401
+            # pylint: disable=unused-import
+            import lm_eval
         except ImportError:
             error_msg = (
                 "lm-eval-harness is required but not installed. "
@@ -349,8 +355,8 @@ class LMEvalHarness(Tool):
                     "Results obtained successfully but couldn't display due to encoding issues"
                 )
 
-            # Process results from the JSON file directly
-            self._process_results_direct(results_file, state)
+            # Process results from the JSON file
+            self._process_results(results_file, state)
 
         except subprocess.CalledProcessError as e:
             printing.log_error(f"Error running lm-eval-harness: {e}")
