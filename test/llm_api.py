@@ -257,9 +257,6 @@ class Testing(unittest.TestCase):
         lm_eval_stats = [k for k in stats.keys() if k.startswith("lm_eval_")]
         assert len(lm_eval_stats) > 0, "No lm-eval-harness metrics found in stats"
 
-        # Verify JSON file was created
-        import lemonade.common.build as build
-
         results_dir = os.path.join(
             build.output_dir(state.cache_dir, state.build_name), "lm_eval_results"
         )
