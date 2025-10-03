@@ -68,7 +68,9 @@ jobs:
           
           $ErrorActionPreference = "Stop"
           conda create -p .\lemon-ryzenai-ci python=3.10 -y
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           conda init
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           
       - name: Install dependencies
         shell: PowerShell
