@@ -994,7 +994,7 @@
 
 <span class="c1"># This code gets the LLM&#39;s response from the `completion`</span>
 <span class="c1"># and prints it to the screen</span>
-<span class="n">reponse</span> <span class="o">=</span> <span class="n">completion</span><span class="o">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">message</span><span class="o">.</span><span class="n">content</span>
+<span class="n">response</span> <span class="o">=</span> <span class="n">completion</span><span class="o">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">message</span><span class="o">.</span><span class="n">content</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
 </code></pre></div>
 <p>The Python above will work with Lemonade Server, along with a variety of other cloud and local LLM servers, just by changing the <code>base_url</code>, <code>api_key</code>, and <code>model</code> as needed. This example demonstrates that details like deployment location (local vs. cloud), hardware type (GPU vs. NPU), and backend implementation (OGA vs. llama.cpp), etc. are hidden behind a unified interface.</p>
