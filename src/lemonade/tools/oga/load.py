@@ -380,7 +380,7 @@ class OgaLoad(FirstTool):
                 dll_source_path = os.path.join(
                     env_path, "Lib", "site-packages", "onnxruntime", "capi"
                 )
-                required_dlls = ["dyn_dispatch_core.dll", "xaiengine.dll"]
+                required_dlls = []
             else:
                 custom_ops_path = os.path.join(
                     env_path,
@@ -422,17 +422,17 @@ class OgaLoad(FirstTool):
             with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
 
-            if (
-                "model" in config
-                and "decoder" in config["model"]
-                and "session_options" in config["model"]["decoder"]
-            ):
-                config["model"]["decoder"]["session_options"][
-                    "custom_ops_library"
-                ] = custom_ops_path
+            # if (
+            #     "model" in config
+            #     and "decoder" in config["model"]
+            #     and "session_options" in config["model"]["decoder"]
+            # ):
+            #     config["model"]["decoder"]["session_options"][
+            #         "custom_ops_library"
+            #     ] = custom_ops_path
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=4)
+            # with open(config_path, "w", encoding="utf-8") as f:
+            #     json.dump(config, f, indent=4)
 
         else:
             printing.log_info(
@@ -508,7 +508,7 @@ class OgaLoad(FirstTool):
         Sets up environment for NPU flow of ONNX model and returns saved state to be restored
         later in cleanup.
         """
-        if "1.5.0" in ryzenai_version:
+        if "1.5.0" or "1.6.0" in ryzenai_version:
             # For PyPI installation (1.5.0+), no environment setup needed
             return None
         elif "1.4.0" in ryzenai_version:
