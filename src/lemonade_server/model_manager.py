@@ -104,6 +104,24 @@ class ModelManager:
             else:
                 # Handle other models
                 checkpoint = model_info["checkpoint"]
+
+                # Check if this is a local GGUF file path
+                is_local_gguf = (checkpoint.endswith('.gguf') or
+                                (os.path.isabs(checkpoint) and os.path.exists(checkpoint)) or
+                                (os.path.exists(checkpoint) and '.gguf' in checkpoint))
+
+                if is_local_gguf:
+                    # Local GGUF file - check if it exists
+                    if os.path.exists(checkpoint):
+                        # Also check for mmproj if specified
+                        mmproj = model_info.get("mmproj")
+                        if mmproj and not os.path.exists(mmproj):
+                            # mmproj file specified but doesn't exist, skip this model
+                            continue
+                        downloaded_models[model] = model_info
+                    # If local file doesn't exist, model is not "downloaded"
+                    continue
+
                 base_checkpoint, variant = parse_checkpoint(checkpoint)
 
                 if base_checkpoint in downloaded_checkpoints:
