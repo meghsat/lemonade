@@ -215,14 +215,17 @@ class ModelManager:
                     new_user_model["mmproj"] = mmproj
 
                 # Make sure that a variant is provided for GGUF models before registering the model
-                if "gguf" in checkpoint.lower() and ":" not in checkpoint.lower():
+                # Exception: Allow local .gguf file paths without variant
+                is_local_gguf = checkpoint.endswith('.gguf') or (os.path.exists(checkpoint) and '.gguf' in checkpoint)
+                if "gguf" in checkpoint.lower() and ":" not in checkpoint.lower() and not is_local_gguf:
                     raise ValueError(
                         "You are required to provide a 'variant' in the checkpoint field when "
-                        "registering a GGUF model. The variant is provided "
+                        "registering a GGUF model from Hugging Face. The variant is provided "
                         "as CHECKPOINT:VARIANT. For example: "
                         "Qwen/Qwen2.5-Coder-3B-Instruct-GGUF:Q4_0 or "
                         "Qwen/Qwen2.5-Coder-3B-Instruct-GGUF:"
-                        "qwen2.5-coder-3b-instruct-q4_0.gguf"
+                        "qwen2.5-coder-3b-instruct-q4_0.gguf\n"
+                        "Alternatively, you can provide a local path to a .gguf file."
                     )
 
                 # Create a PullConfig we will use to download the model
@@ -327,7 +330,7 @@ class ModelManager:
                         f"FLM command not found even after installation attempt. "
                         f"Please manually install FLM using 'lemonade-install --flm'."
                     ) from e
-            elif "gguf" in checkpoint_to_download.lower():
+            elif "gguf" in checkpoint_to_download.lower() or checkpoint_to_download.endswith('.gguf'):
                 download_gguf(
                     gguf_model_config.checkpoint,
                     gguf_model_config.mmproj,

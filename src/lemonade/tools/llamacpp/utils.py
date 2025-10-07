@@ -649,12 +649,54 @@ def identify_gguf_models(
 
 def download_gguf(config_checkpoint, config_mmproj=None, do_not_upgrade=False) -> dict:
     """
-    Downloads the GGUF file for the given model configuration.
+    Downloads the GGUF file for the given model configuration or uses a local file.
 
     For sharded models, if the variant points to a folder (e.g. Q4_0), all files in that folder
     will be downloaded but only the first file will be returned for loading.
+
+    If config_checkpoint is a local file path (absolute or relative path ending with .gguf),
+    the file path will be used directly without downloading.
     """
 
+    # Check if this is a local file path
+    if config_checkpoint.endswith('.gguf') or (os.path.isabs(config_checkpoint) and os.path.exists(config_checkpoint)):
+        # Handle local GGUF file
+        if not os.path.exists(config_checkpoint):
+            raise ValueError(f"Local GGUF file not found: {config_checkpoint}")
+
+        if not config_checkpoint.endswith('.gguf'):
+            raise ValueError(f"Local file must be a .gguf file: {config_checkpoint}")
+
+        # Get absolute path
+        absolute_path = os.path.abspath(config_checkpoint)
+
+        result = {"variant": absolute_path}
+
+        # Handle mmproj file if provided
+        if config_mmproj:
+            if not os.path.exists(config_mmproj):
+                raise ValueError(f"Local mmproj file not found: {config_mmproj}")
+            result["mmproj"] = os.path.abspath(config_mmproj)
+
+        logging.info(f"Using local GGUF model: {absolute_path}")
+        return result
+
+    # Check if it's a relative path that exists
+    if os.path.exists(config_checkpoint) and config_checkpoint.endswith('.gguf'):
+        absolute_path = os.path.abspath(config_checkpoint)
+
+        result = {"variant": absolute_path}
+
+        # Handle mmproj file if provided
+        if config_mmproj:
+            if not os.path.exists(config_mmproj):
+                raise ValueError(f"Local mmproj file not found: {config_mmproj}")
+            result["mmproj"] = os.path.abspath(config_mmproj)
+
+        logging.info(f"Using local GGUF model: {absolute_path}")
+        return result
+
+    # Otherwise, handle as Hugging Face download
     # This code handles all cases by constructing the appropriate filename or pattern
     checkpoint, variant = parse_checkpoint(config_checkpoint)
 
