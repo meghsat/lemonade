@@ -105,10 +105,15 @@ class ModelManager:
                 # Handle other models
                 checkpoint = model_info["checkpoint"]
 
-                # Check if this is a local GGUF file path
-                is_local_gguf = (checkpoint.endswith('.gguf') or
-                                (os.path.isabs(checkpoint) and os.path.exists(checkpoint)) or
-                                (os.path.exists(checkpoint) and '.gguf' in checkpoint))
+                # Check if this is a local GGUF file (simplified logic)
+                if os.path.exists(checkpoint):
+                    is_local_gguf = True
+                else:
+                    # Check for HuggingFace format: "org/repo:variant"
+                    colon_pos = checkpoint.find(':')
+                    slash_pos = checkpoint.find('/')
+                    is_hf_format = (colon_pos > 1 and slash_pos >= 0 and slash_pos < colon_pos)
+                    is_local_gguf = not is_hf_format
 
                 if is_local_gguf:
                     # Local GGUF file - check if it exists
@@ -234,7 +239,14 @@ class ModelManager:
 
                 # Make sure that a variant is provided for GGUF models before registering the model
                 # Exception: Allow local .gguf file paths without variant
-                is_local_gguf = checkpoint.endswith('.gguf') or (os.path.exists(checkpoint) and '.gguf' in checkpoint)
+                if os.path.exists(checkpoint):
+                    is_local_gguf = True
+                else:
+                    colon_pos = checkpoint.find(':')
+                    slash_pos = checkpoint.find('/')
+                    is_hf_format = (colon_pos > 1 and slash_pos >= 0 and slash_pos < colon_pos)
+                    is_local_gguf = not is_hf_format
+
                 if "gguf" in checkpoint.lower() and ":" not in checkpoint.lower() and not is_local_gguf:
                     raise ValueError(
                         "You are required to provide a 'variant' in the checkpoint field when "

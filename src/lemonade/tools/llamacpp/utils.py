@@ -658,8 +658,22 @@ def download_gguf(config_checkpoint, config_mmproj=None, do_not_upgrade=False) -
     the file path will be used directly without downloading.
     """
 
-    # Check if this is a local file path
-    if config_checkpoint.endswith('.gguf') or (os.path.isabs(config_checkpoint) and os.path.exists(config_checkpoint)):
+    # Simple check: HuggingFace format has "org/repo:variant" pattern
+    # Local files either exist on disk or don't have the HF pattern
+    if os.path.exists(config_checkpoint):
+        # File exists locally, use it
+        is_local_file = True
+    else:
+        # Check if it looks like HuggingFace format: contains "/" before ":"
+        # (excluding Windows drive letters like C:)
+        colon_pos = config_checkpoint.find(':')
+        slash_pos = config_checkpoint.find('/')
+
+        # HuggingFace format: has "/" before ":" (and colon isn't at position 1 for Windows drives)
+        is_hf_format = (colon_pos > 1 and slash_pos >= 0 and slash_pos < colon_pos)
+        is_local_file = not is_hf_format
+
+    if is_local_file:
         # Handle local GGUF file
         if not os.path.exists(config_checkpoint):
             raise ValueError(f"Local GGUF file not found: {config_checkpoint}")
