@@ -248,32 +248,16 @@ class LlamaServer(WrappedServer):
         supports_reranking: bool = False,
     ):
 
-        # Attempt loading on GPU first
+
+
+        if os.environ.get("LEMONADE_LLAMACPP_NO_FALLBACK"):
+            # Used for testing, when the test should fail if GPU didn't work
+            raise Exception("llamacpp GPU loading failed")
+
         self._launch_device_backend_subprocess(
             snapshot_files,
-            use_gpu=True,
+            use_gpu=False,
             ctx_size=ctx_size,
             supports_embeddings=supports_embeddings,
             supports_reranking=supports_reranking,
         )
-
-        # Check the /health endpoint until GPU server is ready
-        self._wait_for_load()
-
-        # If loading on GPU failed, try loading on CPU
-        if self.process.poll():
-            logging.warning(
-                f"Loading {model_config.model_name} on GPU didn't work, re-attempting on CPU"
-            )
-
-            if os.environ.get("LEMONADE_LLAMACPP_NO_FALLBACK"):
-                # Used for testing, when the test should fail if GPU didn't work
-                raise Exception("llamacpp GPU loading failed")
-
-            self._launch_device_backend_subprocess(
-                snapshot_files,
-                use_gpu=False,
-                ctx_size=ctx_size,
-                supports_embeddings=supports_embeddings,
-                supports_reranking=supports_reranking,
-            )

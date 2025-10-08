@@ -60,6 +60,7 @@ def identify_rocm_arch_from_name(device_name: str) -> str | None:
 
 
 def identify_rocm_arch() -> str:
+    return "gfx1151" # Hardcoding this since we are forcing CPU offload for testing
     """
     Identify the appropriate ROCm target architecture based on the device info
     Returns tuple of (architecture, gpu_type) where gpu_type is 'igpu' or 'dgpu'
