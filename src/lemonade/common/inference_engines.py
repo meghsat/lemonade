@@ -332,7 +332,7 @@ class LlamaCppDetector(BaseEngineDetector):
         try:
             # Use backend-specific path - same logic as get_llama_folder_path in utils.py
             server_base_dir = os.path.join(
-                os.path.dirname(sys.executable), backend, "llama_server"
+                os.getcwd(), backend, "llama_server"
             )
             version_file = os.path.join(server_base_dir, "version.txt")
 

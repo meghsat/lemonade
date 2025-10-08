@@ -140,7 +140,7 @@ def get_llama_folder_path(backend: str):
     """
     Get path for llama.cpp platform-specific executables folder
     """
-    return os.path.join(os.path.dirname(sys.executable), backend, "llama_server")
+    return os.path.join(os.getcwd(), backend, "llama_server")
 
 
 def get_llama_exe_path(exe_name: str, backend: str):
