@@ -1045,10 +1045,9 @@ function setupRegisterModelForm() {
         };
     }
 }
-// Satya changes
+// Satya
 let isLocalModel = false;
 let selectedModelFiles = null;
-
 // Helper function to find mmproj file in selected folder
 function findMmprojFile(files) {
     for (let i = 0; i < files.length; i++) {
@@ -1064,7 +1063,7 @@ function findMmprojFile(files) {
     }
     return null;
 }
-
+// satya
 // Helper function to auto-fill mmproj field if llamacpp is selected
 function autoFillMmproj() {
     const recipeSelect = document.getElementById('register-recipe');
@@ -1081,7 +1080,7 @@ function autoFillMmproj() {
         }
     }
 }
-
+//satya
 function setupFolderSelection() {
     const selectFolderBtn = document.getElementById('select-folder-btn');
     const folderInput = document.getElementById('folder-input');
