@@ -56,7 +56,7 @@ For best results, a code-tuned model with at least 20B parameters is required. T
     ![Continue Extension in VS Code Marketplace](https://raw.githubusercontent.com/lemonade-sdk/assets/refs/heads/main/docs/guides/continue/continue_vscode_marketplace.png)
 
 3. **Open Continue in VS Code**: After installation completes, the Continue logo appears in the Activity bar. Click it to open the extension.
-4. **Add Lemonade Server Provider**: Click the model dropdown menu in the Continue sidebar, then select "Add Chat Model". Choose "Lemonade Server" from the list of available providers. Continue will automatically detect your local server running at `http://localhost:8000`.
+4. **Add Lemonade Server Provider**: Click the model dropdown menu in the Continue sidebar, then select "Add Chat Model". Choose "Lemonade Server" from the list of available providers. Continue will set the default address to `http://localhost:8000`, but it can be changed to match a different setup.
 
     _Example configuration screen:_
     ![Add Lemonade Provider](https://raw.githubusercontent.com/lemonade-sdk/assets/refs/heads/main/docs/guides/continue/continue_add_lemonade_provider.png)
