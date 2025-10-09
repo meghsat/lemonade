@@ -221,7 +221,6 @@ async function loadModelStandardized(modelId, options = {}) {
             onLoadingStart(modelId);
         }
         
-        // satya
         // Make the API call to load the model
         // Include mmproj if the model has it defined
         const loadPayload = { model_name: modelId };

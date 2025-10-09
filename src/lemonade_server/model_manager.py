@@ -105,7 +105,6 @@ class ModelManager:
             else:
                 # Handle other models
                 checkpoint = model_info["checkpoint"]
-                #satya
                 if model.startswith('user.'):
                     local_model_path = os.path.join(HF_HUB_CACHE, checkpoint)
                     if os.path.exists(local_model_path):
@@ -154,7 +153,6 @@ class ModelManager:
                         downloaded_models[model] = model_info
         return downloaded_models
 
-    #satya
     def register_local_model(
     self,
     model_name: str,
@@ -542,7 +540,6 @@ class ModelManager:
             except subprocess.CalledProcessError as e:
                 raise ValueError(f"Failed to delete FLM model {model_name}: {e}") from e
 
-        #satya
         if checkpoint.startswith("models--"):
             # This is already in cache directory format (local model)
             model_cache_dir = os.path.join(HF_HUB_CACHE, checkpoint)

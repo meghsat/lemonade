@@ -1288,7 +1288,6 @@ button:disabled {
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(91, 141, 184, 0.3);
 }
-/* satya */
 .checkpoint-input-group {
   display: flex;
   align-items: stretch;

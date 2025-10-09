@@ -427,7 +427,6 @@ function createModelItem(modelId, modelData, container) {
 
 // Install model
 async function installModel(modelId) {
-    //satya- Doesn't do anything 
     if (modelId.startsWith('user.')) {
         // For local models, they should already be "installed" after upload
         // Just refresh the UI to show the correct state
@@ -519,7 +518,6 @@ async function deleteModel(modelId) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model_name: modelId })
         });
-        //satya
         installedModels.delete(modelId);
         // Remove custom models from SERVER_MODELS to prevent them from reappearing without having to do a manual refresh
         if (modelId.startsWith('user.')) {
@@ -654,7 +652,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Set up register model form
     setupRegisterModelForm();
-    // satya
     setupFolderSelection();
 });
 
@@ -934,7 +931,6 @@ function refreshModelMgmtUIDisplay() {
     }
 }
 
-// satya changes
 // Set up the register model form
 function setupRegisterModelForm() {
     const registerForm = document.getElementById('register-model-form');
@@ -966,7 +962,6 @@ function setupRegisterModelForm() {
             btn.textContent = 'Installing...';
             
             try {
-                // satya changes
                 if (isLocalModel && selectedModelFiles) {
                     if (recipe === 'llamacpp' && !Array.from(selectedModelFiles).some(file => file.name.toLowerCase().endsWith('.gguf'))) {
                         throw new Error('No .gguf files found in the selected folder for llamacpp');
@@ -1006,7 +1001,6 @@ function setupRegisterModelForm() {
                 registerStatus.style.color = '#27ae60';
                 registerStatus.className = 'register-status success';
 
-                //satya
                 // Add custom model to SERVER_MODELS so it appears in the UI without having to do a manual refresh
                 if (name.startsWith('user.')) {
                     const labels = ['custom'];
@@ -1022,7 +1016,6 @@ function setupRegisterModelForm() {
                 }
 
                 registerForm.reset();
-                // satya changes
                 isLocalModel = false;
                 selectedModelFiles = null;
                 document.getElementById('folder-input').value = '';
@@ -1045,7 +1038,6 @@ function setupRegisterModelForm() {
         };
     }
 }
-// Satya
 let isLocalModel = false;
 let selectedModelFiles = null;
 // Helper function to find mmproj file in selected folder
@@ -1063,7 +1055,6 @@ function findMmprojFile(files) {
     }
     return null;
 }
-// satya
 // Helper function to auto-fill mmproj field if llamacpp is selected
 function autoFillMmproj() {
     const recipeSelect = document.getElementById('register-recipe');
@@ -1080,7 +1071,6 @@ function autoFillMmproj() {
         }
     }
 }
-//satya
 function setupFolderSelection() {
     const selectFolderBtn = document.getElementById('select-folder-btn');
     const folderInput = document.getElementById('folder-input');

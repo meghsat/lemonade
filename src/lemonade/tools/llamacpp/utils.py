@@ -653,18 +653,14 @@ def download_gguf(config_checkpoint: str, config_mmproj=None, do_not_upgrade: bo
     For sharded models, if the variant points to a folder (e.g. Q4_0), all files in that folder
     will be downloaded but only the first file will be returned for loading.
     """
-    #satya
     # Check if this is a user-uploaded model (path contains models-- pattern or is already a full path)
     if "models--" in config_checkpoint and os.path.exists(config_checkpoint):
-        # This is a user-uploaded model with a full path
         result = {"variant": config_checkpoint}
-        # Include mmproj if provided (should already be a full path from serve.py)
         if config_mmproj:
             result["mmproj"] = config_mmproj
         return result
 
     result = {"variant": config_checkpoint}
-    # Include mmproj if provided for non-user-uploaded models
     if config_mmproj:
         result["mmproj"] = config_mmproj
     return result

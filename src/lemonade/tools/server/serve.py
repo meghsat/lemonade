@@ -327,7 +327,6 @@ class Server:
             self.app.post(f"{prefix}/responses")(self.responses)
             self.app.post(f"{prefix}/log-level")(self.set_log_level)
             self.app.websocket(f"{prefix}/logs/ws")(self.logs_ws)
-            #satya
             self.app.post(f"{prefix}/upload-model")(self.upload_model)
 
             # OpenAI-compatible routes
@@ -340,7 +339,6 @@ class Server:
             self.app.post(f"{prefix}/reranking")(self.reranking)
             self.app.post(f"{prefix}/rerank")(self.reranking)
 
-    # Satya        
     async def upload_model(
         self,
         model_name: str = Form(...),
@@ -1691,7 +1689,6 @@ class Server:
                 config_to_use = LoadConfig(**supported_models[config.model_name])
 
 
-            #satya
             if config_to_use.model_name.startswith("user."):
                 model_name_clean = config_to_use.model_name.replace("user.", "")
                 repo_cache_name = f"{model_name_clean.replace('/', '--')}"
