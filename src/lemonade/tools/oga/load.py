@@ -37,6 +37,7 @@ execution_providers = {
     "cuda": "cuda",
 }
 
+
 def find_onnx_files_recursively(directory):
     """
     Recursively search for ONNX files in a directory and its subdirectories.
@@ -46,6 +47,7 @@ def find_onnx_files_recursively(directory):
             if file.endswith(".onnx"):
                 return True
     return False
+
 
 def _get_npu_driver_version():
     """
