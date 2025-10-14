@@ -54,23 +54,52 @@ function renderMarkdown(text) {
 
 // Display an error message in the banner
 function showErrorBanner(msg) {
+    showBanner(msg, 'error');
+}
+
+// Display a banner with a specific type (error, warning, success)
+function showBanner(msg, type = 'error') {
     // If DOM isn't ready, wait for it
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            showErrorBanner(msg);
+            showBanner(msg, type);
         });
         return;
     }
-    
+
     const banner = document.getElementById('error-banner');
     if (!banner) return;
     const msgEl = document.getElementById('error-banner-msg');
-    const fullMsg = msg + '\nCheck the Lemonade Server logs via the system tray app for more information.';
+
+    // Determine the full message and styling based on type
+    let fullMsg = msg;
+    let backgroundColor, color;
+
+    switch(type) {
+        case 'success':
+            backgroundColor = '#27ae60'; // green
+            color = '#ffffff';
+            break;
+        case 'warning':
+            backgroundColor = '#8d5803ff'; // yellow/orange
+            color = '#ffffff';
+            break;
+        case 'error':
+        default:
+            backgroundColor = '#b10819ff'; // red
+            color = '#ffffff';
+            fullMsg = msg + '\nCheck the Lemonade Server logs via the system tray app for more information.';
+            break;
+    }
+
     if (msgEl) {
         msgEl.textContent = fullMsg;
     } else {
         banner.textContent = fullMsg;
     }
+
+    banner.style.backgroundColor = backgroundColor;
+    banner.style.color = color;
     banner.style.display = 'flex';
 }
 

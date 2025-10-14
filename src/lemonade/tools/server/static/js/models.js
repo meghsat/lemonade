@@ -427,19 +427,6 @@ function createModelItem(modelId, modelData, container) {
 
 // Install model
 async function installModel(modelId) {
-    if (modelId.startsWith('user.')) {
-        // For local models, they should already be "installed" after upload
-        // Just refresh the UI to show the correct state
-        await fetchInstalledModels();
-        await updateModelStatusIndicator();
-        
-        // Refresh model list
-        if (currentCategory === 'hot') displayHotModels();
-        else if (currentCategory === 'recipes') displayModelsByRecipe(currentFilter);
-        else if (currentCategory === 'labels') displayModelsByLabel(currentFilter);
-        
-        return;
-    }
     // Find the install button and show loading state
     const modelItems = document.querySelectorAll('.model-item');
     let installBtn = null;
@@ -946,7 +933,17 @@ function setupRegisterModelForm() {
             if (!name.startsWith('user.')) {
                 name = 'user.' + name;
             }
-            
+
+            // Check if model name already exists
+            const allModels = window.SERVER_MODELS || {};
+            if (allModels[name] || installedModels.has(name)) {
+                showErrorBanner('Model name already exists. Please enter a different name.');
+                registerStatus.textContent = 'Model name already exists';
+                registerStatus.style.color = '#b10819ff';
+                registerStatus.className = 'register-status error';
+                return;
+            }
+
             const checkpoint = document.getElementById('register-checkpoint').value.trim();
             const recipe = document.getElementById('register-recipe').value;
             const reasoning = document.getElementById('register-reasoning').checked;
@@ -966,9 +963,10 @@ function setupRegisterModelForm() {
                     if (recipe === 'llamacpp' && !Array.from(selectedModelFiles).some(file => file.name.toLowerCase().endsWith('.gguf'))) {
                         throw new Error('No .gguf files found in the selected folder for llamacpp');
                     }
-                    
+
                     const formData = new FormData();
                     formData.append('model_name', name);
+                    formData.append('checkpoint', checkpoint);
                     formData.append('recipe', recipe);
                     formData.append('reasoning', reasoning);
                     formData.append('vision', vision);
@@ -976,8 +974,8 @@ function setupRegisterModelForm() {
                     Array.from(selectedModelFiles).forEach(file => {
                         formData.append('model_files', file, file.webkitRelativePath);
                     });
-                    
-                    await httpRequest(getServerBaseUrl() + '/api/v1/upload-model', {
+
+                    await httpRequest(getServerBaseUrl() + '/api/v1/add-local-model', {
                         method: 'POST',
                         body: formData
                     });
@@ -998,7 +996,7 @@ function setupRegisterModelForm() {
                 }
 
                 registerStatus.textContent = 'Model installed!';
-                registerStatus.style.color = '#27ae60';
+                registerStatus.style.color = '#0eaf51ff';
                 registerStatus.className = 'register-status success';
 
                 // Add custom model to SERVER_MODELS so it appears in the UI without having to do a manual refresh
@@ -1055,6 +1053,54 @@ function findMmprojFile(files) {
     }
     return null;
 }
+
+// Helper function to find all non-mmproj GGUF files in selected folder
+function findGgufFiles(files) {
+    const ggufFiles = [];
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileName = file.name.toLowerCase();
+        const relativePath = file.webkitRelativePath;
+
+        // Check if file has .gguf extension but is NOT an mmproj file
+        if (fileName.endsWith('.gguf') && !fileName.includes('mmproj')) {
+            // Store just the filename (last part of the path)
+            ggufFiles.push(relativePath.split('/').pop());
+        }
+    }
+    return ggufFiles;
+}
+
+// Helper function to check GGUF files and show appropriate banners
+function checkGgufFilesAndShowBanner(files) {
+    const recipeSelect = document.getElementById('register-recipe');
+
+    // Only check if llamacpp is selected
+    if (!recipeSelect || recipeSelect.value !== 'llamacpp') {
+        return;
+    }
+
+    const mmprojFile = findMmprojFile(files);
+    const ggufFiles = findGgufFiles(files);
+
+    // Hide any existing banners first
+    hideErrorBanner();
+
+    if (ggufFiles.length > 1) {
+        // Multiple GGUF files detected
+        const folderPath = files[0].webkitRelativePath.split('/')[0];
+        let bannerMsg = `More than one variant detected. Please clarify them at the end of the checkpoint name like:\n<folder_name>:<variant>\nExample: ${folderPath}:${ggufFiles[0]}`;
+
+        if (mmprojFile) {
+            bannerMsg += `\n\nDon't forget to enter the mmproj file name and check the 'vision' checkbox if it is a vision model.`;
+        }
+
+        showBanner(bannerMsg, 'warning');
+    } else if (mmprojFile) {
+        // MMproj detected
+        showBanner("MMproj detected and populated. Please validate the file name and check the 'vision' checkbox if it is a vision model.", 'success');
+    }
+}
 // Helper function to auto-fill mmproj field if llamacpp is selected
 function autoFillMmproj() {
     const recipeSelect = document.getElementById('register-recipe');
@@ -1068,6 +1114,12 @@ function autoFillMmproj() {
             if (mmprojFile) {
                 mmprojInput.value = mmprojFile;
             }
+
+            // Check GGUF files and show appropriate banner
+            checkGgufFilesAndShowBanner(selectedModelFiles);
+        } else {
+            // Hide banners if not llamacpp
+            hideErrorBanner();
         }
     }
 }
@@ -1098,6 +1150,7 @@ function setupFolderSelection() {
                 isLocalModel = false;
                 selectedModelFiles = null;
                 checkpointInput.value = '';
+                hideErrorBanner();
             }
         });
 
