@@ -70,6 +70,7 @@ function showBanner(msg, type = 'error') {
     const banner = document.getElementById('error-banner');
     if (!banner) return;
     const msgEl = document.getElementById('error-banner-msg');
+    const logsUrl = window.location.origin + '/static/logs.html';
 
     // Determine the full message and styling based on type
     let fullMsg = msg;
@@ -88,14 +89,14 @@ function showBanner(msg, type = 'error') {
         default:
             backgroundColor = '#b10819ff'; // red
             color = '#ffffff';
-            fullMsg = msg + '\nCheck the Lemonade Server logs via the system tray app for more information.';
+            fullMsg = `${msg}<br>Check the Lemonade Server logs <a href="${logsUrl}" target="_blank" rel="noopener noreferrer">on the browser</a> or via the system tray app for more information.`;
             break;
     }
-
+    
     if (msgEl) {
-        msgEl.textContent = fullMsg;
+        msgEl.innerHTML = fullMsg;
     } else {
-        banner.textContent = fullMsg;
+        banner.innerHTML = fullMsg;
     }
 
     banner.style.backgroundColor = backgroundColor;
