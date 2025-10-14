@@ -713,7 +713,6 @@ class OgaLoad(FirstTool):
             state.save_stat(Keys.CHECKPOINT, checkpoint)
             state.save_stat(Keys.LOCAL_MODEL_FOLDER, full_model_path)
             # See if there is a file ending in ".onnx" in this folder
-            dir = os.listdir(input)
             has_onnx_file = find_onnx_files_recursively(input)
             if not has_onnx_file:
                 raise ValueError(
