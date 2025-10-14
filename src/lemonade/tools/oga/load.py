@@ -42,7 +42,7 @@ def find_onnx_files_recursively(directory):
     """
     Recursively search for ONNX files in a directory and its subdirectories.
     """
-    for root, dirs, files in os.walk(directory):
+    for _, _, files in os.walk(directory):
         for file in files:
             if file.endswith(".onnx"):
                 return True

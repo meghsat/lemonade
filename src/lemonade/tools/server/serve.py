@@ -12,7 +12,6 @@ import json
 from pathlib import Path
 import os
 import shutil
-from pathlib import Path
 from fastapi import FastAPI, HTTPException, status, Request, WebSocket, Form, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -351,9 +350,7 @@ class Server:
         from huggingface_hub.constants import HF_HUB_CACHE
         from lemonade.tools.llamacpp.utils import parse_checkpoint
 
-        """
-        Upload and register a local model from files.
-        """
+        # Upload and register a local model from files.
         try:
             if not model_files:
                 raise HTTPException(
@@ -386,7 +383,10 @@ class Server:
             if model_name in ModelManager().supported_models:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Model name '{model_name}' already exists. Please use a different name.",
+                    detail=(
+                        f"Model name '{model_name}' already exists. "
+                        "Please use a different name."
+                    ),
                 )
 
             model_name_clean = model_name.replace("user.", "")
@@ -402,7 +402,8 @@ class Server:
             variant = None
             if checkpoint and ":" in checkpoint:
                 _, variant = parse_checkpoint(checkpoint)
-                # variant now contains just the variant[can be with & without the .gguf extension] filename (e.g., "LFM2-VL-1.6B-F16 or LFM2-VL-1.6B-F16.gguf")
+                # variant now contains just the variant[can be with & without the
+                # .gguf extension] filename (e.g., "LFM2-VL-1.6B-F16 or LFM2-VL-1.6B-F16.gguf")
 
             # Save uploaded files, preserving folder structure
             for file in model_files:

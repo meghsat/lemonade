@@ -376,7 +376,7 @@ def install_llamacpp(backend):
                 import stat
 
                 # Find and make executable files executable
-                for root, dirs, files in os.walk(llama_server_exe_dir):
+                for root, _, files in os.walk(llama_server_exe_dir):
                     for file in files:
                         file_path = os.path.join(root, file)
                         # Make files in bin/ directories executable
