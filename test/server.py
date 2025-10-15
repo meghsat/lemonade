@@ -381,8 +381,8 @@ class Testing(ServerTestingBase):
             load_response = await client.post(
                 "/pull",
                 json={
-                    "model_name": "user.Qwen2.5-0.5B-HF-CPU-test013",
-                    "checkpoint": "Qwen/Qwen2.5-0.5B",
+                    "model_name": "user.Qwen2.5-1.5B-HF-CPU",
+                    "checkpoint": "Qwen/Qwen2.5-1.5B",
                     "recipe": "hf-cpu",
                 },
             )
@@ -400,7 +400,7 @@ class Testing(ServerTestingBase):
             )
 
             completion = client.completions.create(
-                model="user.Qwen2.5-0.5B-HF-CPU-test013",
+                model="user.Qwen2.5-1.5B-HF-CPU",
                 prompt="Hello, how are you?",
                 stream=False,
                 max_tokens=10,
