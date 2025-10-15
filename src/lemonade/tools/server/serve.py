@@ -402,7 +402,7 @@ class Server:
             variant = None
             if checkpoint and ":" in checkpoint:
                 _, variant = parse_checkpoint(checkpoint)
-                # variant now contains just the variant[can be with & without the
+                # variant now contains just the variant[can be with or without the
                 # .gguf extension] filename (e.g., "LFM2-VL-1.6B-F16 or LFM2-VL-1.6B-F16.gguf")
 
             # Save uploaded files, preserving folder structure
