@@ -377,12 +377,16 @@ class Testing(ServerTestingBase):
     # Test pull to register-and-install
     async def test_013_test_load_checkpoint_completion(self):
         async with httpx.AsyncClient(base_url=self.base_url, timeout=120.0) as client:
+            # Delete the model if it exists from a previous test run
+            await client.post(
+                "/delete", json={"model_name": "user.Qwen2.5-0.5B-HF-CPU"}
+            )
 
             load_response = await client.post(
                 "/pull",
                 json={
-                    "model_name": "user.Qwen2.5-1.5B-HF-CPU",
-                    "checkpoint": "Qwen/Qwen2.5-1.5B",
+                    "model_name": "user.Qwen2.5-0.5B-HF-CPU",
+                    "checkpoint": "Qwen/Qwen2.5-0.5B",
                     "recipe": "hf-cpu",
                 },
             )
@@ -400,7 +404,7 @@ class Testing(ServerTestingBase):
             )
 
             completion = client.completions.create(
-                model="user.Qwen2.5-1.5B-HF-CPU",
+                model="user.Qwen2.5-0.5B-HF-CPU",
                 prompt="Hello, how are you?",
                 stream=False,
                 max_tokens=10,
