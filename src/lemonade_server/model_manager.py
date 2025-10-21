@@ -402,30 +402,35 @@ class ModelManager:
 
                 # Parse checkpoint to get base checkpoint without variant
                 base_checkpoint, variant = parse_checkpoint(checkpoint)
-                repo_cache_name = base_checkpoint.replace("/", "--")
-                cache_checkpoint = f"models--{repo_cache_name}"
 
-                # For GGUF models, preserve variant so the loader knows which file to use
-                if variant:
-                    cache_checkpoint = f"{cache_checkpoint}:{variant}"
+                if current_recipe and current_recipe.startswith("hf-"):
+                    cache_checkpoint = checkpoint
+                else:
+                    # For GGUF and OGA models, convert to cache directory format
+                    repo_cache_name = base_checkpoint.replace("/", "--")
+                    cache_checkpoint = f"models--{repo_cache_name}"
 
-                # For OGA models, resolve the path to genai_config.json
-                elif current_recipe and current_recipe.startswith("oga-"):
-                    model_cache_dir = os.path.join(HF_HUB_CACHE, cache_checkpoint)
+                    # For GGUF models, preserve variant so the loader knows which file to use
+                    if variant:
+                        cache_checkpoint = f"{cache_checkpoint}:{variant}"
 
-                    # Search for genai_config.json in the downloaded model
-                    resolved_checkpoint = None
-                    if os.path.exists(model_cache_dir):
-                        for root, _, files in os.walk(model_cache_dir):
-                            if "genai_config.json" in files:
-                                # Store relative path from HF_HUB_CACHE for portability
-                                resolved_checkpoint = os.path.relpath(
-                                    root, HF_HUB_CACHE
-                                )
-                                break
+                    # For OGA models, resolve the path to genai_config.json
+                    elif current_recipe and current_recipe.startswith("oga-"):
+                        model_cache_dir = os.path.join(HF_HUB_CACHE, cache_checkpoint)
 
-                    if resolved_checkpoint:
-                        cache_checkpoint = resolved_checkpoint
+                        # Search for genai_config.json in the downloaded model
+                        resolved_checkpoint = None
+                        if os.path.exists(model_cache_dir):
+                            for root, _, files in os.walk(model_cache_dir):
+                                if "genai_config.json" in files:
+                                    # Store relative path from HF_HUB_CACHE for portability
+                                    resolved_checkpoint = os.path.relpath(
+                                        root, HF_HUB_CACHE
+                                    )
+                                    break
+
+                        if resolved_checkpoint:
+                            cache_checkpoint = resolved_checkpoint
 
                 new_user_model["checkpoint"] = cache_checkpoint
 

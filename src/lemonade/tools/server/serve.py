@@ -1796,6 +1796,7 @@ class Server:
             if (
                 config_to_use.model_name.startswith("user.")
                 and config_to_use.checkpoint
+                and not config_to_use.recipe.startswith("hf-")
             ):
                 # Check if checkpoint is a relative path (stored during upload)
                 if not os.path.isabs(config_to_use.checkpoint):
