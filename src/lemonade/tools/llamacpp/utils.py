@@ -654,26 +654,15 @@ def identify_gguf_models(
     return core_files, sharded_files
 
 
-def download_gguf(
-    config_checkpoint: str, config_mmproj=None, do_not_upgrade: bool = False
-) -> dict:
+def resolve_local_gguf_model(
+    checkpoint: str, variant: str, config_mmproj: str = None
+) -> dict | None:
     """
-    Downloads the GGUF file for the given model configuration.
-
-    For sharded models, if the variant points to a folder (e.g. Q4_0), all files in that folder
-    will be downloaded but only the first file will be returned for loading.
+    Attempts to resolve a GGUF model from the local HuggingFace cache.
     """
-    if os.path.exists(config_checkpoint):
-        result = {"variant": config_checkpoint}
-        if config_mmproj:
-            result["mmproj"] = config_mmproj
-        return result
-
-    # Parse checkpoint to extract base and variant
-    # Checkpoint format: models--{model_name} or models--{model_name}:variant for gguf models
-    checkpoint, variant = parse_checkpoint(config_checkpoint)
     from huggingface_hub.constants import HF_HUB_CACHE
 
+    # Convert checkpoint to cache directory format
     if checkpoint.startswith("models--"):
         model_cache_dir = os.path.join(HF_HUB_CACHE, checkpoint)
     else:
@@ -681,44 +670,76 @@ def download_gguf(
         repo_cache_name = checkpoint.replace("/", "--")
         model_cache_dir = os.path.join(HF_HUB_CACHE, f"models--{repo_cache_name}")
 
-    # Check if this is a local model
-    if os.path.exists(model_cache_dir):
-        gguf_file_found = None
+    # Check if the cache directory exists
+    if not os.path.exists(model_cache_dir):
+        return None
 
-        # If variant is specified, look for that specific file
-        if variant:
-            search_term = variant if variant.endswith(".gguf") else f"{variant}.gguf"
+    gguf_file_found = None
 
-            for root, _, files in os.walk(model_cache_dir):
-                if search_term in files:
-                    gguf_file_found = os.path.join(root, search_term)
-                    break
+    # If variant is specified, look for that specific file
+    if variant:
+        search_term = variant if variant.endswith(".gguf") else f"{variant}.gguf"
 
-        # If no variant or variant not found, find any .gguf file (excluding mmproj)
-        if not gguf_file_found:
-            for root, _, files in os.walk(model_cache_dir):
-                gguf_files = [
-                    f
-                    for f in files
-                    if f.endswith(".gguf") and "mmproj" not in f.lower()
-                ]
-                if gguf_files:
-                    gguf_file_found = os.path.join(root, gguf_files[0])
-                    break
-        if gguf_file_found:
-            result = {"variant": gguf_file_found}
+        for root, _, files in os.walk(model_cache_dir):
+            if search_term in files:
+                gguf_file_found = os.path.join(root, search_term)
+                break
 
-            # Search for mmproj file if provided
-            if config_mmproj:
-                for root, _, files in os.walk(model_cache_dir):
-                    if config_mmproj in files:
-                        result["mmproj"] = os.path.join(root, config_mmproj)
-                        break
-            logging.info(result)
-            return result
-        # If no GGUF files found in local cache, continue to HuggingFace download logic below
+    # If no variant or variant not found, find any .gguf file (excluding mmproj)
+    if not gguf_file_found:
+        for root, _, files in os.walk(model_cache_dir):
+            gguf_files = [
+                f for f in files if f.endswith(".gguf") and "mmproj" not in f.lower()
+            ]
+            if gguf_files:
+                gguf_file_found = os.path.join(root, gguf_files[0])
+                break
 
-    # This code handles all cases by constructing the appropriate filename or pattern
+    # If no GGUF file found, model is not in cache
+    if not gguf_file_found:
+        return None
+
+    # Build result dictionary
+    result = {"variant": gguf_file_found}
+
+    # Search for mmproj file if provided
+    if config_mmproj:
+        for root, _, files in os.walk(model_cache_dir):
+            if config_mmproj in files:
+                result["mmproj"] = os.path.join(root, config_mmproj)
+                break
+
+    logging.info(f"Resolved local GGUF model: {result}")
+    return result
+
+
+def download_gguf(
+    config_checkpoint: str, config_mmproj=None, do_not_upgrade: bool = False
+) -> dict:
+    """
+    Downloads the GGUF file for the given model configuration from HuggingFace.
+
+    This function downloads models from the internet. It does NOT check the local cache first.
+    Callers should use resolve_local_gguf_model() if they want to check for existing models first.
+
+    Args:
+        config_checkpoint: Checkpoint identifier (file path or HF repo with variant)
+        config_mmproj: Optional mmproj file to also download
+        do_not_upgrade: If True, use local cache only without attempting to download updates
+
+    Returns:
+        Dictionary with "variant" (and optionally "mmproj") file paths
+    """
+    # Handle direct file path case - if the checkpoint is an actual file on disk
+    if os.path.exists(config_checkpoint):
+        result = {"variant": config_checkpoint}
+        if config_mmproj:
+            result["mmproj"] = config_mmproj
+        return result
+
+    # Parse checkpoint to extract base and variant
+    # Checkpoint format: repo_name:variant (e.g., "unsloth/Qwen3-0.6B-GGUF:Q4_0")
+    checkpoint, variant = parse_checkpoint(config_checkpoint)
 
     # Identify the GGUF model files in the repository that match the variant
     core_files, sharded_files = identify_gguf_models(checkpoint, variant, config_mmproj)

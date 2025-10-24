@@ -8,7 +8,11 @@ from importlib.metadata import distributions
 from lemonade_server.pydantic_models import PullConfig
 from lemonade_server.pydantic_models import PullConfig
 from lemonade.cache import DEFAULT_CACHE_DIR
-from lemonade.tools.llamacpp.utils import parse_checkpoint, download_gguf
+from lemonade.tools.llamacpp.utils import (
+    parse_checkpoint,
+    download_gguf,
+    resolve_local_gguf_model,
+)
 from lemonade.common.network import custom_snapshot_download
 
 USER_MODELS_FILE = os.path.join(DEFAULT_CACHE_DIR, "user_models.json")
@@ -384,11 +388,21 @@ class ModelManager:
                         f"Please manually install FLM using 'lemonade-install --flm'."
                     ) from e
             elif "gguf" in checkpoint_to_download.lower():
-                download_gguf(
-                    gguf_model_config.checkpoint,
-                    gguf_model_config.mmproj,
-                    do_not_upgrade=do_not_upgrade,
+                # Parse checkpoint to check local cache first
+                base_checkpoint, variant = parse_checkpoint(gguf_model_config.checkpoint)
+                local_result = resolve_local_gguf_model(
+                    base_checkpoint, variant, gguf_model_config.mmproj
                 )
+
+                # Only download if not found locally
+                if not local_result:
+                    download_gguf(
+                        gguf_model_config.checkpoint,
+                        gguf_model_config.mmproj,
+                        do_not_upgrade=do_not_upgrade,
+                    )
+                else:
+                    print(f"Model already exists locally, skipping download")
             else:
                 custom_snapshot_download(
                     checkpoint_to_download, do_not_upgrade=do_not_upgrade
