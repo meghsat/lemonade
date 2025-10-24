@@ -47,7 +47,6 @@ setup(
         "jinja2",
         "tabulate",
         "sentencepiece",
-        "onnxruntime_genai",
         "huggingface-hub[hf_xet]==0.33.0",
         "python-dotenv",
         "python-multipart",

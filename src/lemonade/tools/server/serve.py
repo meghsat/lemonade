@@ -357,7 +357,7 @@ class Server:
             # JinaAI routes (jina.ai/reranker/)
             self.app.post(f"{prefix}/reranking")(self.reranking)
             self.app.post(f"{prefix}/rerank")(self.reranking)
-            
+
             # Migration routes
             self.app.get(f"{prefix}/migration/incompatible-models")(
                 self.get_incompatible_models
