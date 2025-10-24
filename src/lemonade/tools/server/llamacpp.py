@@ -107,7 +107,6 @@ class LlamaServer(WrappedServer):
         First checks local cache, then downloads from internet if needed.
         """
         # If it's a direct file path, just return it
-        import os
 
         if os.path.exists(config_checkpoint):
             result = {"variant": config_checkpoint}
