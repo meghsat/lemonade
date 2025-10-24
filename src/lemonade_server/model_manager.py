@@ -400,7 +400,9 @@ class ModelManager:
                     ) from e
             elif "gguf" in checkpoint_to_download.lower():
                 # Parse checkpoint to check local cache first
-                base_checkpoint, variant = parse_checkpoint(gguf_model_config.checkpoint)
+                base_checkpoint, variant = parse_checkpoint(
+                    gguf_model_config.checkpoint
+                )
                 local_result = resolve_local_gguf_model(
                     base_checkpoint, variant, gguf_model_config.mmproj
                 )

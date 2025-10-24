@@ -172,7 +172,9 @@ class LoadLlamaCpp(FirstTool):
             else:
                 # First, try to resolve from local cache to avoid unnecessary downloads
                 base_checkpoint, variant = parse_checkpoint(checkpoint)
-                snapshot_files = resolve_local_gguf_model(base_checkpoint, variant, None)
+                snapshot_files = resolve_local_gguf_model(
+                    base_checkpoint, variant, None
+                )
 
                 # If not found locally, download from internet
                 if not snapshot_files:
