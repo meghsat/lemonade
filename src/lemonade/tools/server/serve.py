@@ -83,10 +83,31 @@ if platform.system() in ["Windows", "Darwin"]:
     from lemonade.tools.server.tray import LemonadeTray, OutputDuplicator
 
 
-class WebsocketTextFilter(logging.Filter):
+class ServerLogFilter(logging.Filter):
+    def __init__(self, server):
+        super().__init__()
+        self.server = server
+        self.noisy_paths = {
+            "/api/v1/health",
+            "/api/v0/health",
+            "/api/v1/models",
+            "/api/v0/models",
+        }
+
     def filter(self, record: logging.LogRecord) -> bool:
-        # Only allow logs that don't include "> TEXT"
-        return "> TEXT" not in record.getMessage()
+        msg = record.getMessage()
+
+        # Filter out websocket logs
+        if "> TEXT" in msg:
+            return False
+
+        # Filter out noisy HTTP routes if debug logs are OFF
+        if not self.server.debug_logging_enabled:
+            if any(path in msg for path in self.noisy_paths):
+                return False
+
+        # Otherwise, allow the log
+        return True
 
 
 async def log_streamer(websocket: WebSocket, path: str, interval: float = 1.0):
@@ -336,6 +357,14 @@ class Server:
             self.app.post(f"{prefix}/reranking")(self.reranking)
             self.app.post(f"{prefix}/rerank")(self.reranking)
 
+            # Migration routes
+            self.app.get(f"{prefix}/migration/incompatible-models")(
+                self.get_incompatible_models
+            )
+            self.app.post(f"{prefix}/migration/cleanup")(
+                self.cleanup_incompatible_models
+            )
+
     async def set_log_level(self, config: LogLevelConfig):
         """
         Set the logging level of the server.
@@ -454,13 +483,13 @@ class Server:
             )
             file_handler.setLevel(logging_level)
             file_handler.setFormatter(uvicorn_formatter)
-            file_handler.addFilter(WebsocketTextFilter())
+            file_handler.addFilter(ServerLogFilter(self))
 
             # Set up console handler
             console_handler = logging.StreamHandler()
             console_handler.setLevel(logging_level)
             console_handler.setFormatter(uvicorn_formatter)
-            console_handler.addFilter(WebsocketTextFilter())
+            console_handler.addFilter(ServerLogFilter(self))
 
             # Configure root logger with both handlers
             logging.basicConfig(
@@ -1781,6 +1810,42 @@ class Server:
             await websocket.close(code=4000)
             return
         await log_streamer(websocket, self.log_file)
+
+    async def get_incompatible_models(self):
+        """
+        Get information about incompatible RyzenAI models in the cache.
+        """
+        try:
+            return ModelManager().get_incompatible_ryzenai_models()
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to scan for incompatible models: {str(e)}",
+            )
+
+    async def cleanup_incompatible_models(self, request: Request):
+        """
+        Delete selected incompatible RyzenAI models from the cache.
+        """
+        try:
+            body = await request.json()
+            model_paths = body.get("model_paths", [])
+
+            if not model_paths:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No model_paths provided",
+                )
+
+            result = ModelManager().cleanup_incompatible_models(model_paths)
+            return result
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to cleanup models: {str(e)}",
+            )
 
 
 @asynccontextmanager

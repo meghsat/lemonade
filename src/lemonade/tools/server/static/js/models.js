@@ -166,6 +166,29 @@ async function unloadModel() {
 
 // === Model Browser Management ===
 
+// Update visibility of categories/subcategories based on available models
+function updateCategoryVisibility() {
+    const allModels = window.SERVER_MODELS || {};
+    
+    // Count models for each recipe
+    const recipeCounts = {};
+    const recipes = ['llamacpp', 'oga-hybrid', 'oga-npu', 'oga-cpu', 'flm'];
+    recipes.forEach(recipe => {
+        recipeCounts[recipe] = 0;
+        Object.entries(allModels).forEach(([modelId, modelData]) => {
+            if (modelData.recipe === recipe && (modelData.suggested || installedModels.has(modelId))) {
+                recipeCounts[recipe]++;
+            }
+        });
+        
+        // Show/hide recipe subcategory
+        const subcategory = document.querySelector(`[data-recipe="${recipe}"]`);
+        if (subcategory) {
+            subcategory.style.display = recipeCounts[recipe] > 0 ? 'block' : 'none';
+        }
+    });
+}
+
 // Toggle category in model browser (only for Hot Models now)
 function toggleCategory(categoryName) {
     const header = document.querySelector(`[data-category="${categoryName}"] .category-header`);
@@ -283,7 +306,7 @@ function displayHotModels() {
     modelList.innerHTML = '';
     
     Object.entries(allModels).forEach(([modelId, modelData]) => {
-        if (modelData.labels && modelData.labels.includes('hot')) {
+        if (modelData.labels && modelData.labels.includes('hot') && (modelData.suggested || installedModels.has(modelId))) {
             createModelItem(modelId, modelData, modelList);
         }
     });
@@ -317,7 +340,7 @@ function displayModelsByRecipe(recipe) {
     }
     
     Object.entries(allModels).forEach(([modelId, modelData]) => {
-        if (modelData.recipe === recipe) {
+        if (modelData.recipe === recipe && (modelData.suggested || installedModels.has(modelId))) {
             createModelItem(modelId, modelData, modelList);
         }
     });
@@ -341,7 +364,7 @@ function displayModelsByLabel(label) {
             if (modelId.startsWith('user.')) {
                 createModelItem(modelId, modelData, modelList);
             }
-        } else if (modelData.labels && modelData.labels.includes(label)) {
+        } else if (modelData.labels && modelData.labels.includes(label) && (modelData.suggested || installedModels.has(modelId))) {
             createModelItem(modelId, modelData, modelList);
         }
     });
@@ -618,8 +641,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Initial fetch of model data - this will populate installedModels
     await updateModelStatusIndicator();
     
-    // Set up periodic refresh of model status
-    setInterval(updateModelStatusIndicator, 1000); // Check every 1 seconds
+    // Update category visibility on initial load
+    updateCategoryVisibility();
     
     // Initialize model browser with hot models
     displayHotModels();
@@ -635,6 +658,44 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Set up register model form
     setupRegisterModelForm();
+    
+    // Set up smart periodic refresh to detect external model changes
+    // Poll every 15 seconds (much less aggressive than 1 second)
+    // Only poll when page is visible to save resources
+    let pollInterval = null;
+    
+    function startPolling() {
+        if (!pollInterval) {
+            pollInterval = setInterval(async () => {
+                // Only update if page is visible
+                if (document.visibilityState === 'visible') {
+                    await updateModelStatusIndicator();
+                }
+            }, 15000); // Check every 15 seconds
+        }
+    }
+    
+    function stopPolling() {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+        }
+    }
+    
+    // Start polling when page is visible, stop when hidden
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            // Page became visible - update immediately and resume polling
+            updateModelStatusIndicator();
+            startPolling();
+        } else {
+            // Page hidden - stop polling to save resources
+            stopPolling();
+        }
+    });
+    
+    // Start polling initially
+    startPolling();
 });
 
 // Toggle Add Model form
@@ -976,6 +1037,153 @@ function setupRegisterModelForm() {
     }
 }
 
+// === Migration/Cleanup Functions ===
+
+// Store incompatible models data globally
+let incompatibleModelsData = null;
+
+// Check for incompatible models on page load
+async function checkIncompatibleModels() {
+    try {
+        const response = await httpJson(getServerBaseUrl() + '/api/v1/migration/incompatible-models');
+        incompatibleModelsData = response;
+
+        if (response.count > 0) {
+            showMigrationBanner(response.count, response.total_size);
+        }
+    } catch (error) {
+        console.error('Error checking for incompatible models:', error);
+    }
+}
+
+// Show migration banner
+function showMigrationBanner(count, totalSize) {
+    const banner = document.getElementById('migration-banner');
+    const msg = document.getElementById('migration-banner-msg');
+
+    const sizeGB = (totalSize / (1024 * 1024 * 1024)).toFixed(1);
+    msg.textContent = `Found ${count} incompatible RyzenAI model${count > 1 ? 's' : ''} (${sizeGB} GB). Clean up to free disk space.`;
+    banner.style.display = 'flex';
+}
+
+// Hide migration banner
+function hideMigrationBanner() {
+    const banner = document.getElementById('migration-banner');
+    banner.style.display = 'none';
+}
+
+// Show migration modal with model list
+function showMigrationModal() {
+    if (!incompatibleModelsData || incompatibleModelsData.count === 0) {
+        return;
+    }
+
+    const modal = document.getElementById('migration-modal');
+    const modelList = document.getElementById('migration-model-list');
+    const totalSize = document.getElementById('migration-total-size');
+
+    // Populate model list
+    modelList.innerHTML = '';
+    incompatibleModelsData.models.forEach(model => {
+        const item = document.createElement('div');
+        item.className = 'migration-model-item';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'migration-model-name';
+        nameSpan.textContent = model.name;
+
+        const sizeSpan = document.createElement('span');
+        sizeSpan.className = 'migration-model-size';
+        sizeSpan.textContent = model.size_formatted;
+
+        item.appendChild(nameSpan);
+        item.appendChild(sizeSpan);
+        modelList.appendChild(item);
+    });
+
+    // Set total size
+    const sizeGB = (incompatibleModelsData.total_size / (1024 * 1024 * 1024)).toFixed(1);
+    totalSize.textContent = `${sizeGB} GB`;
+
+    modal.style.display = 'flex';
+}
+
+// Hide migration modal
+function hideMigrationModal() {
+    const modal = document.getElementById('migration-modal');
+    modal.style.display = 'none';
+}
+
+// Delete incompatible models
+async function deleteIncompatibleModels() {
+    if (!incompatibleModelsData || incompatibleModelsData.count === 0) {
+        return;
+    }
+
+    const modelPaths = incompatibleModelsData.models.map(m => m.path);
+
+    try {
+        // Disable buttons during deletion
+        const deleteBtn = document.querySelector('.delete-btn');
+        const cancelBtn = document.querySelector('.cancel-btn');
+        deleteBtn.disabled = true;
+        cancelBtn.disabled = true;
+        deleteBtn.textContent = 'Deleting...';
+
+        const response = await httpRequest(getServerBaseUrl() + '/api/v1/migration/cleanup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_paths: modelPaths })
+        });
+
+        const result = await response.json();
+
+        // Close modal
+        hideMigrationModal();
+
+        // Hide banner
+        hideMigrationBanner();
+
+        // Show success message
+        showSuccessMessage(`Successfully deleted ${result.success_count} model${result.success_count > 1 ? 's' : ''}, freed ${result.freed_size_formatted}`);
+
+        // Clear cached data
+        incompatibleModelsData = null;
+
+    } catch (error) {
+        console.error('Error deleting incompatible models:', error);
+        showErrorBanner('Failed to delete models: ' + error.message);
+
+        // Re-enable buttons
+        const deleteBtn = document.querySelector('.delete-btn');
+        const cancelBtn = document.querySelector('.cancel-btn');
+        deleteBtn.disabled = false;
+        cancelBtn.disabled = false;
+        deleteBtn.textContent = 'Delete All';
+    }
+}
+
+// Show success message (reuse error banner with green color)
+function showSuccessMessage(message) {
+    const banner = document.getElementById('error-banner');
+    const msg = document.getElementById('error-banner-msg');
+    msg.textContent = message;
+    banner.style.backgroundColor = '#2d7f47';
+    banner.style.display = 'flex';
+
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        banner.style.display = 'none';
+        banner.style.backgroundColor = ''; // Reset to default
+    }, 5000);
+}
+
+// Check for incompatible models when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Run check after a short delay to let the page load
+    setTimeout(checkIncompatibleModels, 1000);
+});
+
 // Make functions globally available for HTML onclick handlers and other components
 window.toggleCategory = toggleCategory;
 window.selectRecipe = selectRecipe;
@@ -984,3 +1192,7 @@ window.showAddModelForm = showAddModelForm;
 window.unloadModel = unloadModel;
 window.installModel = installModel;
 window.deleteModel = deleteModel;
+window.showMigrationModal = showMigrationModal;
+window.hideMigrationModal = hideMigrationModal;
+window.hideMigrationBanner = hideMigrationBanner;
+window.deleteIncompatibleModels = deleteIncompatibleModels;
