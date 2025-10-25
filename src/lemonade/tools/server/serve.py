@@ -1800,9 +1800,12 @@ class Server:
                 # Get additional properties from the model registry
                 config_to_use = LoadConfig(**supported_models[config.model_name])
 
-            # For user models, convert the relative checkpoint path to absolute path
+            # For locally uploaded models, convert the relative checkpoint path to absolute path
+            model_source = supported_models.get(config.model_name, {}).get(
+                "source", None
+            )
             if (
-                config_to_use.model_name.startswith("user.")
+                model_source == "local_upload"
                 and config_to_use.checkpoint
                 and not config_to_use.recipe.startswith("hf-")
             ):

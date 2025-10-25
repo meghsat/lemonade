@@ -195,6 +195,7 @@ class ModelManager:
             "recipe": recipe,
             "suggested": True,
             "labels": labels,
+            "source": "local_upload",
         }
         if mmproj:
             new_user_model["mmproj"] = mmproj
