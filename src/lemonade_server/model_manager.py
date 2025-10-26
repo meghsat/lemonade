@@ -123,10 +123,17 @@ class ModelManager:
                 checkpoint = model_info["checkpoint"]
                 base_checkpoint, variant = parse_checkpoint(checkpoint)
                 if model.startswith("user."):
-                    # Parse checkpoint to get base path (models--xxx) without variant
-                    local_model_path = os.path.join(HF_HUB_CACHE, base_checkpoint)
-                    if os.path.exists(local_model_path):
-                        downloaded_models[model] = model_info
+                    # Check if this is a locally uploaded model or internet-downloaded model
+                    if model_info.get("source") == "local_upload":
+                        # Locally uploaded model: checkpoint is in cache directory format (models--xxx)
+                        local_model_path = os.path.join(HF_HUB_CACHE, base_checkpoint)
+                        if os.path.exists(local_model_path):
+                            downloaded_models[model] = model_info
+                    else:
+                        # Internet-downloaded model: checkpoint is in HuggingFace format (org/repo)
+                        # Check if it's in the downloaded checkpoints list
+                        if base_checkpoint in downloaded_checkpoints:
+                            downloaded_models[model] = model_info
                     continue
 
                 if base_checkpoint in downloaded_checkpoints:
@@ -426,41 +433,10 @@ class ModelManager:
             # We do this registration after the download so that we don't register
             # any incorrectly configured models where the download would fail
             if new_registration_model_config:
-                from huggingface_hub.constants import HF_HUB_CACHE
-
-                # Parse checkpoint to get base checkpoint without variant
-                base_checkpoint, variant = parse_checkpoint(checkpoint)
-
-                if current_recipe and current_recipe.startswith("hf-"):
-                    cache_checkpoint = checkpoint
-                else:
-                    # For GGUF and OGA models, convert to cache directory format
-                    repo_cache_name = base_checkpoint.replace("/", "--")
-                    cache_checkpoint = f"models--{repo_cache_name}"
-
-                    # For GGUF models, preserve variant so the loader knows which file to use
-                    if variant:
-                        cache_checkpoint = f"{cache_checkpoint}:{variant}"
-
-                    # For OGA models, resolve the path to genai_config.json
-                    elif current_recipe and current_recipe.startswith("oga-"):
-                        model_cache_dir = os.path.join(HF_HUB_CACHE, cache_checkpoint)
-
-                        # Search for genai_config.json in the downloaded model
-                        resolved_checkpoint = None
-                        if os.path.exists(model_cache_dir):
-                            for root, _, files in os.walk(model_cache_dir):
-                                if "genai_config.json" in files:
-                                    # Store relative path from HF_HUB_CACHE for portability
-                                    resolved_checkpoint = os.path.relpath(
-                                        root, HF_HUB_CACHE
-                                    )
-                                    break
-
-                        if resolved_checkpoint:
-                            cache_checkpoint = resolved_checkpoint
-
-                new_user_model["checkpoint"] = cache_checkpoint
+                # For models downloaded from the internet (HuggingFace),
+                # keep the original checkpoint format (e.g., "amd/Llama-3.2-1B-Instruct-...")
+                # Do NOT convert to cache directory format - that's only for locally uploaded models
+                new_user_model["checkpoint"] = checkpoint
 
                 if os.path.exists(USER_MODELS_FILE):
                     with open(USER_MODELS_FILE, "r", encoding="utf-8") as file:
