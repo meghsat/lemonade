@@ -582,6 +582,24 @@ class LemonadePerfTable(Table):
                     ".2f",
                 ),
                 StatWithSD(
+                    _wrap("TTFT Without Overhead (sec)", 8),
+                    Keys.TTFT_WITHOUT_OVERHEAD,
+                    Keys.STD_DEV_TTFT_WITHOUT_OVERHEAD,
+                    ".4f",
+                ),
+                StatWithSD(
+                    _wrap("Tokenization Overhead (sec)", 8),
+                    Keys.TOKENIZATION_OVERHEAD,
+                    Keys.STD_DEV_TOKENIZATION_OVERHEAD,
+                    ".4f",
+                ),
+                StatWithSD(
+                    _wrap("Generator Overhead (sec)", 8),
+                    Keys.GENERATOR_CREATION_OVERHEAD,
+                    Keys.STD_DEV_GENERATOR_CREATION_OVERHEAD,
+                    ".4f",
+                ),
+                StatWithSD(
                     _wrap("Prefill Tokens per Second", 8),
                     Keys.PREFILL_TOKENS_PER_SECOND,
                     Keys.STD_DEV_PREFILL_TOKENS_PER_SECOND,

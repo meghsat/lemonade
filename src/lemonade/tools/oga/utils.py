@@ -209,9 +209,13 @@ class OrtGenaiModel(ModelAdapter):
         )
         params.try_graph_capture_with_max_batch_size(1)
 
+        # EXPERIMENT: Measure generator creation overhead separately
+        generator_creation_start = time.perf_counter()
         generator = og.Generator(self.model, params)
+        generator_creation_time = time.perf_counter() - generator_creation_start
 
         if streamer is None:
+            # OPTION 1: Original lemonade measurement (excludes generator creation)
             prompt_start_time = time.perf_counter()
             if use_oga_post_6_api:
                 generator.append_tokens(input_ids)
@@ -220,7 +224,15 @@ class OrtGenaiModel(ModelAdapter):
             generator.generate_next_token()
             prompt_end_time = time.perf_counter()
 
+            # Original TTFT (what lemonade currently reports)
             self.time_to_first_token = prompt_end_time - prompt_start_time
+
+            # EXPERIMENT: Store extended TTFT that includes generator creation
+            # This simulates what external code measures
+            self.time_to_first_token_extended = (
+                self.time_to_first_token + generator_creation_time
+            )
+            self.generator_creation_overhead = generator_creation_time
 
             if max_new_tokens > 1:
 
@@ -232,7 +244,9 @@ class OrtGenaiModel(ModelAdapter):
                     generator.generate_next_token()
                     token_gen_end_time = time.perf_counter()
 
-                    token_gen_times.append(token_gen_end_time - token_gen_start_time)
+                    token_gen_times.append(
+                        token_gen_end_time - token_gen_start_time
+                    )  # everything but the first token
 
                 if token_gen_times:
                     # List will be empty if we generated 1 or 0 tokens, and we don't
