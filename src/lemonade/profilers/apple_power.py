@@ -26,6 +26,8 @@ class Keys:
     # powermetrics metrics
     PEAK_GPU_POWER = "peak_gpu_power_apple"
     AVG_GPU_POWER = "avg_gpu_power_apple"
+    PEAK_CPU_POWER = "peak_cpu_power_apple"
+    AVG_CPU_POWER = "avg_cpu_power_apple"
 
 # Add column to the Lemonade performance report table for the power data
 LemonadePerfTable.table_descriptor["stat_columns"].append(
@@ -68,6 +70,8 @@ class ApplePowerProfiler(Profiler):
         self.status_stats += [
             Keys.PEAK_GPU_POWER,
             Keys.AVG_GPU_POWER,
+            Keys.PEAK_CPU_POWER,
+            Keys.AVG_CPU_POWER,
             Keys.POWER_USAGE_PLOT,
         ]
         self.tracking_active = False
@@ -270,11 +274,15 @@ class ApplePowerProfiler(Profiler):
             df['time'] = df['time'] - df['time'].iloc[0]
 
         # Calculate statistics from powermetrics data
-        peak_power = df['gpu_power'].max()
-        avg_power = df['gpu_power'].mean()
+        peak_gpu_power = df['gpu_power'].max()
+        avg_gpu_power = df['gpu_power'].mean()
+        peak_cpu_power = df['cpu_power'].max()
+        avg_cpu_power = df['cpu_power'].mean()
 
-        printing.log_info(f"powermetrics: Peak GPU Power={peak_power:.1f}W, "
-                        f"Avg GPU Power={avg_power:.1f}W")
+        printing.log_info(f"powermetrics: Peak GPU Power={peak_gpu_power:.1f}W, "
+                        f"Avg GPU Power={avg_gpu_power:.1f}W")
+        printing.log_info(f"powermetrics: Peak CPU Power={peak_cpu_power:.1f}W, "
+                        f"Avg CPU Power={avg_cpu_power:.1f}W")
 
         # Create a figure with 2 subplots (GPU power, CPU/ANE power)
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 8))
@@ -377,8 +385,10 @@ class ApplePowerProfiler(Profiler):
         state.save_stat(Keys.POWER_USAGE_DATA_CSV, self.csv_path)
 
         # Save statistics
-        state.save_stat(Keys.PEAK_GPU_POWER, f"{peak_power:0.1f} W")
-        state.save_stat(Keys.AVG_GPU_POWER, f"{avg_power:0.1f} W")
+        state.save_stat(Keys.PEAK_GPU_POWER, f"{peak_gpu_power:0.1f} W")
+        state.save_stat(Keys.AVG_GPU_POWER, f"{avg_gpu_power:0.1f} W")
+        state.save_stat(Keys.PEAK_CPU_POWER, f"{peak_cpu_power:0.1f} W")
+        state.save_stat(Keys.AVG_CPU_POWER, f"{avg_cpu_power:0.1f} W")
 
         printing.log_info(f"Power usage plot saved to: {plot_path}")
 
