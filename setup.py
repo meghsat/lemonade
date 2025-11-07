@@ -82,7 +82,7 @@ setup(
         ],
         "model-generate": [
             "model-generate==1.5.0; platform_system=='Windows' and python_version=='3.10'",
-        ],
+        ]
     },
     classifiers=[],
     entry_points={
