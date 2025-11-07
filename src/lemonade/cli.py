@@ -44,6 +44,18 @@ def get_available_profilers(warn_missing=False):
                 "pip install lemonade-sdk[dev]"
             )
 
+    try:
+        from lemonade.profilers.apple_power import ApplePowerProfiler
+
+        profilers.append(ApplePowerProfiler)
+    except ImportError:
+        if warn_missing:
+            print(
+                "Warning: ApplePowerProfiler not available. "
+                "Install lemonade with dev extras: "
+                "pip install lemonade-sdk[dev]"
+            )
+
     return profilers
 
 

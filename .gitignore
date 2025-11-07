@@ -165,3 +165,21 @@ cython_debug/
 #.idea/
 
 .aider*
+
+# Custom ignores
+cache*/
+mac-gguf-models/
+2025-11-06-192837_power_usage_apple.png
+test_powermetrics.sh
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_00h_15m_34s/log_llamacpp-load.txt
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_00h_15m_34s/state.yaml
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_03h_11m_05s/.lemonadebuild
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_03h_13m_12s/.lemonadebuild
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_03h_13m_12s/lemonade_stats.yaml
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_03h_13m_12s/log_llamacpp-load.txt
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_03h_13m_12s/log_llamacpp-bench.txt
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_03h_13m_12s/powermetrics_sample.txt
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_03h_13m_12s/state.yaml
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_03h_28m_37s/.lemonadebuild
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_03h_28m_37s/2025-11-06-192837_power_usage_apple.png
+cache_temp_phi3/builds/Phi-3.5-mini-instruct-Q4_0_2025y_11m_07d_03h_28m_37s/lemonade_stats.yaml

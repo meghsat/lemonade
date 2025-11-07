@@ -18,7 +18,7 @@ from dotenv import set_key, load_dotenv
 
 LLAMA_VERSION_VULKAN = "b6510"
 LLAMA_VERSION_ROCM = "b1066"
-LLAMA_VERSION_METAL = "b6510"
+LLAMA_VERSION_METAL = "b6940"
 
 
 def identify_rocm_arch_from_name(device_name: str) -> str | None:
@@ -358,16 +358,21 @@ def install_llamacpp(backend):
                     f"for supported configurations. {hint}"
                 )
 
-        # Direct download for Vulkan/ROCm
-        llama_archive_url, filename = get_binary_url_and_filename(backend, target_arch)
-        llama_archive_path = os.path.join(llama_server_exe_dir, filename)
+#        # Direct download for Vulkan/ROCm
+        backend = "metal"
+        llama_archive_url, filename = "file://~/Downloads/llama-b6940-bin-macos-arm64.zip", "llama-b6940-bin-macos-arm64.zip"
+        llama_archive_path = "/Users/user1/Downloads/llama-b6940-bin-macos-arm64.zip"
         logging.info(f"Downloading llama.cpp server from {llama_archive_url}")
 
-        with requests.get(llama_archive_url, stream=True) as r:
-            r.raise_for_status()
-            with open(llama_archive_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
+#        llama_archive_url, filename = get_binary_url_and_filename(backend, target_arch)
+#        llama_archive_path = os.path.join(llama_server_exe_dir, filename)
+#        logging.info(f"Downloading llama.cpp server from {llama_archive_url}")
+#
+#        with requests.get(llama_archive_url, stream=True) as r:
+#            r.raise_for_status()
+#            with open(llama_archive_path, "wb") as f:
+#                for chunk in r.iter_content(chunk_size=8192):
+#                    f.write(chunk)
 
         logging.info(f"Extracting {filename} to {llama_server_exe_dir}")
         if filename.endswith(".zip"):
@@ -434,7 +439,7 @@ def install_llamacpp(backend):
             bf.write(backend)
 
         # Delete the archive file
-        os.remove(llama_archive_path)
+        #os.remove(llama_archive_path)
 
 
 def parse_checkpoint(checkpoint: str) -> tuple[str, str | None]:

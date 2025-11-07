@@ -9,7 +9,7 @@ from lemonade.cache import Keys
 default_iterations = 10
 default_warmup_runs = 5
 default_prompt_length = 64
-default_output_tokens = 32
+default_output_tokens = 1024
 default_prompt = "Hello, I am conscious and"
 
 
