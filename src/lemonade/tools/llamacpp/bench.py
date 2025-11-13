@@ -20,6 +20,16 @@ class LlamaCppBench(Bench):
 
     unique_name = "llamacpp-bench"
 
+    def __init__(self, monitor_message="Benchmarking LLM"):
+        super().__init__(monitor_message)
+
+        # Per-prompt power metrics lists
+        self.peak_gpu_power_list = []
+        self.avg_gpu_power_list = []
+        self.peak_gpu_temp_list = []
+        self.avg_gpu_temp_list = []
+        self.power_plot_list = []
+
     @staticmethod
     def parser(add_help: bool = True) -> argparse.ArgumentParser:
         parser = __class__.helpful_parser(
@@ -165,8 +175,100 @@ class LlamaCppBench(Bench):
             )
             self.max_memory_used_gb_list.append(mean_gb_used)
 
-    def run_llama_bench_exe(self, state, prompts, iterations, output_tokens):
+    def display_prompt_results(self, state, prompt, prompt_index):
+        """Display results for a single prompt immediately after benchmarking"""
+        import lemonade.common.printing as printing
+        from lemonade.cache import Keys
+        import sys
 
+        # Get the real terminal stdout (not redirected by Logger)
+        # The Logger redirects sys.stdout, but saves the original as self.terminal
+        output = sys.stdout
+        if hasattr(sys.stdout, 'terminal'):
+            output = sys.stdout.terminal
+
+        # Print newline and separator directly to terminal
+        output.write(f"\n{'='*80}\n")
+        output.write(f"Results for Prompt Length: {prompt} tokens (Prompt {prompt_index + 1})\n")
+        output.write(f"{'='*80}\n")
+        output.flush()
+
+        # Get the current prompt's results (last item in each list)
+        idx = prompt_index
+
+        results = {
+            "Prompt Tokens": self.input_ids_len_list[idx],
+            "Response Tokens": self.tokens_out_len_list[idx],
+            "Seconds To First Token": f"{self.mean_time_to_first_token_list[idx]:.3f}",
+            "Token Generation Tokens Per Second": f"{self.token_generation_tokens_per_second_list[idx]:.3f}",
+            "Prefill Tokens Per Second": f"{self.prefill_tokens_per_second_list[idx]:.3f}",
+        }
+
+        # Add std dev metrics if available (only in CLI mode)
+        if len(self.std_dev_time_to_first_token_list) > idx and self.std_dev_time_to_first_token_list[idx] is not None:
+            results["Std Dev Seconds To First Token"] = f"{self.std_dev_time_to_first_token_list[idx]:.3f}"
+
+        if len(self.std_dev_token_generation_tokens_per_second_list) > idx and self.std_dev_token_generation_tokens_per_second_list[idx] is not None:
+            results["Std Dev Tokens Per Second"] = f"{self.std_dev_token_generation_tokens_per_second_list[idx]:.3f}"
+
+        if len(self.std_dev_prefill_tokens_per_second_list) > idx and self.std_dev_prefill_tokens_per_second_list[idx] is not None:
+            results["Std Dev Prefill Tokens Per Second"] = f"{self.std_dev_prefill_tokens_per_second_list[idx]:.3f}"
+
+        if self.save_max_memory_used and len(self.max_memory_used_gb_list) > idx:
+            if self.max_memory_used_gb_list[idx] is not None:
+                results["Memory Usage (GB)"] = f"{self.max_memory_used_gb_list[idx]:.3f}"
+
+        # Display power metrics from per-prompt lists
+        if len(self.peak_gpu_power_list) > idx:
+            results["Peak GPU Power"] = self.peak_gpu_power_list[idx]
+            results["Avg GPU Power"] = self.avg_gpu_power_list[idx]
+
+            # Add temperature if available (Nvidia only)
+            if len(self.peak_gpu_temp_list) > idx:
+                results["Peak GPU Temp"] = self.peak_gpu_temp_list[idx]
+                results["Avg GPU Temp"] = self.avg_gpu_temp_list[idx]
+
+            # Add plot path if available
+            if len(self.power_plot_list) > idx:
+                results["Power Usage Plot"] = self.power_plot_list[idx]
+
+        for key, value in results.items():
+            output.write(f"  {key}: {value}\n")
+
+        output.write(f"{'='*80}\n\n")
+        output.flush()
+
+    def _store_power_metrics(self, state):
+        """Store per-prompt power metrics from filesystem into lists"""
+        from lemonade.profilers.nvidia_power import Keys as NvidiaKeys
+        from lemonade.profilers.apple_power import Keys as AppleKeys
+        import lemonade.common.filesystem as fs
+
+        # Load stats from the YAML file (not from state.stats attribute)
+        stats_obj = fs.Stats(state.cache_dir, state.build_name)
+        stats = stats_obj.stats  # This loads from lemonade_stats.yaml
+
+        if stats:
+            # Check for Nvidia power metrics
+            if NvidiaKeys.PEAK_GPU_POWER in stats:
+                self.peak_gpu_power_list.append(stats[NvidiaKeys.PEAK_GPU_POWER])
+                self.avg_gpu_power_list.append(stats[NvidiaKeys.AVG_GPU_POWER])
+                self.peak_gpu_temp_list.append(stats[NvidiaKeys.PEAK_GPU_TEMP])
+                self.avg_gpu_temp_list.append(stats[NvidiaKeys.AVG_GPU_TEMP])
+                if NvidiaKeys.POWER_USAGE_PLOT in stats:
+                    self.power_plot_list.append(stats[NvidiaKeys.POWER_USAGE_PLOT])
+
+            # Check for Apple power metrics
+            elif AppleKeys.PEAK_POWER in stats:
+                self.peak_gpu_power_list.append(stats[AppleKeys.PEAK_POWER])
+                self.avg_gpu_power_list.append(stats[AppleKeys.AVG_POWER])
+                if AppleKeys.POWER_USAGE_PLOT in stats:
+                    self.power_plot_list.append(stats[AppleKeys.POWER_USAGE_PLOT])
+
+    def run_llama_bench_exe(self, state, prompts, iterations, output_tokens, gpu_cooldown=5):
+        import time
+        import lemonade.common.printing as printing
+        from datetime import datetime
         if prompts is None:
             prompts = [default_prompt_length]
         elif isinstance(prompts, int):
@@ -176,6 +278,9 @@ class LlamaCppBench(Bench):
         state.save_stat("iterations", iterations)
         state.save_stat("output_tokens", output_tokens)
 
+        # Check if profilers are available
+        has_profilers = hasattr(state, 'profilers') and state.profilers
+
         counter = 0
         report_progress_fn = lambda x: self.set_percent_progress(
             100 * (counter + x) / len(prompts)
@@ -184,6 +289,24 @@ class LlamaCppBench(Bench):
         for counter, prompt in enumerate(prompts):
             report_progress_fn(0)
 
+            # Restart profilers for this prompt if we're not on the first prompt
+            if has_profilers and counter > 0:
+                # Stop profilers from previous prompt
+                for profiler in state.profilers:
+                    profiler.stop()
+
+                # Wait for cooldown
+                printing.log_info(f"GPU cooldown for {gpu_cooldown}s before next prompt...")
+                time.sleep(gpu_cooldown)
+
+                # Restart profilers for this prompt
+                build_dir = state.cache_dir + "/builds/" + state.build_name
+                for profiler in state.profilers:
+                    profiler.start(build_dir)
+
+                # Update start times for this prompt
+                state.profiler_start_times[f"prompt_{prompt}"] = time.time()
+
             self.run_prompt_llama_bench_exe(
                 state,
                 prompt,
@@ -191,6 +314,28 @@ class LlamaCppBench(Bench):
                 output_tokens,
             )
             self.first_run_prompt = False
+
+            # Generate profiler results for this prompt
+            if has_profilers:
+                for profiler in state.profilers:
+                    profiler.stop()
+
+                # Generate plot with prompt-specific timestamp
+                current_time = datetime.now()
+                prompt_timestamp = current_time.strftime(f"%Y-%m-%d-%H%M%S_prompt_{prompt}tok")
+
+                for profiler in state.profilers:
+                    profiler.generate_results(state, prompt_timestamp, state.profiler_start_times)
+
+                # Store per-prompt power metrics
+                self._store_power_metrics(state)
+
+            # Display results for this prompt immediately (after storing metrics)
+            self.display_prompt_results(state, prompt, counter)
+
+        # Mark that we've already handled profiler output per-prompt
+        if has_profilers:
+            state.profilers_handled_by_tool = True
 
         self.set_percent_progress(None)
         self.save_stats(state)
@@ -215,6 +360,34 @@ class LlamaCppBench(Bench):
             else:
                 self.max_memory_used_gb_list.append(None)
 
+    def save_stats(self, state):
+        """Override parent save_stats to also save power metrics lists"""
+        # Call parent save_stats first
+        super().save_stats(state)
+
+        # Save power metrics lists if they have data
+        from lemonade.profilers.nvidia_power import Keys as NvidiaKeys
+        from lemonade.profilers.apple_power import Keys as AppleKeys
+
+        if self.peak_gpu_power_list:
+            # Determine if it's single or list
+            peak_power = self.peak_gpu_power_list[0] if len(self.peak_gpu_power_list) == 1 else self.peak_gpu_power_list
+            avg_power = self.avg_gpu_power_list[0] if len(self.avg_gpu_power_list) == 1 else self.avg_gpu_power_list
+
+            state.save_stat(NvidiaKeys.PEAK_GPU_POWER, peak_power)
+            state.save_stat(NvidiaKeys.AVG_GPU_POWER, avg_power)
+
+            if self.peak_gpu_temp_list:
+                peak_temp = self.peak_gpu_temp_list[0] if len(self.peak_gpu_temp_list) == 1 else self.peak_gpu_temp_list
+                avg_temp = self.avg_gpu_temp_list[0] if len(self.avg_gpu_temp_list) == 1 else self.avg_gpu_temp_list
+
+                state.save_stat(NvidiaKeys.PEAK_GPU_TEMP, peak_temp)
+                state.save_stat(NvidiaKeys.AVG_GPU_TEMP, avg_temp)
+
+            if self.power_plot_list:
+                plots = self.power_plot_list[0] if len(self.power_plot_list) == 1 else self.power_plot_list
+                state.save_stat(NvidiaKeys.POWER_USAGE_PLOT, plots)
+
     def run(
         self,
         state: State,
@@ -223,6 +396,7 @@ class LlamaCppBench(Bench):
         warmup_iterations: int = default_warmup_runs,
         output_tokens: int = default_output_tokens,
         cli: bool = False,
+        gpu_cooldown: int = 5,
         **kwargs,
     ) -> State:
         """
@@ -234,6 +408,7 @@ class LlamaCppBench(Bench):
                 and not included in the results.
             - output_tokens: Number of new tokens LLM to create.
             - cli: Use multiple calls to llama-cpp.exe instead of llama-bench.exe
+            - gpu_cooldown: Number of seconds to wait between prompts for GPU cooldown
             - kwargs: Additional parameters used by bench tools
         """
 
@@ -243,10 +418,10 @@ class LlamaCppBench(Bench):
 
         if cli:
             state = super().run(
-                state, prompts, iterations, warmup_iterations, output_tokens, **kwargs
+                state, prompts, iterations, warmup_iterations, output_tokens, gpu_cooldown, **kwargs
             )
         else:
-            state = self.run_llama_bench_exe(state, prompts, iterations, output_tokens)
+            state = self.run_llama_bench_exe(state, prompts, iterations, output_tokens, gpu_cooldown)
 
         return state
 

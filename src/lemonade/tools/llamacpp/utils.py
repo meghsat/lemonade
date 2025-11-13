@@ -204,6 +204,34 @@ def get_llama_installed_version(backend: str):
     return None
 
 
+def get_default_backend() -> str:
+    """
+    Get the default llamacpp backend based on the current platform.
+    Uses Metal for Apple Silicon Macs, Vulkan for everything else.
+
+    Returns:
+        str: The default backend name ('metal', 'vulkan', or 'rocm')
+    """
+    # Allow environment variable override
+    env_backend = os.environ.get("LEMONADE_LLAMACPP_BACKEND")
+    if env_backend:
+        # Validate the backend choice
+        valid_backends = ["vulkan", "rocm", "metal"]
+        env_backend_lower = env_backend.lower()
+        if env_backend_lower not in valid_backends:
+            logging.warning(
+                f"Invalid LEMONADE_LLAMACPP_BACKEND value '{env_backend}'. "
+                f"Valid options: {', '.join(valid_backends)}. Falling back to platform default."
+            )
+        else:
+            return env_backend_lower
+
+    # Platform-specific defaults: use metal for Apple Silicon, vulkan for everything else
+    if platform.system() == "Darwin" and platform.machine().lower() in ["arm64", "aarch64"]:
+        return "metal"
+    return "vulkan"
+
+
 def get_binary_url_and_filename(backend: str, target_arch: str = None):
     """
     Get the appropriate binary URL and filename based on platform and backend
@@ -358,21 +386,16 @@ def install_llamacpp(backend):
                     f"for supported configurations. {hint}"
                 )
 
-#        # Direct download for Vulkan/ROCm
-        backend = "metal"
-        llama_archive_url, filename = "file://~/Downloads/llama-b6940-bin-macos-arm64.zip", "llama-b6940-bin-macos-arm64.zip"
-        llama_archive_path = "/Users/user1/Downloads/llama-b6940-bin-macos-arm64.zip"
+        # Direct download for Vulkan/ROCm
+        llama_archive_url, filename = get_binary_url_and_filename(backend, target_arch)
+        llama_archive_path = os.path.join(llama_server_exe_dir, filename)
         logging.info(f"Downloading llama.cpp server from {llama_archive_url}")
 
-#        llama_archive_url, filename = get_binary_url_and_filename(backend, target_arch)
-#        llama_archive_path = os.path.join(llama_server_exe_dir, filename)
-#        logging.info(f"Downloading llama.cpp server from {llama_archive_url}")
-#
-#        with requests.get(llama_archive_url, stream=True) as r:
-#            r.raise_for_status()
-#            with open(llama_archive_path, "wb") as f:
-#                for chunk in r.iter_content(chunk_size=8192):
-#                    f.write(chunk)
+        with requests.get(llama_archive_url, stream=True) as r:
+            r.raise_for_status()
+            with open(llama_archive_path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
 
         logging.info(f"Extracting {filename} to {llama_server_exe_dir}")
         if filename.endswith(".zip"):
@@ -439,7 +462,7 @@ def install_llamacpp(backend):
             bf.write(backend)
 
         # Delete the archive file
-        #os.remove(llama_archive_path)
+        os.remove(llama_archive_path)
 
 
 def parse_checkpoint(checkpoint: str) -> tuple[str, str | None]:
