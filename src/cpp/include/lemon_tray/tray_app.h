@@ -28,6 +28,7 @@ struct AppConfig {
     bool show_version = false;
     std::string host = "localhost";
     std::string llamacpp_backend = "vulkan";  // Default to vulkan
+    std::string llamacpp_args = "";  // Custom arguments for llama-server
     
     // For commands that take arguments
     std::vector<std::string> command_args;
@@ -46,11 +47,18 @@ public:
     
     int run();
     void shutdown();  // Public method for signal handlers
+
+#ifndef _WIN32
+    // Signal handling infrastructure for Linux (self-pipe pattern)
+    // Public so signal handler can access it
+    static int signal_pipe_[2];
+#endif
     
 private:
     // Initialization
+    void load_env_defaults();
     void parse_arguments(int argc, char* argv[]);
-    void print_usage();
+    void print_usage(bool show_serve_options = false);
     void print_version();
     bool find_server_binary();
     bool setup_logging();
@@ -65,7 +73,6 @@ private:
     
     // Helper functions for command execution
     bool is_server_running_on_port(int port);
-    bool wait_for_server_ready(int port, int timeout_seconds = 30);
     std::pair<int, int> get_server_info();  // Returns {pid, port}
     bool start_ephemeral_server(int port);
     
@@ -126,6 +133,12 @@ private:
     std::thread log_tail_thread_;
     
     void tail_log_to_console();
+
+#ifndef _WIN32
+    // Signal monitor thread for Linux
+    std::thread signal_monitor_thread_;
+    std::atomic<bool> stop_signal_monitor_{false};
+#endif
 };
 
 } // namespace lemon_tray

@@ -5,7 +5,7 @@ if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-project(lemon_cpp VERSION 9.0.0)
+project(lemon_cpp VERSION 9.0.2)
 
 # C++ Standard
 set(CMAKE_CXX_STANDARD 17)
@@ -47,6 +47,14 @@ set(JSON_BuildTests OFF CACHE INTERNAL "")
 set(JSON_Install OFF CACHE INTERNAL "")
 set(CLI11_BUILD_TESTS OFF CACHE INTERNAL "")
 set(CLI11_BUILD_EXAMPLES OFF CACHE INTERNAL "")
+
+# Disable OpenSSL in cpp-httplib (not needed for localhost HTTP server)
+# All HTTPS downloads are handled by libcurl with native SSL backends:
+#   - Windows: Schannel (native)
+#   - macOS: SecureTransport (native)
+#   - Linux: OpenSSL (system library, not bundled)
+set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE BOOL "" FORCE)
 
 # cpp-httplib (MIT License)
 FetchContent_Declare(httplib
@@ -149,8 +157,8 @@ if(WIN32)
     
     # Generate NSIS installer script with version
     configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/Lemonade_Server_Installer_beta.nsi.in
-        ${CMAKE_CURRENT_SOURCE_DIR}/Lemonade_Server_Installer_beta.nsi
+        ${CMAKE_CURRENT_SOURCE_DIR}/Lemonade_Server_Installer.nsi.in
+        ${CMAKE_CURRENT_SOURCE_DIR}/Lemonade_Server_Installer.nsi
         @ONLY
     )
 endif()
@@ -215,6 +223,8 @@ file(COPY ${CMAKE_SOURCE_DIR}/../../src/lemonade/tools/server/static
      DESTINATION ${CMAKE_BINARY_DIR}/resources)
 file(COPY ${CMAKE_SOURCE_DIR}/../../src/lemonade_server/server_models.json
      DESTINATION ${CMAKE_BINARY_DIR}/resources)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/resources/backend_versions.json
+     DESTINATION ${CMAKE_BINARY_DIR}/resources)
 
 # Also copy to Release and Debug directories for Visual Studio multi-config
 add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
@@ -253,7 +263,7 @@ if(UNIX AND NOT APPLE)
     endif()
     
     # Only install our executables (not curl/development files)
-    # Note: lemonade-server-beta installation is handled in tray/CMakeLists.txt
+    # Note: lemonade-server installation is handled in tray/CMakeLists.txt
     install(TARGETS ${EXECUTABLE_NAME}
         RUNTIME DESTINATION bin
     )

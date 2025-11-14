@@ -6,6 +6,7 @@
 #include <lemon/system_info.h>
 #include <filesystem>
 #include <iostream>
+#include <fstream>
 #include <algorithm>
 #include <cstdlib>
 #include <sstream>
@@ -232,10 +233,19 @@ std::string ModelManager::get_user_models_file() {
 }
 
 std::string ModelManager::get_hf_cache_dir() const {
+    // Check HF_HUB_CACHE first (highest priority)
+    const char* hf_hub_cache_env = std::getenv("HF_HUB_CACHE");
+    if (hf_hub_cache_env) {
+        return std::string(hf_hub_cache_env);
+    }
+    
+    // Check HF_HOME second (append /hub)
     const char* hf_home_env = std::getenv("HF_HOME");
     if (hf_home_env) {
         return std::string(hf_home_env) + "/hub";
     }
+    
+    // Default platform-specific paths
 #ifdef _WIN32
     const char* userprofile = std::getenv("USERPROFILE");
     if (userprofile) {
@@ -476,15 +486,22 @@ std::map<std::string, ModelInfo> ModelManager::get_supported_models() {
     return filter_models_by_backend(models);
 }
 
-std::map<std::string, ModelInfo> ModelManager::get_downloaded_models() {
+void ModelManager::initialize_cache() {
+    std::lock_guard<std::mutex> lock(downloaded_cache_mutex_);
+    
+    if (cache_initialized_) {
+        return;
+    }
+    
+    std::cout << "[ModelManager] Initializing downloaded models cache..." << std::endl;
+    
     auto all_models = get_supported_models(); // Already filtered by backend
-    std::map<std::string, ModelInfo> downloaded;
     
     // OPTIMIZATION: For FLM, get the list once
     auto flm_models = get_flm_installed_models();
     std::unordered_set<std::string> available_flm_models(flm_models.begin(), flm_models.end());
     
-    // Filter models - just check resolved_path exists
+    // Check disk ONCE on startup
     for (const auto& [name, info] : all_models) {
         bool is_available = false;
         
@@ -497,62 +514,56 @@ std::map<std::string, ModelInfo> ModelManager::get_downloaded_models() {
         }
         
         if (is_available) {
-            downloaded[name] = info;
+            downloaded_cache_[name] = info;
         }
     }
     
-    return downloaded;
+    cache_initialized_ = true;
+    std::cout << "[ModelManager] Cache initialized with " << downloaded_cache_.size() << " downloaded models" << std::endl;
+}
+
+void ModelManager::add_to_cache(const std::string& model_name) {
+    std::lock_guard<std::mutex> lock(downloaded_cache_mutex_);
+    
+    if (!cache_initialized_) {
+        return; // Cache will be initialized on next get_downloaded_models() call
+    }
+    
+    try {
+        auto info = get_model_info(model_name);
+        downloaded_cache_[model_name] = info;
+        std::cout << "[ModelManager] Added '" << model_name << "' to cache" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "[ModelManager] Failed to add model to cache: " << e.what() << std::endl;
+    }
+}
+
+void ModelManager::remove_from_cache(const std::string& model_name) {
+    std::lock_guard<std::mutex> lock(downloaded_cache_mutex_);
+    
+    if (!cache_initialized_) {
+        return; // Cache will be initialized on next get_downloaded_models() call
+    }
+    
+    downloaded_cache_.erase(model_name);
+    std::cout << "[ModelManager] Removed '" << model_name << "' from cache" << std::endl;
+}
+
+std::map<std::string, ModelInfo> ModelManager::get_downloaded_models() {
+    // Initialize cache on first call (thread-safe)
+    if (!cache_initialized_) {
+        initialize_cache();
+    }
+    
+    // Return cached models (fast - no disk I/O)
+    std::lock_guard<std::mutex> lock(downloaded_cache_mutex_);
+    return downloaded_cache_;
 }
 
 // Helper function to check if NPU is available
 // Matches Python behavior: on Windows, assume available (FLM will fail at runtime if not compatible)
 // This allows showing FLM models on Windows systems - the actual compatibility check happens when loading
-// Helper function to get backend availability from SystemInfo
-static json get_backend_availability() {
-    // Try to load from cache first
-    SystemInfoCache cache;
-    json cached_hardware = cache.load_hardware_info();
-    
-    if (!cached_hardware.empty()) {
-        return cached_hardware;
-    }
-    
-    // If no cache, detect hardware
-    auto sys_info = create_system_info();
-    json hardware = sys_info->get_device_dict();
-    
-    // Strip inference_engines before caching (hardware only)
-    json hardware_only = hardware;
-    if (hardware_only.contains("cpu") && hardware_only["cpu"].contains("inference_engines")) {
-        hardware_only["cpu"].erase("inference_engines");
-    }
-    if (hardware_only.contains("amd_igpu") && hardware_only["amd_igpu"].contains("inference_engines")) {
-        hardware_only["amd_igpu"].erase("inference_engines");
-    }
-    if (hardware_only.contains("amd_dgpu") && hardware_only["amd_dgpu"].is_array()) {
-        for (auto& gpu : hardware_only["amd_dgpu"]) {
-            if (gpu.contains("inference_engines")) {
-                gpu.erase("inference_engines");
-            }
-        }
-    }
-    if (hardware_only.contains("nvidia_dgpu") && hardware_only["nvidia_dgpu"].is_array()) {
-        for (auto& gpu : hardware_only["nvidia_dgpu"]) {
-            if (gpu.contains("inference_engines")) {
-                gpu.erase("inference_engines");
-            }
-        }
-    }
-    if (hardware_only.contains("npu") && hardware_only["npu"].contains("inference_engines")) {
-        hardware_only["npu"].erase("inference_engines");
-    }
-    
-    cache.save_hardware_info(hardware_only);
-    
-    return hardware_only;
-}
-
-static bool is_npu_available() {
+static bool is_npu_available(const json& hardware) {
     // Check if user explicitly disabled NPU check
     const char* skip_check = std::getenv("RYZENAI_SKIP_PROCESSOR_CHECK");
     if (skip_check && (std::string(skip_check) == "1" || 
@@ -561,8 +572,7 @@ static bool is_npu_available() {
         return true;
     }
     
-    // Use SystemInfo to detect NPU
-    json hardware = get_backend_availability();
+    // Use provided hardware info
     if (hardware.contains("npu") && hardware["npu"].is_object()) {
         return hardware["npu"].value("available", false);
     }
@@ -570,16 +580,16 @@ static bool is_npu_available() {
     return false;
 }
 
-static bool is_flm_available() {
+static bool is_flm_available(const json& hardware) {
     // FLM models are available if NPU hardware is present
     // The FLM executable will be obtained as needed
-    return is_npu_available();
+    return is_npu_available(hardware);
 }
 
-static bool is_oga_available() {
+static bool is_oga_available(const json& hardware) {
     // OGA models are available if NPU hardware is present
     // The ryzenai-server executable (OGA backend) will be obtained as needed
-    return is_npu_available();
+    return is_npu_available(hardware);
 }
 
 std::map<std::string, ModelInfo> ModelManager::filter_models_by_backend(
@@ -594,10 +604,14 @@ std::map<std::string, ModelInfo> ModelManager::filter_models_by_backend(
     bool is_macos = false;
 #endif
     
-    // Check backend availability
-    bool npu_available = is_npu_available();
-    bool flm_available = is_flm_available();
-    bool oga_available = is_oga_available();
+    // Get hardware info once (this will print the message)
+    json system_info = SystemInfoCache::get_system_info_with_cache(false);
+    json hardware = system_info.contains("devices") ? system_info["devices"] : json::object();
+    
+    // Check backend availability (passing hardware info)
+    bool npu_available = is_npu_available(hardware);
+    bool flm_available = is_flm_available(hardware);
+    bool oga_available = is_oga_available(hardware);
     
     // Debug output (only shown once during startup)
     static bool debug_printed = false;
@@ -699,73 +713,75 @@ void ModelManager::register_user_model(const std::string& model_name,
     user_models_ = updated_user_models;
 }
 
-// Helper function to get FLM installed models by calling 'flm list'
+// Helper function to get FLM installed models by calling 'flm list --filter installed --quiet'
+// Uses the improved FLM CLI methodology with --filter and --quiet flags
 std::vector<std::string> ModelManager::get_flm_installed_models() {
     std::vector<std::string> installed_models;
-    
+
 #ifdef _WIN32
     std::string command = "where flm > nul 2>&1";
 #else
     std::string command = "which flm > /dev/null 2>&1";
 #endif
-    
+
     // Check if flm is available
     if (system(command.c_str()) != 0) {
         return installed_models; // FLM not installed
     }
-    
-    // Run 'flm list' to get installed models
+
+    // Run 'flm list --filter installed --quiet' to get only installed models
+    // This uses FLM's native filtering instead of emoji parsing
 #ifdef _WIN32
-    FILE* pipe = _popen("flm list", "r");
+    FILE* pipe = _popen("flm list --filter installed --quiet", "r");
 #else
-    FILE* pipe = popen("flm list", "r");
+    FILE* pipe = popen("flm list --filter installed --quiet", "r");
 #endif
-    
+
     if (!pipe) {
         return installed_models;
     }
-    
+
     char buffer[256];
     std::string output;
     while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
         output += buffer;
     }
-    
+
 #ifdef _WIN32
     _pclose(pipe);
 #else
     pclose(pipe);
 #endif
-    
-    // Parse output - look for lines starting with "- " and ending with " ✅"
+
+    // Parse output - cleaner format without emojis
+    // Expected format:
+    //   Models:
+    //     - modelname:tag
+    //     - another:model
     std::istringstream stream(output);
     std::string line;
     while (std::getline(stream, line)) {
         // Trim whitespace
         line.erase(0, line.find_first_not_of(" \t\r\n"));
         line.erase(line.find_last_not_of(" \t\r\n") + 1);
-        
+
+        // Skip the "Models:" header line or empty lines
+        if (line == "Models:" || line.empty()) {
+            continue;
+        }
+
+        // Parse model checkpoint (format: "  - modelname:tag")
         if (line.find("- ") == 0) {
-            // Remove "- " prefix
-            std::string model_info = line.substr(2);
-            
-            // Check if model is installed (ends with ✅)
-            // Note: ✅ is UTF-8, so we need to check for the byte sequence
-            if (model_info.size() >= 4 && 
-                (model_info.substr(model_info.size() - 4) == " \xE2\x9C\x85" || 
-                 model_info.find(" \xE2\x9C\x85") != std::string::npos)) {
-                // Remove the checkmark and trim
-                size_t checkmark_pos = model_info.find(" \xE2\x9C\x85");
-                if (checkmark_pos != std::string::npos) {
-                    std::string checkpoint = model_info.substr(0, checkmark_pos);
-                    checkpoint.erase(0, checkpoint.find_first_not_of(" \t"));
-                    checkpoint.erase(checkpoint.find_last_not_of(" \t") + 1);
-                    installed_models.push_back(checkpoint);
-                }
+            std::string checkpoint = line.substr(2);
+            // Trim any remaining whitespace
+            checkpoint.erase(0, checkpoint.find_first_not_of(" \t"));
+            checkpoint.erase(checkpoint.find_last_not_of(" \t") + 1);
+            if (!checkpoint.empty()) {
+                installed_models.push_back(checkpoint);
             }
         }
     }
-    
+
     return installed_models;
 }
 
@@ -811,6 +827,7 @@ void ModelManager::download_model(const std::string& model_name,
     
     std::string actual_checkpoint = checkpoint;
     std::string actual_recipe = recipe;
+    std::string actual_mmproj = mmproj;
     
     // Check if model exists in registry
     bool model_registered = model_exists(model_name);
@@ -860,6 +877,15 @@ void ModelManager::download_model(const std::string& model_name,
             actual_checkpoint = info.checkpoint;
             actual_recipe = info.recipe;
         }
+        
+        // Also look up mmproj if not provided (for vision models)
+        if (actual_mmproj.empty()) {
+            auto info = get_model_info(model_name);
+            actual_mmproj = info.mmproj;
+            if (!actual_mmproj.empty()) {
+                std::cout << "[ModelManager] Found mmproj for vision model: " << actual_mmproj << std::endl;
+            }
+        }
     }
     
     // Parse checkpoint
@@ -900,7 +926,7 @@ void ModelManager::download_model(const std::string& model_name,
         download_from_flm(actual_checkpoint, do_not_upgrade);
     } else if (actual_recipe == "llamacpp") {
         // For llamacpp (GGUF) models, use variant-aware download
-        download_from_huggingface(repo_id, variant, mmproj);
+        download_from_huggingface(repo_id, variant, actual_mmproj);
     } else {
         // For non-GGUF models (oga-*, etc.), download all files (no variant filtering)
         download_from_huggingface(repo_id, "", "");
@@ -909,8 +935,11 @@ void ModelManager::download_model(const std::string& model_name,
     // Register if needed
     if (model_name.substr(0, 5) == "user." || !checkpoint.empty()) {
         register_user_model(model_name, actual_checkpoint, actual_recipe, 
-                          reasoning, vision, mmproj);
+                          reasoning, vision, actual_mmproj);
     }
+    
+    // Update cache after successful download
+    add_to_cache(model_name);
 }
 
 // Download model files from HuggingFace
@@ -930,27 +959,7 @@ void ModelManager::download_from_huggingface(const std::string& repo_id,
                                             const std::string& variant,
                                             const std::string& mmproj) {
     // Get Hugging Face cache directory
-    std::string hf_cache;
-    const char* hf_home_env = std::getenv("HF_HOME");
-    if (hf_home_env) {
-        hf_cache = std::string(hf_home_env) + "/hub";
-    } else {
-#ifdef _WIN32
-        const char* userprofile = std::getenv("USERPROFILE");
-        if (userprofile) {
-            hf_cache = std::string(userprofile) + "\\.cache\\huggingface\\hub";
-        } else {
-            throw std::runtime_error("Cannot determine HF cache directory");
-        }
-#else
-        const char* home = std::getenv("HOME");
-        if (home) {
-            hf_cache = std::string(home) + "/.cache/huggingface/hub";
-        } else {
-            throw std::runtime_error("Cannot determine HF cache directory");
-        }
-#endif
-    }
+    std::string hf_cache = get_hf_cache_dir();
     
     // Create cache directory structure
     fs::create_directories(hf_cache);
@@ -966,8 +975,6 @@ void ModelManager::download_from_huggingface(const std::string& repo_id,
     
     std::string model_cache_path = hf_cache + "/" + cache_dir_name;
     fs::create_directories(model_cache_path);
-    std::string snapshot_path = model_cache_path + "/snapshots/main";
-    fs::create_directories(snapshot_path);
     
     // Get HF token if available
     std::map<std::string, std::string> headers;
@@ -997,6 +1004,31 @@ void ModelManager::download_from_huggingface(const std::string& repo_id,
         
         if (!model_info.contains("siblings") || !model_info["siblings"].is_array()) {
             throw std::runtime_error("Invalid model info response from Hugging Face API");
+        }
+        
+        // Extract commit hash (sha) from the API response
+        std::string commit_hash;
+        if (model_info.contains("sha") && model_info["sha"].is_string()) {
+            commit_hash = model_info["sha"].get<std::string>();
+            std::cout << "[ModelManager] Using commit hash: " << commit_hash << std::endl;
+        } else {
+            // Fallback to "main" if sha is not available
+            commit_hash = "main";
+            std::cout << "[ModelManager] Warning: No commit hash found in API response, using 'main'" << std::endl;
+        }
+        
+        // Create snapshot directory using commit hash
+        std::string snapshot_path = model_cache_path + "/snapshots/" + commit_hash;
+        fs::create_directories(snapshot_path);
+        
+        // Create refs/main file pointing to this commit (matching huggingface_hub behavior)
+        std::string refs_dir = model_cache_path + "/refs";
+        fs::create_directories(refs_dir);
+        std::string refs_main_path = refs_dir + "/main";
+        std::ofstream refs_file(refs_main_path);
+        if (refs_file.is_open()) {
+            refs_file << commit_hash;
+            refs_file.close();
         }
         
         // Extract list of all files in the repository
@@ -1226,6 +1258,9 @@ void ModelManager::delete_model(const std::string& model_name) {
             std::cout << "[ModelManager] ✓ Removed from user_models.json" << std::endl;
         }
         
+        // Remove from cache after successful deletion
+        remove_from_cache(model_name);
+        
         return;
     }
     
@@ -1272,6 +1307,9 @@ void ModelManager::delete_model(const std::string& model_name) {
         user_models_ = updated_user_models;
         std::cout << "[ModelManager] ✓ Removed from user_models.json" << std::endl;
     }
+    
+    // Remove from cache after successful deletion
+    remove_from_cache(model_name);
 }
 
 ModelInfo ModelManager::get_model_info(const std::string& model_name) {

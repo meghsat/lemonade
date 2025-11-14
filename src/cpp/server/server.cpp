@@ -24,9 +24,11 @@
 namespace lemon {
 
 Server::Server(int port, const std::string& host, const std::string& log_level,
-               int ctx_size, bool tray, const std::string& llamacpp_backend)
+               int ctx_size, bool tray, const std::string& llamacpp_backend,
+               const std::string& llamacpp_args)
     : port_(port), host_(host), log_level_(log_level), ctx_size_(ctx_size),
-      tray_(tray), llamacpp_backend_(llamacpp_backend), running_(false) {
+      tray_(tray), llamacpp_backend_(llamacpp_backend), llamacpp_args_(llamacpp_args),
+      running_(false) {
     
     // Detect log file path (same location as tray uses)
     // NOTE: The ServerManager is responsible for redirecting stdout/stderr to this file
@@ -51,7 +53,7 @@ Server::Server(int port, const std::string& host, const std::string& log_level,
     std::cout << "[Server] HTTP server initialized with thread pool (8 threads)" << std::endl;
     
     model_manager_ = std::make_unique<ModelManager>();
-    router_ = std::make_unique<Router>(ctx_size, llamacpp_backend, log_level);
+    router_ = std::make_unique<Router>(ctx_size, llamacpp_backend, log_level, llamacpp_args);
     
     if (log_level_ == "debug" || log_level_ == "trace") {
         std::cout << "[Server] Debug logging enabled - subprocess output will be visible" << std::endl;
@@ -350,9 +352,7 @@ void Server::setup_cors() {
 }
 
 void Server::run() {
-    // Display user-friendly address
-    std::string display_host = (host_ == "0.0.0.0") ? "localhost" : host_;
-    std::cout << "[Server] Starting on " << display_host << ":" << port_ << std::endl;
+    std::cout << "[Server] Starting on " << host_ << ":" << port_ << std::endl;
     
     // Add request logging for ALL requests
     http_server_->set_logger([](const httplib::Request& req, const httplib::Response& res) {
@@ -597,6 +597,35 @@ void Server::handle_chat_completions(const httplib::Request& req, httplib::Respo
             }
         }
         
+        // Handle enable_thinking=false by prepending /no_think to last user message
+        if (request_json.contains("enable_thinking") && 
+            request_json["enable_thinking"].is_boolean() && 
+            request_json["enable_thinking"].get<bool>() == false) {
+            
+            if (request_json.contains("messages") && request_json["messages"].is_array()) {
+                auto& messages = request_json["messages"];
+                
+                // Find the last user message (iterate backwards)
+                for (int i = messages.size() - 1; i >= 0; i--) {
+                    if (messages[i].is_object() && 
+                        messages[i].contains("role") && 
+                        messages[i]["role"].is_string() && 
+                        messages[i]["role"].get<std::string>() == "user") {
+                        
+                        // Prepend /no_think to the content
+                        if (messages[i].contains("content") && messages[i]["content"].is_string()) {
+                            std::string original_content = messages[i]["content"].get<std::string>();
+                            messages[i]["content"] = "/no_think\n" + original_content;
+                            
+                            // Update request_body with modified JSON
+                            request_body = request_json.dump();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
         if (is_streaming) {
             try {
                 // Log the HTTP request
@@ -657,38 +686,80 @@ void Server::handle_chat_completions(const httplib::Request& req, httplib::Respo
             
             res.set_content(response.dump(), "application/json");
             
-            // Print telemetry for non-streaming
+            // Print and save telemetry for non-streaming
             // llama-server includes timing data in the response under "timings" field
             if (response.contains("timings")) {
                 auto timings = response["timings"];
+                int input_tokens = 0;
+                int output_tokens = 0;
+                double ttft_seconds = 0.0;
+                double tps = 0.0;
+                
                 std::cout << "\n=== Telemetry ===" << std::endl;
                 if (timings.contains("prompt_n")) {
-                    std::cout << "Input tokens:  " << timings["prompt_n"] << std::endl;
+                    input_tokens = timings["prompt_n"].get<int>();
+                    std::cout << "Input tokens:  " << input_tokens << std::endl;
                 }
                 if (timings.contains("predicted_n")) {
-                    std::cout << "Output tokens: " << timings["predicted_n"] << std::endl;
+                    output_tokens = timings["predicted_n"].get<int>();
+                    std::cout << "Output tokens: " << output_tokens << std::endl;
                 }
                 if (timings.contains("prompt_ms")) {
-                    double ttft_seconds = timings["prompt_ms"].get<double>() / 1000.0;
+                    ttft_seconds = timings["prompt_ms"].get<double>() / 1000.0;
                     std::cout << "TTFT (s):      " << std::fixed << std::setprecision(2) 
                              << ttft_seconds << std::endl;
                 }
                 if (timings.contains("predicted_per_second")) {
+                    tps = timings["predicted_per_second"].get<double>();
                     std::cout << "TPS:           " << std::fixed << std::setprecision(2) 
-                             << timings["predicted_per_second"].get<double>() << std::endl;
+                             << tps << std::endl;
                 }
                 std::cout << "=================" << std::endl;
+                
+                // Save telemetry to router
+                router_->update_telemetry(input_tokens, output_tokens, ttft_seconds, tps);
             } else if (response.contains("usage")) {
                 // OpenAI format uses "usage" field
                 auto usage = response["usage"];
+                int input_tokens = 0;
+                int output_tokens = 0;
+                double ttft_seconds = 0.0;
+                double tps = 0.0;
+                
                 std::cout << "\n=== Telemetry ===" << std::endl;
                 if (usage.contains("prompt_tokens")) {
-                    std::cout << "Input tokens:  " << usage["prompt_tokens"] << std::endl;
+                    input_tokens = usage["prompt_tokens"].get<int>();
+                    std::cout << "Input tokens:  " << input_tokens << std::endl;
                 }
                 if (usage.contains("completion_tokens")) {
-                    std::cout << "Output tokens: " << usage["completion_tokens"] << std::endl;
+                    output_tokens = usage["completion_tokens"].get<int>();
+                    std::cout << "Output tokens: " << output_tokens << std::endl;
+                }
+                
+                // FLM format may include timing data
+                if (usage.contains("prefill_duration_ttft")) {
+                    ttft_seconds = usage["prefill_duration_ttft"].get<double>();
+                    std::cout << "TTFT (s):      " << std::fixed << std::setprecision(2) 
+                             << ttft_seconds << std::endl;
+                }
+                if (usage.contains("decoding_speed_tps")) {
+                    tps = usage["decoding_speed_tps"].get<double>();
+                    std::cout << "TPS:           " << std::fixed << std::setprecision(2) 
+                             << tps << std::endl;
                 }
                 std::cout << "=================" << std::endl;
+                
+                // Save telemetry to router
+                router_->update_telemetry(input_tokens, output_tokens, ttft_seconds, tps);
+            }
+            
+            // Capture prompt_tokens from usage if available
+            if (response.contains("usage")) {
+                auto usage = response["usage"];
+                if (usage.contains("prompt_tokens")) {
+                    int prompt_tokens = usage["prompt_tokens"].get<int>();
+                    router_->update_prompt_tokens(prompt_tokens);
+                }
             }
         }
         
@@ -792,6 +863,80 @@ void Server::handle_completions(const httplib::Request& req, httplib::Response& 
             }
             
             res.set_content(response.dump(), "application/json");
+            
+            // Print and save telemetry for non-streaming completions
+            if (response.contains("timings")) {
+                auto timings = response["timings"];
+                int input_tokens = 0;
+                int output_tokens = 0;
+                double ttft_seconds = 0.0;
+                double tps = 0.0;
+                
+                std::cout << "\n=== Telemetry ===" << std::endl;
+                if (timings.contains("prompt_n")) {
+                    input_tokens = timings["prompt_n"].get<int>();
+                    std::cout << "Input tokens:  " << input_tokens << std::endl;
+                }
+                if (timings.contains("predicted_n")) {
+                    output_tokens = timings["predicted_n"].get<int>();
+                    std::cout << "Output tokens: " << output_tokens << std::endl;
+                }
+                if (timings.contains("prompt_ms")) {
+                    ttft_seconds = timings["prompt_ms"].get<double>() / 1000.0;
+                    std::cout << "TTFT (s):      " << std::fixed << std::setprecision(2) 
+                             << ttft_seconds << std::endl;
+                }
+                if (timings.contains("predicted_per_second")) {
+                    tps = timings["predicted_per_second"].get<double>();
+                    std::cout << "TPS:           " << std::fixed << std::setprecision(2) 
+                             << tps << std::endl;
+                }
+                std::cout << "=================" << std::endl;
+                
+                // Save telemetry to router
+                router_->update_telemetry(input_tokens, output_tokens, ttft_seconds, tps);
+            } else if (response.contains("usage")) {
+                auto usage = response["usage"];
+                int input_tokens = 0;
+                int output_tokens = 0;
+                double ttft_seconds = 0.0;
+                double tps = 0.0;
+                
+                std::cout << "\n=== Telemetry ===" << std::endl;
+                if (usage.contains("prompt_tokens")) {
+                    input_tokens = usage["prompt_tokens"].get<int>();
+                    std::cout << "Input tokens:  " << input_tokens << std::endl;
+                }
+                if (usage.contains("completion_tokens")) {
+                    output_tokens = usage["completion_tokens"].get<int>();
+                    std::cout << "Output tokens: " << output_tokens << std::endl;
+                }
+                
+                // FLM format may include timing data
+                if (usage.contains("prefill_duration_ttft")) {
+                    ttft_seconds = usage["prefill_duration_ttft"].get<double>();
+                    std::cout << "TTFT (s):      " << std::fixed << std::setprecision(2) 
+                             << ttft_seconds << std::endl;
+                }
+                if (usage.contains("decoding_speed_tps")) {
+                    tps = usage["decoding_speed_tps"].get<double>();
+                    std::cout << "TPS:           " << std::fixed << std::setprecision(2) 
+                             << tps << std::endl;
+                }
+                std::cout << "=================" << std::endl;
+                
+                // Save telemetry to router
+                router_->update_telemetry(input_tokens, output_tokens, ttft_seconds, tps);
+            }
+            
+            // Capture prompt_tokens from usage if available
+            if (response.contains("usage")) {
+                auto usage = response["usage"];
+                if (usage.contains("prompt_tokens")) {
+                    int prompt_tokens = usage["prompt_tokens"].get<int>();
+                    router_->update_prompt_tokens(prompt_tokens);
+                }
+            }
         }
         
     } catch (const std::exception& e) {
@@ -1417,113 +1562,8 @@ void Server::handle_system_info(const httplib::Request& req, httplib::Response& 
             verbose = (verbose_param == "true" || verbose_param == "1");
         }
         
-        // Check cache first
-        SystemInfoCache cache;
-        nlohmann::json cached_hardware = cache.load_hardware_info();
-        nlohmann::json devices;
-        
-        // Create platform-specific system info instance
-        auto sys_info = create_system_info();
-        
-        if (!cached_hardware.empty()) {
-            std::cout << "[Server] Using cached hardware info from: " << cache.get_cache_file_path() << std::endl;
-            devices = cached_hardware;
-        } else {
-            std::cout << "[Server] Detecting hardware (will cache to: " << cache.get_cache_file_path() << ")" << std::endl;
-            
-            // Get hardware information
-            devices = sys_info->get_device_dict();
-            
-            // Strip inference_engines before caching (hardware only)
-            nlohmann::json hardware_only = devices;
-            if (hardware_only.contains("cpu") && hardware_only["cpu"].contains("inference_engines")) {
-                hardware_only["cpu"].erase("inference_engines");
-            }
-            if (hardware_only.contains("amd_igpu") && hardware_only["amd_igpu"].contains("inference_engines")) {
-                hardware_only["amd_igpu"].erase("inference_engines");
-            }
-            if (hardware_only.contains("amd_dgpu") && hardware_only["amd_dgpu"].is_array()) {
-                for (auto& gpu : hardware_only["amd_dgpu"]) {
-                    if (gpu.contains("inference_engines")) {
-                        gpu.erase("inference_engines");
-                    }
-                }
-            }
-            if (hardware_only.contains("nvidia_dgpu") && hardware_only["nvidia_dgpu"].is_array()) {
-                for (auto& gpu : hardware_only["nvidia_dgpu"]) {
-                    if (gpu.contains("inference_engines")) {
-                        gpu.erase("inference_engines");
-                    }
-                }
-            }
-            if (hardware_only.contains("npu") && hardware_only["npu"].contains("inference_engines")) {
-                hardware_only["npu"].erase("inference_engines");
-            }
-            
-            // Save hardware-only info to cache
-            cache.save_hardware_info(hardware_only);
-            std::cout << "[Server] Hardware info cached to: " << cache.get_cache_file_path() << std::endl;
-        }
-        
-        // Detect inference engines (always fresh, never cached)
-        // CPU
-        if (devices.contains("cpu") && devices["cpu"].contains("name")) {
-            std::string cpu_name = devices["cpu"]["name"];
-            devices["cpu"]["inference_engines"] = sys_info->detect_inference_engines("cpu", cpu_name);
-        }
-        
-        // AMD iGPU
-        if (devices.contains("amd_igpu") && devices["amd_igpu"].contains("name")) {
-            std::string gpu_name = devices["amd_igpu"]["name"];
-            devices["amd_igpu"]["inference_engines"] = sys_info->detect_inference_engines("amd_igpu", gpu_name);
-        }
-        
-        // AMD dGPUs
-        if (devices.contains("amd_dgpu") && devices["amd_dgpu"].is_array()) {
-            for (auto& gpu : devices["amd_dgpu"]) {
-                if (gpu.contains("name") && !gpu["name"].get<std::string>().empty()) {
-                    std::string gpu_name = gpu["name"];
-                    gpu["inference_engines"] = sys_info->detect_inference_engines("amd_dgpu", gpu_name);
-                }
-            }
-        }
-        
-        // NVIDIA dGPUs
-        if (devices.contains("nvidia_dgpu") && devices["nvidia_dgpu"].is_array()) {
-            for (auto& gpu : devices["nvidia_dgpu"]) {
-                if (gpu.contains("name") && !gpu["name"].get<std::string>().empty()) {
-                    std::string gpu_name = gpu["name"];
-                    gpu["inference_engines"] = sys_info->detect_inference_engines("nvidia_dgpu", gpu_name);
-                }
-            }
-        }
-        
-        // NPU
-        if (devices.contains("npu") && devices["npu"].contains("name")) {
-            std::string npu_name = devices["npu"]["name"];
-            devices["npu"]["inference_engines"] = sys_info->detect_inference_engines("npu", npu_name);
-        }
-        
-        // Get system information (OS Version, Processor, Physical Memory, etc.)
-        nlohmann::json system_info = sys_info->get_system_info_dict();
-        
-        // Add devices
-        system_info["devices"] = devices;
-        
-        // Filter for non-verbose mode (only essential keys)
-        if (!verbose) {
-            std::vector<std::string> essential_keys = {"OS Version", "Processor", "Physical Memory", "devices"};
-            nlohmann::json filtered_info;
-            for (const auto& key : essential_keys) {
-                if (system_info.contains(key)) {
-                    filtered_info[key] = system_info[key];
-                }
-            }
-            system_info = filtered_info;
-        } else {
-            // In verbose mode, add Python packages (empty for C++ implementation)
-            system_info["Python Packages"] = SystemInfo::get_python_packages();
-        }
+        // Get system info with cache handling
+        nlohmann::json system_info = SystemInfoCache::get_system_info_with_cache(verbose);
         
         res.set_content(system_info.dump(), "application/json");
         

@@ -41,6 +41,11 @@ namespace lemon_tray {
         std::cout << "DEBUG: " << msg << std::endl; \
     }
 
+#ifndef _WIN32
+// Initialize static signal pipe
+int TrayApp::signal_pipe_[2] = {-1, -1};
+#endif
+
 #ifdef _WIN32
 // Helper function to show a simple Windows notification without tray
 static void show_simple_notification(const std::string& title, const std::string& message) {
@@ -104,24 +109,36 @@ static TrayApp* g_tray_app_instance = nullptr;
 BOOL WINAPI console_ctrl_handler(DWORD ctrl_type) {
     if (ctrl_type == CTRL_C_EVENT || ctrl_type == CTRL_CLOSE_EVENT || ctrl_type == CTRL_BREAK_EVENT) {
         std::cout << "\nReceived interrupt signal, shutting down gracefully..." << std::endl;
+        std::cout.flush();
         
         if (g_tray_app_instance) {
             g_tray_app_instance->shutdown();
         }
         
-        return TRUE;  // We handled it
+        // Exit the process explicitly to ensure cleanup completes
+        // Windows will wait for this handler to return before terminating
+        std::exit(0);
     }
     return FALSE;
 }
 #else
 // Unix signal handler for SIGINT/SIGTERM
 void signal_handler(int signal) {
-    if (signal == SIGINT || signal == SIGTERM) {
-        std::cout << "\nReceived interrupt signal, exiting..." << std::endl;
-        std::cout.flush();
+    if (signal == SIGINT) {
+        // SIGINT = User pressed Ctrl+C
+        // We MUST clean up children ourselves
+        // Write to pipe - main thread will handle cleanup
+        // write() is async-signal-safe
+        char sig = (char)signal;
+        ssize_t written = write(TrayApp::signal_pipe_[1], &sig, 1);
+        (void)written;  // Suppress unused variable warning
         
-        // Don't call shutdown() from signal handler - it blocks on thread joins
-        // Just exit immediately and let the OS clean up
+    } else if (signal == SIGTERM) {
+        // SIGTERM = Stop command is killing us
+        // Stop command will handle killing children
+        // Just exit immediately to avoid race condition
+        std::cout << "\nReceived termination signal, exiting..." << std::endl;
+        std::cout.flush();
         _exit(0);
     }
 }
@@ -172,10 +189,14 @@ TrayApp::TrayApp(int argc, char* argv[])
     : current_version_(LEMON_VERSION_STRING)
     , should_exit_(false)
 {
+    // Load defaults from environment variables before parsing command-line arguments
+    load_env_defaults();
     parse_arguments(argc, argv);
     
     if (config_.show_help) {
-        print_usage();
+        // Show serve options only if command is "serve" or "run"
+        bool show_serve_options = (config_.command == "serve" || config_.command == "run");
+        print_usage(show_serve_options);
         exit(0);
     }
     
@@ -192,6 +213,18 @@ TrayApp::TrayApp(int argc, char* argv[])
 #ifdef _WIN32
         SetConsoleCtrlHandler(console_ctrl_handler, TRUE);
 #else
+        // Create self-pipe for safe signal handling
+        if (pipe(signal_pipe_) == -1) {
+            std::cerr << "Failed to create signal pipe: " << strerror(errno) << std::endl;
+            exit(1);
+        }
+        
+        // Set write end to non-blocking to prevent signal handler from blocking
+        int flags = fcntl(signal_pipe_[1], F_GETFL);
+        if (flags != -1) {
+            fcntl(signal_pipe_[1], F_SETFL, flags | O_NONBLOCK);
+        }
+        
         signal(SIGINT, signal_handler);
         signal(SIGTERM, signal_handler);
         
@@ -205,10 +238,28 @@ TrayApp::TrayApp(int argc, char* argv[])
 }
 
 TrayApp::~TrayApp() {
+    // Stop signal monitor thread if running
+#ifndef _WIN32
+    if (signal_monitor_thread_.joinable()) {
+        stop_signal_monitor_ = true;
+        signal_monitor_thread_.join();
+    }
+#endif
+    
     // Only shutdown if we actually started something
     if (server_manager_ || !config_.command.empty()) {
         shutdown();
     }
+    
+#ifndef _WIN32
+    // Clean up signal pipe
+    if (signal_pipe_[0] != -1) {
+        close(signal_pipe_[0]);
+        close(signal_pipe_[1]);
+        signal_pipe_[0] = signal_pipe_[1] = -1;
+    }
+#endif
+    
     g_tray_app_instance = nullptr;
 }
 
@@ -253,14 +304,14 @@ int TrayApp::run() {
     } else if (config_.command == "serve" || config_.command == "run") {
         // Check for single instance - only for 'serve' and 'run' commands
         // Other commands (status, list, pull, delete, stop) can run alongside a server
-        if (lemon::SingleInstance::IsAnotherInstanceRunning("ServerBeta")) {
+        if (lemon::SingleInstance::IsAnotherInstanceRunning("Server")) {
 #ifdef _WIN32
             show_simple_notification("Server Already Running", "Lemonade Server is already running");
 #endif
-            std::cerr << "Error: Another instance of lemonade-server-beta serve/run is already running.\n"
+            std::cerr << "Error: Another instance of lemonade-server serve/run is already running.\n"
                       << "Only one persistent server can run at a time.\n\n"
-                      << "To check server status: lemonade-server-beta status\n"
-                      << "To stop the server: lemonade-server-beta stop\n" << std::endl;
+                      << "To check server status: lemonade-server status\n"
+                      << "To stop the server: lemonade-server stop\n" << std::endl;
             return 1;
         }
         // Continue to server initialization below
@@ -295,10 +346,36 @@ int TrayApp::run() {
     if (config_.no_tray) {
         std::cout << "Press Ctrl+C to stop" << std::endl;
         
-        // TODO: Set up signal handlers for Ctrl+C
+#ifdef _WIN32
+        // Windows: simple sleep loop (signal handler handles Ctrl+C via console_ctrl_handler)
         while (server_manager_->is_server_running()) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
+#else
+        // Linux: monitor signal pipe using select() for proper signal handling
+        while (server_manager_->is_server_running()) {
+            fd_set readfds;
+            FD_ZERO(&readfds);
+            FD_SET(signal_pipe_[0], &readfds);
+            
+            struct timeval tv = {1, 0};  // 1 second timeout
+            int result = select(signal_pipe_[0] + 1, &readfds, nullptr, nullptr, &tv);
+            
+            if (result > 0 && FD_ISSET(signal_pipe_[0], &readfds)) {
+                // Signal received (SIGINT from Ctrl+C)
+                char sig;
+                ssize_t bytes_read = read(signal_pipe_[0], &sig, 1);
+                (void)bytes_read;  // Suppress unused variable warning
+                
+                std::cout << "\nReceived interrupt signal, shutting down..." << std::endl;
+                
+                // Now we're safely in the main thread - call shutdown properly
+                shutdown();
+                break;
+            }
+            // Timeout or error - just continue checking if server is still running
+        }
+#endif
         
         return 0;
     }
@@ -371,6 +448,36 @@ int TrayApp::run() {
     build_menu();
     DEBUG_LOG(this, "Menu built successfully");
     
+#ifndef _WIN32
+    // On Linux, start a background thread to monitor the signal pipe
+    // This allows us to handle Ctrl+C cleanly even when tray is running
+    DEBUG_LOG(this, "Starting signal monitor thread...");
+    signal_monitor_thread_ = std::thread([this]() {
+        while (!stop_signal_monitor_ && !should_exit_) {
+            fd_set readfds;
+            FD_ZERO(&readfds);
+            FD_SET(signal_pipe_[0], &readfds);
+            
+            struct timeval tv = {0, 100000};  // 100ms timeout
+            int result = select(signal_pipe_[0] + 1, &readfds, nullptr, nullptr, &tv);
+            
+            if (result > 0 && FD_ISSET(signal_pipe_[0], &readfds)) {
+                // Signal received (SIGINT from Ctrl+C)
+                char sig;
+                ssize_t bytes_read = read(signal_pipe_[0], &sig, 1);
+                (void)bytes_read;  // Suppress unused variable warning
+                
+                std::cout << "\nReceived interrupt signal, shutting down..." << std::endl;
+                
+                // Call shutdown from this thread (not signal context, so it's safe)
+                shutdown();
+                break;
+            }
+        }
+        DEBUG_LOG(this, "Signal monitor thread exiting");
+    });
+#endif
+    
     DEBUG_LOG(this, "Menu built, entering event loop...");
     // Run tray event loop
     tray_->run();
@@ -379,8 +486,73 @@ int TrayApp::run() {
     return 0;
 }
 
+void TrayApp::load_env_defaults() {
+    // Helper to get environment variable with fallback
+    auto getenv_or_default = [](const char* name, const std::string& default_val) -> std::string {
+        const char* val = std::getenv(name);
+        return val ? std::string(val) : default_val;
+    };
+    
+    // Helper to get integer environment variable with fallback
+    auto getenv_int_or_default = [](const char* name, int default_val) -> int {
+        const char* val = std::getenv(name);
+        if (val) {
+            try {
+                return std::stoi(val);
+            } catch (...) {
+                // Invalid integer, use default
+                return default_val;
+            }
+        }
+        return default_val;
+    };
+    
+    // Load environment variables into config (can be overridden by command-line args)
+    config_.port = getenv_int_or_default("LEMONADE_PORT", config_.port);
+    config_.host = getenv_or_default("LEMONADE_HOST", config_.host);
+    config_.log_level = getenv_or_default("LEMONADE_LOG_LEVEL", config_.log_level);
+    config_.llamacpp_backend = getenv_or_default("LEMONADE_LLAMACPP", config_.llamacpp_backend);
+    config_.ctx_size = getenv_int_or_default("LEMONADE_CTX_SIZE", config_.ctx_size);
+    config_.llamacpp_args = getenv_or_default("LEMONADE_LLAMACPP_ARGS", config_.llamacpp_args);
+}
+
 void TrayApp::parse_arguments(int argc, char* argv[]) {
-    // First check for --help or --version flags
+    // Check if there's a command (non-flag argument)
+    if (argc > 1 && argv[1][0] != '-') {
+        config_.command = argv[1];
+        
+        // Parse remaining arguments (both command args and options)
+        for (int i = 2; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg == "--help" || arg == "-h") {
+                config_.show_help = true;
+                return;  // Return early, command is already set
+            } else if (arg == "--version" || arg == "-v") {
+                config_.show_version = true;
+                return;
+            } else if (arg == "--log-level" && i + 1 < argc) {
+                config_.log_level = argv[++i];
+            } else if (arg == "--port" && i + 1 < argc) {
+                config_.port = std::stoi(argv[++i]);
+            } else if (arg == "--host" && i + 1 < argc) {
+                config_.host = argv[++i];
+            } else if (arg == "--ctx-size" && i + 1 < argc) {
+                config_.ctx_size = std::stoi(argv[++i]);
+            } else if (arg == "--llamacpp" && i + 1 < argc) {
+                config_.llamacpp_backend = argv[++i];
+            } else if (arg == "--llamacpp-args" && i + 1 < argc) {
+                config_.llamacpp_args = argv[++i];
+            } else if (arg == "--no-tray") {
+                config_.no_tray = true;
+            } else {
+                // It's a command argument (like model name)
+                config_.command_args.push_back(arg);
+            }
+        }
+        return;
+    }
+    
+    // Check for global --help or --version flags (before command)
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--help" || arg == "-h") {
@@ -390,31 +562,6 @@ void TrayApp::parse_arguments(int argc, char* argv[]) {
             config_.show_version = true;
             return;
         }
-    }
-    
-    // Check if there's a command (non-flag argument)
-    if (argc > 1 && argv[1][0] != '-') {
-        config_.command = argv[1];
-        
-        // Parse remaining arguments (both command args and options)
-        for (int i = 2; i < argc; ++i) {
-            std::string arg = argv[i];
-            if (arg == "--log-level" && i + 1 < argc) {
-                config_.log_level = argv[++i];
-            } else if (arg == "--port" && i + 1 < argc) {
-                config_.port = std::stoi(argv[++i]);
-            } else if (arg == "--ctx-size" && i + 1 < argc) {
-                config_.ctx_size = std::stoi(argv[++i]);
-            } else if (arg == "--llamacpp" && i + 1 < argc) {
-                config_.llamacpp_backend = argv[++i];
-            } else if (arg == "--no-tray") {
-                config_.no_tray = true;
-            } else {
-                // It's a command argument (like model name)
-                config_.command_args.push_back(arg);
-            }
-        }
-        return;
     }
     
     // No command provided - this is an error
@@ -427,35 +574,42 @@ void TrayApp::parse_arguments(int argc, char* argv[]) {
     config_.command = "";
 }
 
-void TrayApp::print_usage() {
-    std::cout << "lemonade-server-beta - Lemonade Server Beta\n\n";
-    std::cout << "Usage: lemonade-server-beta <command> [options]\n\n";
+void TrayApp::print_usage(bool show_serve_options) {
+    std::cout << "lemonade-server - Lemonade Server\n\n";
+    std::cout << "Usage: lemonade-server <command> [options]\n\n";
     std::cout << "Commands:\n";
-    std::cout << "  serve                    Start the server (default if no command specified)\n";
+    std::cout << "  serve                    Start the server\n";
+    std::cout << "  run <model>              Run a model\n";
     std::cout << "  list                     List available models\n";
     std::cout << "  pull <model>             Download a model\n";
     std::cout << "  delete <model>           Delete a model\n";
-    std::cout << "  run <model>              Run a model (starts server if needed)\n";
     std::cout << "  status                   Check server status\n";
     std::cout << "  stop                     Stop the server\n\n";
-    std::cout << "Serve Options:\n";
-    std::cout << "  --port PORT              Server port (default: 8000)\n";
-    std::cout << "  --host HOST              Server host (default: localhost)\n";
-    std::cout << "  --ctx-size SIZE          Context size (default: 4096)\n";
-    std::cout << "  --llamacpp BACKEND       LlamaCpp backend: vulkan, rocm, metal (default: vulkan)\n";
-    std::cout << "  --log-file PATH          Log file path\n";
-    std::cout << "  --log-level LEVEL        Log level: info, debug, trace (default: info)\n";
+    
+    // Only show serve options if requested (for serve/run --help)
+    if (show_serve_options) {
+        std::cout << "Serve/Run Options:\n";
+        std::cout << "  --port PORT              Server port (default: 8000)\n";
+        std::cout << "  --host HOST              Server host (default: 127.0.0.1)\n";
+        std::cout << "  --ctx-size SIZE          Context size (default: 4096)\n";
+        std::cout << "  --llamacpp BACKEND       LlamaCpp backend: vulkan, rocm, metal (default: vulkan)\n";
+        std::cout << "  --llamacpp-args ARGS     Custom arguments for llama-server\n";
+        std::cout << "  --log-file PATH          Log file path\n";
+        std::cout << "  --log-level LEVEL        Log level: info, debug, trace (default: info)\n";
 #if defined(__linux__) && !defined(__ANDROID__)
-    std::cout << "  --no-tray                Start server without tray (default on Linux)\n";
+        std::cout << "  --no-tray                Start server without tray (default on Linux)\n";
 #else
-    std::cout << "  --no-tray                Start server without tray (headless mode)\n";
+        std::cout << "  --no-tray                Start server without tray (headless mode)\n";
 #endif
+        std::cout << "\n";
+    }
+    
     std::cout << "  --help, -h               Show this help message\n";
     std::cout << "  --version, -v            Show version\n";
 }
 
 void TrayApp::print_version() {
-    std::cout << "lemonade-server-beta version " << current_version_ << std::endl;
+    std::cout << "lemonade-server version " << current_version_ << std::endl;
 }
 
 bool TrayApp::find_server_binary() {
@@ -526,25 +680,31 @@ bool TrayApp::is_server_running_on_port(int port) {
     }
 }
 
-// Helper: Wait for server to be ready
-bool TrayApp::wait_for_server_ready(int port, int timeout_seconds) {
-    auto server_mgr = std::make_unique<ServerManager>();
-    for (int i = 0; i < timeout_seconds * 10; ++i) {
-        try {
-            auto health = server_mgr->get_health();
-            return true;
-        } catch (...) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
-    return false;
-}
-
 // Helper: Get server info (returns {pid, port} or {0, 0} if not found)
 std::pair<int, int> TrayApp::get_server_info() {
     // Query OS for listening TCP connections and find lemonade-router.exe
 #ifdef _WIN32
     // Windows: Use GetExtendedTcpTable to find listening connections
+    // Check both IPv4 and IPv6 since server may bind to either
+    
+    // Helper lambda to check if a PID is lemonade-router.exe
+    auto is_lemonade_router = [](DWORD pid) -> bool {
+        HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (hProcess) {
+            WCHAR processName[MAX_PATH];
+            DWORD size = MAX_PATH;
+            if (QueryFullProcessImageNameW(hProcess, 0, processName, &size)) {
+                std::wstring fullPath(processName);
+                std::wstring exeName = fullPath.substr(fullPath.find_last_of(L"\\/") + 1);
+                CloseHandle(hProcess);
+                return (exeName == L"lemonade-router.exe");
+            }
+            CloseHandle(hProcess);
+        }
+        return false;
+    };
+    
+    // Try IPv4 first
     DWORD size = 0;
     GetExtendedTcpTable(nullptr, &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
     
@@ -556,21 +716,26 @@ std::pair<int, int> TrayApp::get_server_info() {
             DWORD pid = pTcpTable->table[i].dwOwningPid;
             int port = ntohs((u_short)pTcpTable->table[i].dwLocalPort);
             
-            // Check if this PID is lemonade-router.exe
-            HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-            if (hProcess) {
-                WCHAR processName[MAX_PATH];
-                DWORD size = MAX_PATH;
-                if (QueryFullProcessImageNameW(hProcess, 0, processName, &size)) {
-                    std::wstring fullPath(processName);
-                    std::wstring exeName = fullPath.substr(fullPath.find_last_of(L"\\/") + 1);
-                    
-                    if (exeName == L"lemonade-router.exe") {
-                        CloseHandle(hProcess);
-                        return {static_cast<int>(pid), port};
-                    }
-                }
-                CloseHandle(hProcess);
+            if (is_lemonade_router(pid)) {
+                return {static_cast<int>(pid), port};
+            }
+        }
+    }
+    
+    // Try IPv6 if not found in IPv4
+    size = 0;
+    GetExtendedTcpTable(nullptr, &size, FALSE, AF_INET6, TCP_TABLE_OWNER_PID_LISTENER, 0);
+    
+    buffer.resize(size);
+    PMIB_TCP6TABLE_OWNER_PID pTcp6Table = reinterpret_cast<PMIB_TCP6TABLE_OWNER_PID>(buffer.data());
+    
+    if (GetExtendedTcpTable(pTcp6Table, &size, FALSE, AF_INET6, TCP_TABLE_OWNER_PID_LISTENER, 0) == NO_ERROR) {
+        for (DWORD i = 0; i < pTcp6Table->dwNumEntries; i++) {
+            DWORD pid = pTcp6Table->table[i].dwOwningPid;
+            int port = ntohs((u_short)pTcp6Table->table[i].dwLocalPort);
+            
+            if (is_lemonade_router(pid)) {
+                return {static_cast<int>(pid), port};
             }
         }
     }
@@ -609,7 +774,11 @@ bool TrayApp::start_ephemeral_server(int port) {
         config_.ctx_size,
         config_.log_file.empty() ? "" : config_.log_file,
         config_.log_level,  // Pass log level to ServerManager
-        config_.llamacpp_backend  // Pass llamacpp backend to ServerManager
+        config_.llamacpp_backend,  // Pass llamacpp backend to ServerManager
+        false,  // show_console
+        true,   // is_ephemeral (suppress startup message)
+        config_.llamacpp_args,  // Pass custom llamacpp args
+        config_.host  // Pass host to ServerManager
     );
     
     if (!success) {
@@ -691,7 +860,7 @@ int TrayApp::execute_list_command() {
 int TrayApp::execute_pull_command() {
     if (config_.command_args.empty()) {
         std::cerr << "Error: model name required" << std::endl;
-        std::cerr << "Usage: lemonade-server-beta pull <model_name> [--checkpoint CHECKPOINT] [--recipe RECIPE] [--reasoning] [--vision] [--mmproj MMPROJ]" << std::endl;
+        std::cerr << "Usage: lemonade-server pull <model_name> [--checkpoint CHECKPOINT] [--recipe RECIPE] [--reasoning] [--vision] [--mmproj MMPROJ]" << std::endl;
         return 1;
     }
     
@@ -773,7 +942,7 @@ int TrayApp::execute_pull_command() {
 int TrayApp::execute_delete_command() {
     if (config_.command_args.empty()) {
         std::cerr << "Error: model name required" << std::endl;
-        std::cerr << "Usage: lemonade-server-beta delete <model_name>" << std::endl;
+        std::cerr << "Usage: lemonade-server delete <model_name>" << std::endl;
         return 1;
     }
     
@@ -834,7 +1003,7 @@ int TrayApp::execute_delete_command() {
 int TrayApp::execute_run_command() {
     if (config_.command_args.empty()) {
         std::cerr << "Error: model name required" << std::endl;
-        std::cerr << "Usage: lemonade-server-beta run <model_name>" << std::endl;
+        std::cerr << "Usage: lemonade-server run <model_name>" << std::endl;
         return 1;
     }
     
@@ -842,18 +1011,12 @@ int TrayApp::execute_run_command() {
     std::cout << "Running model: " << model_name << std::endl;
     
     // The run command will:
-    // 1. Start server (handled by main run() after this returns)
-    // 2. Wait for server to be ready
-    // 3. Load the model
-    // 4. Open browser
-    // 5. Show tray (handled by main run() after this returns)
+    // 1. Start server (already done in main run() before this function is called)
+    // 2. Load the model
+    // 3. Open browser
+    // 4. Show tray (handled by main run() after this returns)
     
-    // Wait for server to be ready
-    std::cout << "Waiting for server to be ready..." << std::endl;
-    if (!wait_for_server_ready(config_.port, 30)) {
-        std::cerr << "Server did not become ready in time" << std::endl;
-        return 1;
-    }
+    // Note: Server is already started and ready - start_server() does health checks internally
     
     // Load the model
     std::cout << "Loading model " << model_name << "..." << std::endl;
@@ -861,7 +1024,7 @@ int TrayApp::execute_run_command() {
         std::cout << "Model loaded successfully!" << std::endl;
         
         // Open browser to chat interface
-        std::string url = "http://localhost:" + std::to_string(config_.port) + "/?model=" + model_name + "#llm-chat";
+        std::string url = "http://" + config_.host + ":" + std::to_string(config_.port) + "/?model=" + model_name + "#llm-chat";
         std::cout << "Opening browser: " << url << std::endl;
         open_url(url);
     } else {
@@ -921,12 +1084,12 @@ int TrayApp::execute_stop_command() {
                 if (pe32.th32ProcessID == router_pid) {
                     // Found router, check its parent
                     DWORD parent_pid = pe32.th32ParentProcessID;
-                    // Search for parent to see if it's lemonade-server-beta
+                    // Search for parent to see if it's lemonade-server
                     if (Process32FirstW(snapshot, &pe32)) {
                         do {
                             if (pe32.th32ProcessID == parent_pid) {
                                 std::wstring parent_name(pe32.szExeFile);
-                                if (parent_name == L"lemonade-server-beta.exe") {
+                                if (parent_name == L"lemonade-server.exe") {
                                     tray_pid = parent_pid;
                                     std::cout << "Found parent tray app (PID: " << tray_pid << ")" << std::endl;
                                 }
@@ -1088,7 +1251,7 @@ int TrayApp::execute_stop_command() {
         char buffer[128];
         if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
             int parent_pid = atoi(buffer);
-            // Check if parent is lemonade-server-beta
+            // Check if parent is lemonade-server
             std::string name_cmd = "ps -o comm= -p " + std::to_string(parent_pid);
             FILE* name_pipe = popen(name_cmd.c_str(), "r");
             if (name_pipe) {
@@ -1098,7 +1261,7 @@ int TrayApp::execute_stop_command() {
                     // Remove newline
                     parent_name.erase(parent_name.find_last_not_of("\n\r") + 1);
                     // Note: ps -o comm= is limited to 15 chars on Linux (/proc/PID/comm truncation)
-                    // "lemonade-server-beta" (21 chars) gets truncated to "lemonade-server" (15 chars)
+                    // "lemonade-server" is exactly 15 chars, so no truncation occurs
                     if (parent_name.find("lemonade-server") != std::string::npos) {
                         tray_pid = parent_pid;
                         std::cout << "Found parent tray app (PID: " << tray_pid << ")" << std::endl;
@@ -1172,7 +1335,7 @@ int TrayApp::execute_stop_command() {
         if (router_gone && tray_gone && all_children_gone) {
             // Additional check: verify the lock file can be acquired
             // This is a belt-and-suspenders check to ensure the lock is truly released
-            std::string lock_file = "/tmp/lemonade_ServerBeta.lock";
+            std::string lock_file = "/tmp/lemonade_Server.lock";
             int fd = open(lock_file.c_str(), O_RDWR | O_CREAT, 0666);
             if (fd != -1) {
                 if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
@@ -1252,7 +1415,10 @@ bool TrayApp::start_server() {
         config_.log_file,
         config_.log_level,  // Pass log level to ServerManager
         config_.llamacpp_backend,  // Pass llamacpp backend to ServerManager
-        true                // Always show console output for serve command
+        true,               // Always show console output for serve command
+        false,              // is_ephemeral = false (persistent server, show startup message with URL)
+        config_.llamacpp_args,  // Pass custom llamacpp args
+        config_.host        // Pass host to ServerManager
     );
     
     // Start log tail thread to show logs in console
@@ -1546,11 +1712,11 @@ void TrayApp::on_open_documentation() {
 }
 
 void TrayApp::on_open_llm_chat() {
-    open_url("http://localhost:" + std::to_string(config_.port) + "/#llm-chat");
+    open_url("http://" + config_.host + ":" + std::to_string(config_.port) + "/#llm-chat");
 }
 
 void TrayApp::on_open_model_manager() {
-    open_url("http://localhost:" + std::to_string(config_.port) + "/#model-management");
+    open_url("http://" + config_.host + ":" + std::to_string(config_.port) + "/#model-management");
 }
 
 void TrayApp::on_upgrade() {
@@ -1570,7 +1736,13 @@ void TrayApp::shutdown() {
     
     should_exit_ = true;
     
-    // Only print shutdown message if we actually have something to shutdown
+    // Only print shutdown message for persistent server commands (serve/run)
+    // Don't print for ephemeral commands (list/pull/delete/status/stop)
+    if (config_.command == "serve" || config_.command == "run") {
+        std::cout << "Shutting down server..." << std::endl;
+    }
+    
+    // Only print debug message if we actually have something to shutdown
     if (server_manager_ || tray_) {
         DEBUG_LOG(this, "Shutting down gracefully...");
     }
@@ -1604,9 +1776,11 @@ void TrayApp::open_url(const std::string& url) {
 #ifdef _WIN32
     ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #elif defined(__APPLE__)
-    system(("open \"" + url + "\"").c_str());
+    int result = system(("open \"" + url + "\"").c_str());
+    (void)result;  // Suppress unused variable warning
 #else
-    system(("xdg-open \"" + url + "\" &").c_str());
+    int result = system(("xdg-open \"" + url + "\" &").c_str());
+    (void)result;  // Suppress unused variable warning
 #endif
 }
 

@@ -17,7 +17,8 @@ class Router {
 public:
     Router(int ctx_size = 4096, 
            const std::string& llamacpp_backend = "vulkan",
-           const std::string& log_level = "info");
+           const std::string& log_level = "info",
+           const std::string& llamacpp_args = "");
     
     ~Router();
     
@@ -58,6 +59,13 @@ public:
     // Get telemetry data
     json get_stats() const;
     
+    // Update telemetry data (for non-streaming requests)
+    void update_telemetry(int input_tokens, int output_tokens, 
+                         double time_to_first_token, double tokens_per_second);
+    
+    // Update prompt_tokens field from usage
+    void update_prompt_tokens(int prompt_tokens);
+    
 private:
     std::unique_ptr<WrappedServer> wrapped_server_;
     std::string loaded_model_;
@@ -68,6 +76,7 @@ private:
     int ctx_size_;
     std::string llamacpp_backend_;
     std::string log_level_;
+    std::string llamacpp_args_;
     
     // Concurrency control for load operations
     mutable std::mutex load_mutex_;              // Protects loading state and wrapped_server_

@@ -14,7 +14,7 @@ CLIParser::CLIParser()
         ->default_val(8000);
     
     app_.add_option("--host", config_.host, "Address to bind for connections")
-        ->default_val("0.0.0.0");
+        ->default_val("localhost");
     
     app_.add_option("--log-level", config_.log_level, "Log level for the server")
         ->check(CLI::IsMember({"critical", "error", "warning", "info", "debug", "trace"}))
@@ -26,6 +26,10 @@ CLIParser::CLIParser()
     
     app_.add_option("--ctx-size", config_.ctx_size, "Context size for the model")
         ->default_val(4096);
+    
+    app_.add_option("--llamacpp-args", config_.llamacpp_args, 
+                   "Custom arguments to pass to llama-server (must not conflict with managed args)")
+        ->default_val("");
 }
 
 int CLIParser::parse(int argc, char** argv) {

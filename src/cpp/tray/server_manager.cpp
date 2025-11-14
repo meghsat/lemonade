@@ -1,4 +1,5 @@
 #include "lemon_tray/server_manager.h"
+#include "lemon/version.h"
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -51,6 +52,7 @@ ServerManager::ServerManager()
     , port_(8000)
     , ctx_size_(4096)
     , show_console_(false)
+    , is_ephemeral_(false)
     , server_started_(false)
 #ifdef _WIN32
     , process_handle_(nullptr)
@@ -59,7 +61,11 @@ ServerManager::ServerManager()
 }
 
 ServerManager::~ServerManager() {
-    stop_server();
+    // Only stop server if this instance actually started it
+    // Don't clean up servers we're just querying (e.g., in status commands)
+    if (server_started_ && server_pid_ > 0) {
+        stop_server();
+    }
 }
 
 bool ServerManager::start_server(
@@ -69,7 +75,10 @@ bool ServerManager::start_server(
     const std::string& log_file,
     const std::string& log_level,
     const std::string& llamacpp_backend,
-    bool show_console)
+    bool show_console,
+    bool is_ephemeral,
+    const std::string& llamacpp_args,
+    const std::string& host)
 {
     if (is_server_running()) {
         DEBUG_LOG(this, "Server is already running");
@@ -83,6 +92,9 @@ bool ServerManager::start_server(
     log_level_ = log_level;
     llamacpp_backend_ = llamacpp_backend;
     show_console_ = show_console;
+    is_ephemeral_ = is_ephemeral;
+    llamacpp_args_ = llamacpp_args;
+    host_ = host;
     
     if (!spawn_process()) {
         std::cerr << "Failed to spawn server process" << std::endl;
@@ -91,7 +103,7 @@ bool ServerManager::start_server(
     
     // Wait for server to be ready (check health endpoint)
     DEBUG_LOG(this, "Waiting for server to start...");
-    DEBUG_LOG(this, "Will check health at: http://localhost:" << port_ << "/api/v1/health");
+    DEBUG_LOG(this, "Will check health at: http://" << host_ << ":" << port_ << "/api/v1/health");
     
     for (int i = 0; i < 5; ++i) {  // Wait up to 5 seconds
         DEBUG_LOG(this, "Health check attempt " << (i+1) << "/5...");
@@ -100,12 +112,32 @@ bool ServerManager::start_server(
             DEBUG_LOG(this, "Making HTTP request...");
             auto health = get_health();
             DEBUG_LOG(this, "Health check succeeded!");
-            std::cout << "Server started on port " << port_ << std::endl;
+            
+            // Print startup message based on server type
+            if (!is_ephemeral) {
+                // Persistent server: print startup message with URL
+                std::cout << "Lemonade Server v" << LEMON_VERSION_STRING << " started on port " << port_ << std::endl;
+                // Display localhost for 0.0.0.0 since that's what users can actually visit in a browser
+                std::string display_host = (host_ == "0.0.0.0") ? "localhost" : host_;
+                std::cout << "Chat and manage models: http://" << display_host << ":" << port_ << std::endl;
+            }
+            // Ephemeral server: no output
+            
             server_started_ = true;
             
 #ifndef _WIN32
             // Write PID file on Linux for efficient server discovery
+            DEBUG_LOG(this, "About to write PID file (PID: " << server_pid_ << ", Port: " << port_ << ")");
             write_pid_file();
+            
+            // Verify PID file was written
+            std::ifstream verify_file("/tmp/lemonade-router.pid");
+            if (verify_file.good()) {
+                DEBUG_LOG(this, "PID file verified");
+            } else {
+                std::cerr << "[ServerManager] ERROR: PID file was not created!" << std::endl;
+            }
+            verify_file.close();
 #endif
             
             return true;
@@ -122,24 +154,38 @@ bool ServerManager::start_server(
 }
 
 bool ServerManager::stop_server() {
+    DEBUG_LOG(this, "stop_server() called, server_started_=" << server_started_ << ", server_pid_=" << server_pid_);
+    
     if (!is_server_running()) {
+        DEBUG_LOG(this, "Server not running, checking for orphaned children...");
+        
+        // Even if server appears not running, try to kill children if we have a PID
+        // The router might have crashed/exited but children could still be alive
+        if (server_pid_ != 0) {
+            DEBUG_LOG(this, "Attempting to clean up process tree for PID " << server_pid_);
+            terminate_router_tree();
+        }
+        
+        server_started_ = false;
+        server_pid_ = 0;
+        
+#ifdef _WIN32
+        if (process_handle_) {
+            CloseHandle(process_handle_);
+            process_handle_ = nullptr;
+        }
+#else
+        remove_pid_file();
+#endif
+        
         return true;
     }
     
-    DEBUG_LOG(this, "Stopping server...");
+    DEBUG_LOG(this, "Stopping server and children...");
     
-    // Try graceful shutdown first via API
-    try {
-        make_http_request("/api/v1/halt", "POST");
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-    } catch (...) {
-        // API call failed, proceed to force termination
-    }
-    
-    // Force terminate if still running
-    if (is_process_alive()) {
-        terminate_process();
-    }
+    // Kill the entire process tree (router + children)
+    // This does NOT kill the parent tray app (we might be running inside it!)
+    terminate_router_tree();
     
     server_started_ = false;
     server_pid_ = 0;
@@ -154,6 +200,10 @@ bool ServerManager::stop_server() {
     remove_pid_file();
 #endif
     
+    // Only print message for non-ephemeral servers
+    if (!is_ephemeral_) {
+        std::cout << "Server stopped successfully" << std::endl;
+    }
     DEBUG_LOG(this, "Server stopped");
     return true;
 }
@@ -161,7 +211,7 @@ bool ServerManager::stop_server() {
 bool ServerManager::restart_server() {
     stop_server();
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    return start_server(server_binary_path_, port_, ctx_size_, log_file_, log_level_, llamacpp_backend_);
+    return start_server(server_binary_path_, port_, ctx_size_, log_file_, log_level_, llamacpp_backend_, show_console_, false, llamacpp_args_, host_);
 }
 
 bool ServerManager::is_server_running() const {
@@ -218,30 +268,13 @@ bool ServerManager::load_model(const std::string& model_name) {
     try {
         std::string body = "{\"model_name\": \"" + model_name + "\"}";
         
-        // Model loading can take a long time, so use extended timeout
+        // Model loading can take a long time, so use extended timeout (240 seconds = 4 minutes)
         DEBUG_LOG(this, "Loading model with extended timeout...");
         DEBUG_LOG(this, "Request body: " << body);
         
-        httplib::Client cli("127.0.0.1", port_);
-        cli.set_connection_timeout(10, 0);   // 10 second connection timeout
-        cli.set_read_timeout(240, 0);        // 240 second (4 minute) read timeout for large models
-        
-        auto res = cli.Post("/api/v1/load", body, "application/json");
-        
-        if (!res) {
-            DEBUG_LOG(this, "Load request connection error: " << static_cast<int>(res.error()));
-            return false;
-        }
-        
-        DEBUG_LOG(this, "Load request status: " << res->status);
-        DEBUG_LOG(this, "Response body: " << res->body);
-        
-        if (res->status >= 200 && res->status < 300) {
-            return true;
-        }
-        
-        std::cerr << "Load model failed with status " << res->status << ": " << res->body << std::endl;
-        return false;
+        std::string response = make_http_request("/api/v1/load", "POST", body, 240);
+        DEBUG_LOG(this, "Load request succeeded");
+        return true;
     } catch (const std::exception& e) {
         std::cerr << "Exception loading model: " << e.what() << std::endl;
         return false;
@@ -250,19 +283,9 @@ bool ServerManager::load_model(const std::string& model_name) {
 
 bool ServerManager::unload_model() {
     try {
-        // Unload can also take time
-        httplib::Client cli("127.0.0.1", port_);
-        cli.set_connection_timeout(10, 0);
-        cli.set_read_timeout(30, 0);  // 30 second timeout for unload
-        
-        auto res = cli.Post("/api/v1/unload", "", "application/json");
-        
-        if (!res) {
-            DEBUG_LOG(this, "Unload request connection error: " << static_cast<int>(res.error()));
-            return false;
-        }
-        
-        return (res->status >= 200 && res->status < 300);
+        // Unload can take time, so use 30 second timeout
+        make_http_request("/api/v1/unload", "POST", "", 30);
+        return true;
     } catch (const std::exception& e) {
         std::cerr << "Exception unloading model: " << e.what() << std::endl;
         return false;
@@ -281,9 +304,13 @@ bool ServerManager::spawn_process() {
     // Build command line (server doesn't support --log-file, so we'll redirect stdout/stderr)
     std::string cmdline = "\"" + server_binary_path_ + "\"";
     cmdline += " --port " + std::to_string(port_);
+    cmdline += " --host " + host_;
     cmdline += " --ctx-size " + std::to_string(ctx_size_);
     cmdline += " --llamacpp " + llamacpp_backend_;
     cmdline += " --log-level debug";  // Always use debug logging for router
+    if (!llamacpp_args_.empty()) {
+        cmdline += " --llamacpp-args \"" + llamacpp_args_ + "\"";
+    }
     
     DEBUG_LOG(this, "Starting server: " << cmdline);
     
@@ -389,6 +416,55 @@ bool ServerManager::is_process_alive() const {
     return false;
 }
 
+bool ServerManager::terminate_router_tree() {
+    // Windows implementation: Kill router and its children
+    // This does NOT kill the parent tray app!
+    
+    DEBUG_LOG(this, "terminate_router_tree() called for PID " << server_pid_);
+    
+    std::vector<DWORD> child_pids;
+    
+    // 1. Find router's children (before killing router)
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot != INVALID_HANDLE_VALUE) {
+        PROCESSENTRY32W pe32;
+        pe32.dwSize = sizeof(pe32);
+        if (Process32FirstW(snapshot, &pe32)) {
+            do {
+                if (pe32.th32ParentProcessID == server_pid_) {
+                    child_pids.push_back(pe32.th32ProcessID);
+                    DEBUG_LOG(this, "Found child process: PID " << pe32.th32ProcessID);
+                }
+            } while (Process32NextW(snapshot, &pe32));
+        }
+        CloseHandle(snapshot);
+    }
+    
+    DEBUG_LOG(this, "Found " << child_pids.size() << " child process(es)");
+    
+    // 2. Terminate router
+    if (process_handle_) {
+        DEBUG_LOG(this, "Terminating router (PID: " << server_pid_ << ")");
+        TerminateProcess(process_handle_, 0);
+        WaitForSingleObject(process_handle_, 5000);  // Wait up to 5 seconds
+    }
+    
+    // 3. Terminate children
+    for (DWORD child_pid : child_pids) {
+        DEBUG_LOG(this, "Terminating child process (PID: " << child_pid << ")");
+        HANDLE hChild = OpenProcess(PROCESS_TERMINATE, FALSE, child_pid);
+        if (hChild) {
+            TerminateProcess(hChild, 0);
+            WaitForSingleObject(hChild, 5000);  // Wait up to 5 seconds
+            CloseHandle(hChild);
+        }
+    }
+    
+    DEBUG_LOG(this, "terminate_router_tree() complete");
+    
+    return true;
+}
+
 #else  // Unix/Linux/macOS
 
 bool ServerManager::spawn_process() {
@@ -400,7 +476,7 @@ bool ServerManager::spawn_process() {
     }
     
     if (pid == 0) {
-        // Child process - redirect stdout/stderr to log file if specified
+        // Child process - redirect stdout/stderr to log file if specified, or /dev/null if not
         if (!log_file_.empty()) {
             int log_fd = open(log_file_.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
             if (log_fd >= 0) {
@@ -410,6 +486,14 @@ bool ServerManager::spawn_process() {
             } else {
                 std::cerr << "Failed to open log file: " << log_file_ << std::endl;
             }
+        } else {
+            // Redirect to /dev/null to suppress output (for ephemeral servers)
+            int null_fd = open("/dev/null", O_WRONLY);
+            if (null_fd >= 0) {
+                dup2(null_fd, STDOUT_FILENO);
+                dup2(null_fd, STDERR_FILENO);
+                close(null_fd);
+            }
         }
         
         std::vector<const char*> args;
@@ -417,6 +501,8 @@ bool ServerManager::spawn_process() {
         args.push_back("--port");
         std::string port_str = std::to_string(port_);
         args.push_back(port_str.c_str());
+        args.push_back("--host");
+        args.push_back(host_.c_str());
         args.push_back("--ctx-size");
         std::string ctx_str = std::to_string(ctx_size_);
         args.push_back(ctx_str.c_str());
@@ -424,6 +510,13 @@ bool ServerManager::spawn_process() {
         args.push_back(llamacpp_backend_.c_str());
         args.push_back("--log-level");
         args.push_back("debug");  // Always use debug logging
+        
+        // Add llamacpp_args if present
+        if (!llamacpp_args_.empty()) {
+            args.push_back("--llamacpp-args");
+            args.push_back(llamacpp_args_.c_str());
+        }
+        
         args.push_back(nullptr);
         
         execv(server_binary_path_.c_str(), const_cast<char**>(args.data()));
@@ -504,15 +597,99 @@ bool ServerManager::is_process_alive() const {
     return true;
 }
 
+bool ServerManager::terminate_router_tree() {
+    // Linux implementation: Kill router and its children
+    // This does NOT kill the parent tray app!
+    
+    DEBUG_LOG(this, "terminate_router_tree() called for PID " << server_pid_);
+    
+    if (server_pid_ <= 0) {
+        DEBUG_LOG(this, "Invalid server_pid, returning");
+        return false;
+    }
+    
+    std::vector<pid_t> child_pids;
+    
+    // 1. Find router's children BEFORE killing router
+    // (they get reparented to init if router dies first)
+    std::string cmd = "pgrep -P " + std::to_string(server_pid_);
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (pipe) {
+        char buffer[128];
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            pid_t child_pid = atoi(buffer);
+            if (child_pid > 0) {
+                child_pids.push_back(child_pid);
+                DEBUG_LOG(this, "Found child process: PID " << child_pid);
+            }
+        }
+        pclose(pipe);
+    }
+    
+    DEBUG_LOG(this, "Found " << child_pids.size() << " child process(es)");
+    
+    // 2. Send SIGTERM to router
+    DEBUG_LOG(this, "Sending SIGTERM to router (PID: " << server_pid_ << ")");
+    kill(server_pid_, SIGTERM);
+    
+    // 3. Send SIGTERM to children
+    for (pid_t child_pid : child_pids) {
+        DEBUG_LOG(this, "Sending SIGTERM to child process (PID: " << child_pid << ")");
+        kill(child_pid, SIGTERM);
+    }
+    
+    // 4. Wait up to 5 seconds for graceful shutdown
+    bool all_dead = false;
+    for (int i = 0; i < 50; i++) {  // 50 * 100ms = 5 seconds
+        bool router_alive = (kill(server_pid_, 0) == 0);
+        bool any_child_alive = false;
+        
+        for (pid_t child_pid : child_pids) {
+            if (kill(child_pid, 0) == 0) {
+                any_child_alive = true;
+                break;
+            }
+        }
+        
+        if (!router_alive && !any_child_alive) {
+            all_dead = true;
+            DEBUG_LOG(this, "All processes exited gracefully");
+            break;
+        }
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    
+    // 5. Force kill if still alive
+    if (!all_dead) {
+        DEBUG_LOG(this, "Timeout expired, sending SIGKILL");
+        kill(server_pid_, SIGKILL);
+        for (pid_t child_pid : child_pids) {
+            kill(child_pid, SIGKILL);
+        }
+        
+        // Wait for forced kill to complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    
+    DEBUG_LOG(this, "terminate_router_tree() complete");
+    
+    return true;
+}
+
 void ServerManager::write_pid_file() {
     std::string pid_file_path = "/tmp/lemonade-router.pid";
+    DEBUG_LOG(this, "write_pid_file() called - PID: " << server_pid_ << ", Port: " << port_);
+    
     std::ofstream pid_file(pid_file_path);
     if (pid_file.is_open()) {
         pid_file << server_pid_ << "\n" << port_ << "\n";
         pid_file.close();
         DEBUG_LOG(this, "Wrote PID file: " << pid_file_path << " (PID: " << server_pid_ << ", Port: " << port_ << ")");
+        std::cout << "[ServerManager] PID file created: " << pid_file_path << std::endl;
     } else {
-        std::cerr << "[ServerManager] Warning: Failed to write PID file: " << pid_file_path << std::endl;
+        std::cerr << "[ServerManager] ERROR: Failed to open PID file for writing: " << pid_file_path << std::endl;
+        std::cerr << "[ServerManager] Error: " << strerror(errno) << std::endl;
     }
 }
 
@@ -532,10 +709,11 @@ std::string ServerManager::make_http_request(
     const std::string& body,
     int timeout_seconds)
 {
-    // Debug logging removed - too verbose for normal operations
-    
-    // Use 127.0.0.1 instead of "localhost" to avoid IPv6/IPv4 resolution issues on Windows
-    httplib::Client cli("127.0.0.1", port_);
+
+    // Use the configured host to connect to the server
+    // Special case: 0.0.0.0 is a bind address, not a connect address - use 127.0.0.1 instead
+    std::string connect_host = (host_ == "0.0.0.0") ? "127.0.0.1" : host_;
+    httplib::Client cli(connect_host, port_);
     cli.set_connection_timeout(10, 0);  // 10 second connection timeout
     cli.set_read_timeout(timeout_seconds, 0);  // Configurable read timeout
     
@@ -555,7 +733,22 @@ std::string ServerManager::make_http_request(
     }
     
     if (res->status != 200) {
-        throw std::runtime_error("HTTP request failed with status: " + std::to_string(res->status));
+        // Try to parse error message from response body
+        std::string error_msg = "HTTP request failed with status: " + std::to_string(res->status);
+        try {
+            auto error_json = nlohmann::json::parse(res->body);
+            if (error_json.contains("error")) {
+                error_msg = error_json["error"].get<std::string>();
+            } else if (error_json.contains("detail")) {
+                error_msg = error_json["detail"].get<std::string>();
+            }
+        } catch (...) {
+            // If parsing fails, just use the generic error with the response body
+            if (!res->body.empty() && res->body.length() < 200) {
+                error_msg += ": " + res->body;
+            }
+        }
+        throw std::runtime_error(error_msg);
     }
     
     return res->body;

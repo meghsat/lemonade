@@ -47,7 +47,10 @@ public:
         const std::string& log_file,
         const std::string& log_level = "info",
         const std::string& llamacpp_backend = "vulkan",
-        bool show_console = false
+        bool show_console = false,
+        bool is_ephemeral = false,
+        const std::string& llamacpp_args = "",
+        const std::string& host = "127.0.0.1"
     );
     
     bool stop_server();
@@ -83,6 +86,7 @@ private:
     // Platform-specific process management
     bool spawn_process();
     bool terminate_process();
+    bool terminate_router_tree();  // Kills router and its children (but NOT parent tray app)
     bool is_process_alive() const;
     
 #ifndef _WIN32
@@ -97,9 +101,12 @@ private:
     std::string log_file_;
     std::string log_level_;
     std::string llamacpp_backend_;
+    std::string llamacpp_args_;
+    std::string host_;
     int port_;
     int ctx_size_;
     bool show_console_;
+    bool is_ephemeral_;  // Suppress output for ephemeral servers
     std::atomic<bool> server_started_;
     
 #ifdef _WIN32

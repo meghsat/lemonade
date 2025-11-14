@@ -9,8 +9,10 @@
 
 namespace lemon {
 
-Router::Router(int ctx_size, const std::string& llamacpp_backend, const std::string& log_level)
-    : ctx_size_(ctx_size), llamacpp_backend_(llamacpp_backend), log_level_(log_level) {
+Router::Router(int ctx_size, const std::string& llamacpp_backend, const std::string& log_level,
+               const std::string& llamacpp_args)
+    : ctx_size_(ctx_size), llamacpp_backend_(llamacpp_backend), log_level_(log_level),
+      llamacpp_args_(llamacpp_args) {
 }
 
 Router::~Router() {
@@ -99,7 +101,7 @@ void Router::load_model(const std::string& model_name,
             new_server.reset(ryzenai_server);
         } else {
             std::cout << "[Router] Using LlamaCpp backend: " << llamacpp_backend_ << std::endl;
-            new_server = std::make_unique<backends::LlamaCppServer>(llamacpp_backend_, log_level_);
+            new_server = std::make_unique<backends::LlamaCppServer>(llamacpp_backend_, log_level_, llamacpp_args_);
         }
         
         // CRITICAL: Release the lock before the time-consuming backend startup
@@ -242,6 +244,20 @@ json Router::get_stats() const {
         return ErrorResponse::from_exception(ModelNotLoadedException());
     }
     return wrapped_server_->get_telemetry().to_json();
+}
+
+void Router::update_telemetry(int input_tokens, int output_tokens, 
+                              double time_to_first_token, double tokens_per_second) {
+    if (wrapped_server_) {
+        wrapped_server_->set_telemetry(input_tokens, output_tokens, 
+                                       time_to_first_token, tokens_per_second);
+    }
+}
+
+void Router::update_prompt_tokens(int prompt_tokens) {
+    if (wrapped_server_) {
+        wrapped_server_->set_prompt_tokens(prompt_tokens);
+    }
 }
 
 void Router::chat_completion_stream(const std::string& request_body, httplib::DataSink& sink) {
