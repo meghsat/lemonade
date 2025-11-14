@@ -340,7 +340,13 @@ class NVIDIAPowerProfiler(Profiler):
 
         # Add title and labels to first plot
         ax1.set_ylabel("GPU Power Draw [W]")
-        title_str = "NVIDIA GPU Power Stats\n" + "\n".join(textwrap.wrap(state.build_name, 60))
+
+        # Use prompt label if available, otherwise use build name
+        if hasattr(state, 'current_prompt_label') and state.current_prompt_label:
+            title_str = f"NVIDIA GPU Power Stats: {state.current_prompt_label}\n" + "\n".join(textwrap.wrap(state.build_name, 60))
+        else:
+            title_str = "NVIDIA GPU Power Stats\n" + "\n".join(textwrap.wrap(state.build_name, 60))
+
         ax1.set_title(title_str)
         ax1.legend()
         ax1.grid(True)

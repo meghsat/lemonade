@@ -910,8 +910,6 @@ class LlamaCppAdapter(ModelAdapter):
             str(n_predict),
             "-t",  # number of threads to use during generation
             str(self.threads),
-            "-p",
-            prompt,
             "-b",  # logical maximum batch size
             "1",
             "-ub",  # physical maximum batch size

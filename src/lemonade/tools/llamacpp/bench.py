@@ -30,6 +30,9 @@ class LlamaCppBench(Bench):
         self.avg_gpu_temp_list = []
         self.power_plot_list = []
 
+        # Per-prompt label tracking
+        self.prompt_labels = []
+
     @staticmethod
     def parser(add_help: bool = True) -> argparse.ArgumentParser:
         parser = __class__.helpful_parser(
@@ -48,6 +51,15 @@ class LlamaCppBench(Bench):
             "the only valid prompt format is integer token lengths. Also, the "
             "warmup-iterations parameter is ignored and the default value for number of "
             "threads is 16.",
+        )
+
+        parser.add_argument(
+            "--prompt-label",
+            type=str,
+            action="append",
+            default=None,
+            help="Optional label for each prompt (e.g., filename) to display in results and plots. "
+            "Can be specified multiple times, one per prompt.",
         )
 
         return parser
@@ -128,6 +140,15 @@ class LlamaCppBench(Bench):
                     error_msg += "Stderr:\n" + stderr
                     raise Exception(error_msg)
 
+                # Check for zero values which indicate model failed to generate
+                if model.time_to_first_token == 0:
+                    error_msg = (
+                        "Time to first token is zero - model may not have generated any output.\n"
+                    )
+                    error_msg += "Raw output:\n" + raw_output + "\n"
+                    error_msg += "Stderr:\n" + stderr
+                    raise Exception(error_msg)
+
                 self.tokens_out_len_list.append(model.response_tokens)
 
                 if iteration > warmup_iterations - 1:
@@ -144,6 +165,18 @@ class LlamaCppBench(Bench):
         self.input_ids_len_list.append(model.prompt_tokens)
         mean_time_to_first_token = statistics.mean(per_iteration_time_to_first_token)
         self.mean_time_to_first_token_list.append(mean_time_to_first_token)
+
+        # Prevent division by zero
+        if mean_time_to_first_token == 0:
+            error_msg = (
+                f"Cannot calculate prefill tokens per second: mean_time_to_first_token is zero.\n"
+                f"This indicates the model failed to generate output properly.\n"
+                f"Prompt tokens: {model.prompt_tokens}\n"
+                f"Time to first token measurements: {per_iteration_time_to_first_token}\n"
+                f"Iterations completed: {len(per_iteration_time_to_first_token)}"
+            )
+            raise Exception(error_msg)
+
         self.prefill_tokens_per_second_list.append(
             model.prompt_tokens / mean_time_to_first_token
         )
@@ -187,9 +220,18 @@ class LlamaCppBench(Bench):
         if hasattr(sys.stdout, 'terminal'):
             output = sys.stdout.terminal
 
+        # Get prompt label and actual token count
+        if len(self.prompt_labels) > prompt_index:
+            prompt_label = self.prompt_labels[prompt_index]
+        else:
+            prompt_label = f"{prompt} tokens"
+
+        # Get actual token count from benchmark results
+        actual_token_count = self.input_ids_len_list[prompt_index] if len(self.input_ids_len_list) > prompt_index else prompt
+
         # Print newline and separator directly to terminal
         output.write(f"\n{'='*80}\n")
-        output.write(f"Results for Prompt Length: {prompt} tokens (Prompt {prompt_index + 1})\n")
+        output.write(f"Results for Prompt: {prompt_label} ({actual_token_count} tokens) (Prompt {prompt_index + 1})\n")
         output.write(f"{'='*80}\n")
         output.flush()
 
@@ -265,7 +307,7 @@ class LlamaCppBench(Bench):
                 if AppleKeys.POWER_USAGE_PLOT in stats:
                     self.power_plot_list.append(stats[AppleKeys.POWER_USAGE_PLOT])
 
-    def run_llama_bench_exe(self, state, prompts, iterations, output_tokens, gpu_cooldown=5):
+    def run_llama_bench_exe(self, state, prompts, iterations, output_tokens, gpu_cooldown=5, prompt_labels=None):
         import time
         import lemonade.common.printing as printing
         from datetime import datetime
@@ -278,6 +320,10 @@ class LlamaCppBench(Bench):
         state.save_stat("iterations", iterations)
         state.save_stat("output_tokens", output_tokens)
 
+        # Store prompt labels if provided
+        if prompt_labels:
+            self.prompt_labels = prompt_labels
+
         # Check if profilers are available
         has_profilers = hasattr(state, 'profilers') and state.profilers
 
@@ -288,6 +334,15 @@ class LlamaCppBench(Bench):
         self.first_run_prompt = True
         for counter, prompt in enumerate(prompts):
             report_progress_fn(0)
+
+            # Get prompt label for this prompt
+            if len(self.prompt_labels) > counter:
+                prompt_label = self.prompt_labels[counter]
+            else:
+                prompt_label = f"{prompt} tokens"
+
+            # Store current prompt label in state for profiler to access
+            state.current_prompt_label = prompt_label
 
             # Restart profilers for this prompt if we're not on the first prompt
             if has_profilers and counter > 0:
@@ -397,6 +452,7 @@ class LlamaCppBench(Bench):
         output_tokens: int = default_output_tokens,
         cli: bool = False,
         gpu_cooldown: int = 5,
+        prompt_label: list[str] = None,
         **kwargs,
     ) -> State:
         """
@@ -409,6 +465,7 @@ class LlamaCppBench(Bench):
             - output_tokens: Number of new tokens LLM to create.
             - cli: Use multiple calls to llama-cpp.exe instead of llama-bench.exe
             - gpu_cooldown: Number of seconds to wait between prompts for GPU cooldown
+            - prompt_label: Optional list of labels for each prompt (e.g., filenames)
             - kwargs: Additional parameters used by bench tools
         """
 
@@ -416,12 +473,17 @@ class LlamaCppBench(Bench):
         if not hasattr(state, "model") or not isinstance(state.model, LlamaCppAdapter):
             raise Exception("Load model using llamacpp-load first.")
 
+        # Store prompt labels before running (for both CLI and bench modes)
+        if prompt_label:
+            self.prompt_labels = prompt_label
+
         if cli:
+            # For CLI mode, also store labels in state so run_prompt can access them
             state = super().run(
                 state, prompts, iterations, warmup_iterations, output_tokens, gpu_cooldown, **kwargs
             )
         else:
-            state = self.run_llama_bench_exe(state, prompts, iterations, output_tokens, gpu_cooldown)
+            state = self.run_llama_bench_exe(state, prompts, iterations, output_tokens, gpu_cooldown, prompt_label)
 
         return state
 
