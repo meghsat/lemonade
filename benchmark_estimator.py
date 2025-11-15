@@ -6,6 +6,7 @@ import datetime
 import platform
 import csv
 import statistics
+import math
 
 if len(sys.argv) != 8:
     print("Usage: python script.py <vendor> <model [ hf_checkpoint | directory ]> <prompt_dir_path> <cache_base_path> <prompt_prefix [ mlperf | textgen ]> <iterations> <warmups>")
@@ -171,11 +172,13 @@ def process_csv_with_scores(csv_path, model_path):
 
     ttft_score = c1 / average_ttft if average_ttft > 0 else 0
     ots_score = c2 * average_tps
+    overall_score = math.sqrt(ttft_score * ots_score) if ttft_score > 0 and ots_score > 0 else 0
 
     print(f"  TTFT Score: {ttft_score:.3f}")
     print(f"  OTS Score: {ots_score:.3f}")
+    print(f"  Overall Score: {overall_score:.3f}")
 
-    new_fieldnames = list(fieldnames) + ['C1', 'C2', 'Average TTFT', 'Average TPS', 'TTFT Score', 'OTS Score']
+    new_fieldnames = list(fieldnames) + ['C1', 'C2', 'Average TTFT', 'Average TPS', 'TTFT Score', 'OTS Score', 'Overall Score']
 
     for row in rows:
         row['C1'] = c1
@@ -184,6 +187,7 @@ def process_csv_with_scores(csv_path, model_path):
         row['Average TPS'] = f"{average_tps:.3f}"
         row['TTFT Score'] = f"{ttft_score:.3f}"
         row['OTS Score'] = f"{ots_score:.3f}"
+        row['Overall Score'] = f"{overall_score:.3f}"
 
     # Write back to CSV
     with open(csv_path, 'w', newline='') as csvfile:
