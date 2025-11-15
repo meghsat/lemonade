@@ -213,6 +213,8 @@ class LlamaCppBench(Bench):
         import lemonade.common.printing as printing
         from lemonade.cache import Keys
         import sys
+        import csv
+        import os
 
         # Get the real terminal stdout (not redirected by Logger)
         # The Logger redirects sys.stdout, but saves the original as self.terminal
@@ -279,6 +281,50 @@ class LlamaCppBench(Bench):
 
         output.write(f"{'='*80}\n\n")
         output.flush()
+
+        # CSV export: Append results to CSV file
+        self._append_to_csv(state, prompt_label, results)
+
+    def _append_to_csv(self, state, prompt_label, results):
+        """Append benchmark results to a CSV file in the cache directory"""
+        import csv
+        import os
+        from datetime import datetime
+
+        csv_filename = "benchmark_results.csv"
+        csv_path = os.path.join(state.cache_dir, csv_filename)
+
+        csv_row = {"Prompt File": prompt_label}
+
+        for key, value in results.items():
+            if isinstance(value, str) and key != "Power Usage Plot":
+                try:
+                    csv_row[key] = float(value)
+                except ValueError:
+                    csv_row[key] = value
+            else:
+                csv_row[key] = value
+
+        file_exists = os.path.exists(csv_path)
+
+        fieldnames = ["Prompt File"] + [k for k in results.keys()]
+
+        try:
+            with open(csv_path, 'a', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+                if not file_exists:
+                    writer.writeheader()
+
+                writer.writerow(csv_row)
+
+            if not file_exists:
+                print(f"Created CSV file: {csv_path}")
+            else:
+                print(f"Appended results to: {csv_path}")
+
+        except Exception as e:
+            print(f"Warning: Failed to write to CSV: {e}")
 
     def _store_power_metrics(self, state):
         """Store per-prompt power metrics from filesystem into lists"""
