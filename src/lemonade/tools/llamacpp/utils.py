@@ -15,7 +15,7 @@ import lemonade.common.printing as printing
 from lemonade.tools.adapter import PassthroughTokenizer, ModelAdapter
 from lemonade.common.system_info import get_system_info
 from dotenv import set_key, load_dotenv
-
+import re
 LLAMA_VERSION_VULKAN = "b6510"
 LLAMA_VERSION_ROCM = "b1066"
 LLAMA_VERSION_METAL = "b6940"
@@ -1017,7 +1017,7 @@ class LlamaCppAdapter(ModelAdapter):
                 # Sample: llama_perf_context_print: prompt eval time =      35.26 ms /
                 #             3 tokens   (   11.75 ms per token,    85.09 tokens per second)
                 #
-                if "llama_perf_context_print: prompt eval time =" in line:
+                if re.search(r"^llama_perf_context_print:\s+prompt eval time", line):
                     parts = line.split("=")[1].split()
                     time_to_first_token_ms = float(parts[0])
                     self.time_to_first_token = time_to_first_token_ms / 1000
@@ -1027,7 +1027,7 @@ class LlamaCppAdapter(ModelAdapter):
                 # Sample: llama_perf_context_print:        eval time =    1991.14 ms /
                 #           63 runs   (   31.61 ms per token,    31.64 tokens per second)
                 #
-                if "llama_perf_context_print:        eval time =" in line:
+                if re.search(r"^llama_perf_context_print:\s+eval time", line):
                     parts = line.split("=")[1].split()
                     self.response_tokens = int(parts[3]) + 1  # include first token
                     response_time_ms = float(parts[0])

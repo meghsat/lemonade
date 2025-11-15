@@ -132,7 +132,7 @@ class LlamaCppBench(Bench):
                     save_max_memory_used=self.save_max_memory_used,
                 )
 
-                if model.time_to_first_token is None or model.tokens_per_second is None:
+                if model.time_to_first_token is None or model.tokens_per_second is None or model.time_to_first_token == 0:
                     error_msg = (
                         "Could not find timing information in llama.cpp output.\n"
                     )
@@ -140,14 +140,6 @@ class LlamaCppBench(Bench):
                     error_msg += "Stderr:\n" + stderr
                     raise Exception(error_msg)
 
-                # Check for zero values which indicate model failed to generate
-                if model.time_to_first_token == 0:
-                    error_msg = (
-                        "Time to first token is zero - model may not have generated any output.\n"
-                    )
-                    error_msg += "Raw output:\n" + raw_output + "\n"
-                    error_msg += "Stderr:\n" + stderr
-                    raise Exception(error_msg)
 
                 self.tokens_out_len_list.append(model.response_tokens)
 
