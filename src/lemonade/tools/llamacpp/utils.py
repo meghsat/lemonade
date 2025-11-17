@@ -723,6 +723,7 @@ def resolve_local_gguf_model(
                 f for f in files if f.endswith(".gguf") and "mmproj" not in f.lower()
             ]
             if gguf_files:
+                gguf_files.sort()
                 gguf_file_found = os.path.join(root, gguf_files[0])
                 break
 

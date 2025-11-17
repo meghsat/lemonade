@@ -30,6 +30,10 @@ class LlamaCppBench(Bench):
         self.avg_gpu_temp_list = []
         self.power_plot_list = []
 
+        # Apple-specific CPU power metrics
+        self.peak_cpu_power_list = []
+        self.avg_cpu_power_list = []
+
         # Per-prompt label tracking
         self.prompt_labels = []
 
@@ -264,6 +268,11 @@ class LlamaCppBench(Bench):
                 results["Peak GPU Temp"] = self.peak_gpu_temp_list[idx]
                 results["Avg GPU Temp"] = self.avg_gpu_temp_list[idx]
 
+            # Add CPU power if available (Apple only)
+            if len(self.peak_cpu_power_list) > idx:
+                results["Peak CPU Power"] = self.peak_cpu_power_list[idx]
+                results["Avg CPU Power"] = self.avg_cpu_power_list[idx]
+
             # Add plot path if available
             if len(self.power_plot_list) > idx:
                 results["Power Usage Plot"] = self.power_plot_list[idx]
@@ -339,9 +348,11 @@ class LlamaCppBench(Bench):
                     self.power_plot_list.append(stats[NvidiaKeys.POWER_USAGE_PLOT])
 
             # Check for Apple power metrics
-            elif AppleKeys.PEAK_POWER in stats:
-                self.peak_gpu_power_list.append(stats[AppleKeys.PEAK_POWER])
-                self.avg_gpu_power_list.append(stats[AppleKeys.AVG_POWER])
+            elif AppleKeys.PEAK_GPU_POWER in stats:
+                self.peak_gpu_power_list.append(stats[AppleKeys.PEAK_GPU_POWER])
+                self.avg_gpu_power_list.append(stats[AppleKeys.AVG_GPU_POWER])
+                self.peak_cpu_power_list.append(stats[AppleKeys.PEAK_CPU_POWER])
+                self.avg_cpu_power_list.append(stats[AppleKeys.AVG_CPU_POWER])
                 if AppleKeys.POWER_USAGE_PLOT in stats:
                     self.power_plot_list.append(stats[AppleKeys.POWER_USAGE_PLOT])
 

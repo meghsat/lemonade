@@ -81,9 +81,13 @@ def get_model_from_path(hf_path: str) -> str:
             print(f"[NVIDIA] Using Hugging Face checkpoint directly: {checkpoint}")
             model_path = checkpoint
 
+        elif VENDOR == "APPLE":
+            print(f"[APPLE] Using Hugging Face checkpoint directly: {checkpoint}")
+            model_path = checkpoint
+
         else:
             raise ValueError(
-                f"Unsupported or missing VENDOR '{VENDOR}'. Expected 'INTEL' or 'AMD' or 'NVIDIA'."
+                f"Unsupported or missing VENDOR '{VENDOR}'. Expected 'INTEL', 'AMD', 'NVIDIA', or 'APPLE'."
             )
 
     return model_path
@@ -264,6 +268,22 @@ def main():
                     "--iterations", str(ITERATIONS), "--warmup-iterations", str(WARMUPS),
                     "--output-tokens", str(out_value),
                     "--prompts", full_path,
+                ]
+
+            elif VENDOR == "APPLE":
+                print(f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}")
+                cmd = [
+                    "lemonade", "-d", CACHE_PATH,
+                    "-i", model_path,
+                    "--power-apple",
+                    "llamacpp-load", "--device", "igpu",
+                    "llamacpp-bench",
+                    "--cli",
+                    "--iterations", str(ITERATIONS),
+                    "--warmup-iterations", str(WARMUPS),
+                    "--prompts", full_path,
+                    "--output-tokens", str(out_value),
+                    "--prompt-label", fname
                 ]
 
             print(f"Running: {' '.join(cmd)}")
