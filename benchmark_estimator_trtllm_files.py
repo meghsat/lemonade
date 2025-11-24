@@ -1,5 +1,6 @@
-## docker run --gpus all -it -v ~/phi35_quantization:/workspace/phi35   --name tensorrt_phi35_v3   nvcr.io/nvidia/tensorrt-llm/release:spark-single-gpu-dev bash
-## /app/tensorrt_llm/examples/llm-api# python benchmark_metrics_prompt_files_v2.py   --model_dir openai/gpt-oss-20b   --prompts_folder /app/tensorrt_llm/examples/llm-api/prompt_files   --output_file mlperf_results.json
+## docker run --gpus all -it -v ~/phi35_quantization:/workspace/phi35   --name tensorrt_phi35_v4   nvcr.io/nvidia/tensorrt-llm/release:spark-single-gpu-dev bash
+## /app/tensorrt_llm/examples/llm-api# python benchmark_estimator_trtllm_files.py   --model_dir openai/gpt-oss-20b   --prompts_folder /app/tensorrt_llm/examples/llm-api/prompt_files   --output_file mlperf_results.json
+## trtllm-bench --model openai/gpt-oss-20b throughput --dataset /workspace/phi35/prompts.jsonl --backend pytorch --streaming
 import argparse
 import json
 import time
@@ -115,7 +116,7 @@ def setup_llm(args) -> LLM:
 
     llm = LLM(
         model=args.model_dir,
-        backend='pytorch',
+        backend='tensorrt',
         kv_cache_config=kv_cache_config,
         max_seq_len=args.max_seq_len,
         max_batch_size=args.max_batch_size,
@@ -358,8 +359,6 @@ def main():
             {
                 'query_index': idx + 1,
                 'filename': r.get('filename', None),
-                'expected_isl': r.get('isl', None),
-                'expected_osl': r.get('osl', None),
                 'ttft': r['ttft'],
                 'ttft_ms': r['ttft'] * 1000,
                 'query_latency': r['query_latency'],
