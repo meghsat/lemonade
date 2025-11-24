@@ -1,8 +1,5 @@
-#!/usr/bin/env python3
-"""
-TensorRT-LLM Benchmarking Script with Detailed Metrics (Async Streaming Version)
-Measures TTFT, TPS, Query Latency using async streaming API
-"""
+## docker run --gpus all -it -v ~/phi35_quantization:/workspace/phi35   --name tensorrt_phi35_v3   nvcr.io/nvidia/tensorrt-llm/release:spark-single-gpu-dev bash
+## /app/tensorrt_llm/examples/llm-api# python benchmark_metrics_prompt_files.py   --model_dir openai/gpt-oss-120b   --prompts_folder /app/tensorrt_llm/examples/llm-api/prompt_files   --output_file mlperf_results.json
 import argparse
 import json
 import time
@@ -21,15 +18,11 @@ def parse_arguments():
     # Model configuration
     parser.add_argument('--model_dir', type=str, required=True,
                         help="Model checkpoint directory")
-    parser.add_argument('--prompts', type=str, nargs='+',
-                        help="List of prompts to benchmark")
-    parser.add_argument('--prompts_file', type=str,
-                        help="Path to JSON file containing prompts")
     parser.add_argument('--prompts_folder', type=str,
                         help="Path to folder containing individual prompt text files (mlperf_p1_in{isl}_out{osl}.txt)")
 
     # Generation parameters
-    parser.add_argument('--max_tokens', type=int, default=128,
+    parser.add_argument('--max_tokens', type=int, default=2048,
                         help="Maximum number of tokens to generate")
     parser.add_argument('--temperature', type=float, default=1.0,
                         help="Sampling temperature")
@@ -63,14 +56,8 @@ def parse_arguments():
                         help="Number of warmup iterations")
     parser.add_argument('--output_file', type=str, default='benchmark_results.json',
                         help="Output JSON file for results")
-    parser.add_argument('--verbose', action='store_true',
-                        help="Print verbose output")
     parser.add_argument('--trust_remote_code', action='store_true',
                         help="Trust remote code")
-    parser.add_argument('--apply_chat_template', action='store_true',
-                        help="Apply chat template to prompts")
-    parser.add_argument('--show_tokens', action='store_true',
-                        help="Display tokens as they are generated")
 
     return parser.parse_args()
 
@@ -90,10 +77,9 @@ def load_prompts(args) -> List[Dict[str, Any]]:
         for file_path in sorted(folder_path.glob('*.txt')):
             match = pattern.match(file_path.name)
             if match:
-                isl = int(match.group(1))  # Input sequence length
-                osl = int(match.group(2))  # Output sequence length
+                isl = int(match.group(1))  # ISL
+                osl = int(match.group(2))  # OSL
 
-                # Read the prompt from the file
                 with open(file_path, 'r', encoding='utf-8') as f:
                     prompt_text = f.read().strip()
 
@@ -111,22 +97,6 @@ def load_prompts(args) -> List[Dict[str, Any]]:
         print(f"Loaded {len(prompt_data)} prompts from folder: {folder_path}")
         return prompt_data
 
-    elif args.prompts_file:
-        # Load from JSON file
-        with open(args.prompts_file, 'r') as f:
-            data = json.load(f)
-            # Support both list of strings and list of dicts with 'prompt' key
-            if isinstance(data, list):
-                if isinstance(data[0], str):
-                    return [{'prompt': p} for p in data]
-                elif isinstance(data[0], dict):
-                    return [{'prompt': item.get('prompt', item.get('question', ''))} for item in data]
-            return [{'prompt': data}]
-
-    elif args.prompts:
-        # Load from command line
-        return [{'prompt': p} for p in args.prompts]
-
     else:
         # Default prompts
         return [
@@ -137,7 +107,6 @@ def load_prompts(args) -> List[Dict[str, Any]]:
 
 
 def setup_llm(args) -> LLM:
-    """Initialize the LLM with configuration"""
     kv_cache_config = KvCacheConfig(
         enable_block_reuse=True,
         free_gpu_memory_fraction=args.kv_cache_fraction,
@@ -159,11 +128,8 @@ def setup_llm(args) -> LLM:
     return llm
 
 
-async def benchmark_single_query_async(llm: LLM, prompt: str, sampling_params: SamplingParams,
-                                      verbose: bool = False, show_tokens: bool = False) -> Dict[str, Any]:
-    """
-    Benchmark a single query with async streaming to capture per-token metrics
-    """
+async def benchmark_single_query_async(llm: LLM, prompt: str, sampling_params: SamplingParams) -> Dict[str, Any]:
+
     # Count input tokens and tokenize
     input_ids = llm.tokenizer.encode(prompt)
     if hasattr(input_ids, 'input_ids'):
@@ -183,8 +149,7 @@ async def benchmark_single_query_async(llm: LLM, prompt: str, sampling_params: S
     first_token_received = False
     ttft = 0.0
 
-    if show_tokens:
-        print(f"\n[Generating] ", end='', flush=True)
+    print(f"\n[Generating] ", end='', flush=True)
 
     # Use async generator for streaming - pass tokenized input
     async for output in llm.generate_async(token_ids, sampling_params=sampling_params, streaming=True):
@@ -193,25 +158,19 @@ async def benchmark_single_query_async(llm: LLM, prompt: str, sampling_params: S
         if not first_token_received:
             ttft = t2 - t1
             first_token_received = True
-            if verbose:
-                print(f"TTFT: {ttft*1000:.2f} ms")
+            print(f"TTFT: {ttft*1000:.2f} ms")
 
         token_latency = t2 - t1
         token_times.append(token_latency)
 
-        # Extract generated text
         if output.outputs:
             new_text = output.outputs[0].text
-            if show_tokens:
-                new_tokens = new_text[len(generated_text):]
-                print(new_tokens, end='', flush=True)
+            new_tokens = new_text[len(generated_text):]
+            print(new_tokens, end='', flush=True)
             generated_text = new_text
             output_token_count = len(output.outputs[0].token_ids)
 
         t1 = t2
-
-    if show_tokens:
-        print()  # New line after generation
 
     query_end = time.perf_counter()
     query_latency = query_end - query_start
@@ -233,93 +192,30 @@ async def benchmark_single_query_async(llm: LLM, prompt: str, sampling_params: S
         'prompt': prompt
     }
 
-    if verbose:
-        print(f"\n{'='*80}")
-        print(f"Prompt: {prompt[:100]}...")
-        print(f"Generated: {generated_text[:100]}...")
-        print(f"TTFT: {ttft*1000:.2f} ms")
-        print(f"Query Latency: {query_latency*1000:.2f} ms")
-        print(f"Input Tokens: {input_tokens}")
-        print(f"Output Tokens: {output_token_count}")
-        print(f"Tokens/sec (decode): {tokens_per_sec:.2f}")
-        print(f"{'='*80}\n")
+    print(f"\n{'='*80}")
+    print(f"Prompt: {prompt[:100]}...")
+    print(f"Generated: {generated_text[:100]}...")
+    print(f"TTFT: {ttft*1000:.2f} ms")
+    print(f"Query Latency: {query_latency*1000:.2f} ms")
+    print(f"Input Tokens: {input_tokens}")
+    print(f"Output Tokens: {output_token_count}")
+    print(f"Tokens/sec (decode): {tokens_per_sec:.2f}")
+    print(f"{'='*80}\n")
 
     return metrics
 
 
-                                verbose: bool = False) -> Dict[str, Any]:
-    """
-    Benchmark a single query without streaming (fallback method)
-    Provides accurate total latency but estimated TTFT
-    """
-    # Count input tokens
-    input_ids = llm.tokenizer.encode(prompt)
-    if hasattr(input_ids, 'input_ids'):
-        input_tokens = len(input_ids.input_ids)
-    else:
-        input_tokens = len(input_ids)
-
-    # Measure end-to-end latency
-    query_start = time.perf_counter()
-    outputs = llm.generate([prompt], sampling_params=sampling_params)
-    query_end = time.perf_counter()
-    query_latency = query_end - query_start
-
-    # Extract results
-    output = outputs[0]
-    generated_text = output.outputs[0].text
-    output_token_count = len(output.outputs[0].token_ids)
-
-    # Estimate TTFT (without streaming, this is approximate)
-    # Based on typical prefill vs decode ratios
-    if output_token_count > 0:
-        # Conservative estimate: TTFT is ~15% of total latency
-        estimated_ttft = query_latency * 0.15
-        decode_latency = query_latency - estimated_ttft
-        tokens_per_sec = (output_token_count - 1) / decode_latency if decode_latency > 0 else 0
-    else:
-        estimated_ttft = query_latency
-        tokens_per_sec = 0
-
-    metrics = {
-        'ttft': estimated_ttft,
-        'query_latency': query_latency,
-        'input_tokens': input_tokens,
-        'output_tokens': output_token_count,
-        'tokens_per_sec': tokens_per_sec,
-        'generated_text': generated_text,
-        'prompt': prompt,
-        'note': 'TTFT is estimated (non-streaming mode)'
-    }
-
-    if verbose:
-        print(f"\n{'='*80}")
-        print(f"Prompt: {prompt[:100]}...")
-        print(f"Generated: {generated_text[:100]}...")
-        print(f"Estimated TTFT: {estimated_ttft*1000:.2f} ms")
-        print(f"Query Latency: {query_latency*1000:.2f} ms")
-        print(f"Input Tokens: {input_tokens}")
-        print(f"Output Tokens: {output_token_count}")
-        print(f"Tokens/sec (decode): {tokens_per_sec:.2f}")
-        print(f"{'='*80}\n")
-
-    return metrics
-
-
-def run_warmup(llm: LLM, sampling_params: SamplingParams, num_warmup: int, verbose: bool):
-    """Run warmup iterations"""
+def run_warmup(llm: LLM, sampling_params: SamplingParams, num_warmup: int):
     warmup_prompt = "This is a warmup prompt to initialize the model."
 
     print(f"\nRunning {num_warmup} warmup iterations...")
     for i in range(num_warmup):
-        if verbose:
-            print(f"Warmup {i+1}/{num_warmup}")
+        print(f"Warmup {i+1}/{num_warmup}")
         _ = llm.generate([warmup_prompt], sampling_params=sampling_params)
     print("Warmup complete.\n")
 
 
 def calculate_aggregate_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Calculate aggregate statistics across all queries"""
     if not results:
         return {}
 
@@ -352,7 +248,6 @@ def calculate_aggregate_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]
 
 
 async def main_async(args, llm, prompts, base_sampling_params):
-    """Main async function for streaming benchmarks"""
     results = []
 
     for idx, prompt_data in enumerate(prompts, 1):
@@ -373,10 +268,8 @@ async def main_async(args, llm, prompts, base_sampling_params):
             sampling_params = base_sampling_params
             print(f"\nProcessing query {idx}/{len(prompts)}...")
 
-        metrics = await benchmark_single_query_async(llm, prompt_text, sampling_params,
-                                                     args.verbose, args.show_tokens)
+        metrics = await benchmark_single_query_async(llm, prompt_text, sampling_params)
 
-        # Add metadata from prompt_data
         metrics.update({k: v for k, v in prompt_data.items() if k != 'prompt'})
 
         results.append(metrics)
@@ -387,15 +280,12 @@ async def main_async(args, llm, prompts, base_sampling_params):
 def main():
     args = parse_arguments()
 
-    print(f"\n{'='*80}")
-    print("TensorRT-LLM Benchmark")
     print(f"{'='*80}")
     print(f"Model: {args.model_dir}")
     print(f"{'='*80}\n")
 
     # Load prompts
     prompts = load_prompts(args)
-    print(f"Loaded {len(prompts)} prompts for benchmarking\n")
 
     # Initialize model
     print("Loading model...")
@@ -404,18 +294,15 @@ def main():
     model_load_time = time.perf_counter() - model_load_start
     print(f"Model loaded in {model_load_time:.2f} seconds\n")
 
-    # Apply chat template if requested
-    if args.apply_chat_template:
-        new_prompts = []
-        for prompt_data in prompts:
-            messages = [{"role": "user", "content": prompt_data['prompt']}]
-            formatted = llm.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True)
-            # Update the prompt while preserving other metadata
-            new_prompt_data = prompt_data.copy()
-            new_prompt_data['prompt'] = formatted
-            new_prompts.append(new_prompt_data)
-        prompts = new_prompts
+    new_prompts = []
+    for prompt_data in prompts:
+        messages = [{"role": "user", "content": prompt_data['prompt']}]
+        formatted = llm.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True)
+        new_prompt_data = prompt_data.copy()
+        new_prompt_data['prompt'] = formatted
+        new_prompts.append(new_prompt_data)
+    prompts = new_prompts
 
     # Setup sampling parameters
     sampling_params = SamplingParams(
@@ -427,17 +314,14 @@ def main():
 
     # Run warmup
     if args.num_warmup > 0:
-        run_warmup(llm, sampling_params, args.num_warmup, args.verbose)
+        run_warmup(llm, sampling_params, args.num_warmup)
 
-    # Benchmark - try async streaming first, fallback to sync
     print("Starting benchmark...")
     try:
-        # Try async streaming
         results = asyncio.run(main_async(args, llm, prompts, sampling_params))
         streaming_mode = True
     except (AttributeError, TypeError) as e:
-        # Fallback to non-streaming
-        print(f"Async streaming not available, using non-streaming mode")
+        print(f"Async streaming failed")
        
         streaming_mode = False
 
@@ -449,7 +333,7 @@ def main():
     print("BENCHMARK SUMMARY")
     print(f"{'='*80}")
     print(f"Number of queries: {aggregate_metrics['num_queries']}")
-    print(f"Average TTFT: {aggregate_metrics['average_ttft']*1000:.2f} ms {'(estimated)' if not streaming_mode else ''}")
+    print(f"Average TTFT: {aggregate_metrics['average_ttft']*1000:.2f} ms ")
     print(f"Average Tokens/sec: {aggregate_metrics['average_tokens_per_sec']:.2f}")
     print(f"Average Latency: {aggregate_metrics['average_latency']*1000:.2f} ms")
     print(f"Total Output Tokens: {aggregate_metrics['total_output_tokens']}")
