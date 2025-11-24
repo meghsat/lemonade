@@ -1,0 +1,292 @@
+root@spark-38ad:/app/tensorrt_llm/examples/llm-api# python benchmark_metrics_prompt_files_v2.py   --model_dir openai/gpt-oss-20b   --prompts_folder /app/tensorrt_llm/examples/llm-api/prompt_files   --output_file mlperf_results.json
+[2025-11-24 00:30:42] INFO config.py:54: PyTorch version 2.8.0a0+5228986c39.nv25.6 available.
+[2025-11-24 00:30:42] INFO config.py:66: Polars version 1.25.2 available.
+/usr/local/lib/python3.12/dist-packages/modelopt/torch/__init__.py:36: UserWarning: transformers version 4.55.0 is incompatible with nvidia-modelopt and may cause issues. Please install recommended version with `pip install nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+2025-11-24 00:30:51,577 - INFO - flashinfer.jit: Prebuilt kernels not found, using JIT backend
+[TensorRT-LLM] TensorRT-LLM version: 1.1.0rc3
+================================================================================
+Model: openai/gpt-oss-20b
+================================================================================
+
+Loaded 10 prompts from folder: /app/tensorrt_llm/examples/llm-api/prompt_files
+Loading model...
+[11/24/2025-00:30:51] [TRT-LLM] [I] Using LLM with PyTorch backend
+[11/24/2025-00:30:51] [TRT-LLM] [W] Using default gpus_per_node: 1
+[11/24/2025-00:30:51] [TRT-LLM] [I] Set nccl_plugin to None.
+[11/24/2025-00:30:51] [TRT-LLM] [I] neither checkpoint_format nor checkpoint_loader were provided, checkpoint_format will be set to HF.
+rank 0 using MpiPoolSession to spawn MPI processes
+[2025-11-24 00:30:59] INFO config.py:54: PyTorch version 2.8.0a0+5228986c39.nv25.6 available.
+[2025-11-24 00:30:59] INFO config.py:66: Polars version 1.25.2 available.
+Multiple distributions found for package optimum. Picked distribution: optimum
+/usr/local/lib/python3.12/dist-packages/modelopt/torch/__init__.py:36: UserWarning: transformers version 4.55.0 is incompatible with nvidia-modelopt and may cause issues. Please install recommended version with `pip install nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+2025-11-24 00:31:02,840 - INFO - flashinfer.jit: Prebuilt kernels not found, using JIT backend
+[TensorRT-LLM] TensorRT-LLM version: 1.1.0rc3
+[TensorRT-LLM][INFO] Refreshed the MPI local session
+Loading safetensors weights in parallel: 100%|██████████| 3/3 [00:00<00:00, 161.37it/s]
+Loading weights: 100%|██████████| 537/537 [00:21<00:00, 25.00it/s]
+Model init total -- 29.38s
+[TensorRT-LLM][INFO] Number of tokens per block: 32.
+[TensorRT-LLM][INFO] [MemUsageChange] Allocated 0.19 GiB for max tokens in paged KV cache (4160).
+2025-11-24 00:31:35,413 - INFO - flashinfer.jit: Loading JIT ops: norm
+2025-11-24 00:31:47,891 - INFO - flashinfer.jit: Finished loading JIT ops: norm
+[TensorRT-LLM][WARNING] Attention workspace size is not enough, increase the size from 0 bytes to 67134720 bytes
+[TensorRT-LLM][INFO] Number of tokens per block: 32.
+[TensorRT-LLM][INFO] [MemUsageChange] Allocated 66.44 GiB for max tokens in paged KV cache (1451328).
+[TensorRT-LLM][WARNING] Attention workspace size is not enough, increase the size from 0 bytes to 67134720 bytes
+Model loaded in 63.22 seconds
+
+
+Running 2 warmup iterations...
+Warmup 1/2
+Processed requests: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:41<00:00, 41.53s/it]
+Warmup 2/2
+Processed requests: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:41<00:00, 41.39s/it]
+Warmup complete.
+
+Starting benchmark...
+
+Processing query 1/10 (max_tokens=128)...
+  File: mlperf_p10_in2048_out128.txt
+
+[Generating] TTFT: 189.10 ms
+analysisWe need to provide a useful explanation or interpretation of the code. The code is a command line parser in C++. We should explain its structure, functions, how it works, key features, usage, and maybe improvements. Provide a high-level overview, then detail each method, data members, and logic. Also mention dependencies like command_parser.h, utils.h, version.h. Provide explanation of how options are added, flags, boolean, enum, processing, validation, help display, etc. Also mention formatting logic, console width, wrapping, etc. Provide example usage. Also mention potential issues or improvements. Provide a thorough explanation
+================================================================================
+Prompt: <|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutof...
+Generated: analysisWe need to provide a useful explanation or interpretation of the code. The code is a command...
+TTFT: 189.10 ms
+Query Latency: 2862.40 ms
+Input Tokens: 1988
+Output Tokens: 128
+Tokens/sec (decode): 47.51
+================================================================================
+
+
+Processing query 2/10 (max_tokens=256)...
+  File: mlperf_p1_in119_out256.txt
+
+[Generating] TTFT: 117.96 ms
+analysisWe need to answer: "Do we know that the hypothesis is entailed by the premise?" The premise: "Boys in orange life jackets sitting on raft in water." Hypothesis: "Boy's stranded overboard on a raft." We need to analyze entailment. The premise says boys in orange life jackets sitting on raft in water. That implies they are on a raft, wearing life jackets, in water. The hypothesis says a boy is stranded overboard on a raft. "Stranded overboard" implies the boy is overboard (i.e., in water) and on a raft. The premise says they are on a raft in water. That matches. But "stranded" implies they are stuck, cannot get off. The premise doesn't mention stranded. Also "overboard" could mean fell overboard, but the premise says they are sitting on raft, not necessarily overboard. But they are in water. The phrase "overboard" could mean "in the water" or "fell into water." The premise says they are on a raft in water, so they are in water. But "overboard" might mean they fell off the boat into water. The premise says they are on a raft, not necessarily that they fell over
+================================================================================
+Prompt: <|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutof...
+Generated: analysisWe need to answer: "Do we know that the hypothesis is entailed by the premise?" The premise:...
+TTFT: 117.96 ms
+Query Latency: 5460.36 ms
+Input Tokens: 173
+Output Tokens: 256
+Tokens/sec (decode): 47.73
+================================================================================
+
+
+Processing query 3/10 (max_tokens=256)...
+  File: mlperf_p2_in133_out256.txt
+
+[Generating] TTFT: 79.07 ms
+analysisWe need to answer: Which farm used fewer cover crops? The scenario: Apple farm started agroforestry and other methods to protect depleted soils. Pear farm did nothing and had big losses. The question: Which farm used fewer cover crops? The answer: Pear farm used fewer cover crops (none). So answer: Pear farm. Provide reasoning.assistantfinal**Answer:** The Pear farm used fewer cover crops (in fact, none).
+
+**Justification:**
+
+1. **Apple Farm’s Actions**  
+   - The Apple farm adopted an agroforestry system and other soil‑protecting practices.  
+   - Agroforestry typically incorporates cover crops (e.g., legumes, grasses) to improve soil structure, add organic matter, and reduce erosion.  
+   - Therefore, Apple farm likely used a substantial number of cover crops as part of its integrated approach.
+
+2. **Pear Farm’s Actions**  
+   - The Pear farm “did nothing” and suffered significant losses.  
+   - The phrase “did nothing” implies a lack of soil‑conservation measures, including the absence of cover crops.  
+   - Consequently, Pear farm used the fewest cover crops—essentially zero.
+
+Thus, the Pear farm used fewer cover crops
+================================================================================
+Prompt: <|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutof...
+Generated: analysisWe need to answer: Which farm used fewer cover crops? The scenario: Apple farm started agrof...
+TTFT: 79.07 ms
+Query Latency: 5440.99 ms
+Input Tokens: 177
+Output Tokens: 256
+Tokens/sec (decode): 47.56
+================================================================================
+
+
+Processing query 4/10 (max_tokens=512)...
+  File: mlperf_p3_in526_out512.txt
+
+[Generating] TTFT: 97.77 ms
+analysisWe need to parse the instruction: "You are given a conversation between two people. 'Person1:' and 'Person2:' are used to separate their respective dialogues. If the conversation begins with a question, label it '1' otherwise '0'."
+
+We need to output 1 or 0. The conversation begins with Person1: "Bob ! Your eyes look bloodshot . Did you not sleep well ?" That is a question: "Did you not sleep well?" So label 1.
+
+Thus output: 1. The instruction says Output: [/INST] ... So we output 1.assistantfinal1
+================================================================================
+Prompt: <|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutof...
+Generated: analysisWe need to parse the instruction: "You are given a conversation between two people. 'Person1...
+TTFT: 97.77 ms
+Query Latency: 2862.27 ms
+Input Tokens: 558
+Output Tokens: 133
+Tokens/sec (decode): 47.75
+================================================================================
+
+
+Processing query 5/10 (max_tokens=512)...
+  File: mlperf_p4_in510_out512.txt
+
+[Generating] TTFT: 93.81 ms
+analysisWe need to break the definition into small parts. The definition is the instruction: "Given a story, answer the question about the story. The question is the last sentence in the input. These stories can be difficult due to their length and how each story has at least one of the three following scenarios: the first is when the individual's belief matches reality, the second is when the individual's belief does not match reality, and the third is when an individual has a false belief about another individual's beliefs. The question will ask about the location of an object in the story with respect to either none or one of the three scenarios."
+
+We need to break into parts, each with instruction, and provide sample usage that meets criteria, explaining why.
+
+We need to use format:
+
+Part # : a key part of the definition.
+Usage: Sample response that meets the criteria from the key part. Explain why you think it meets the criteria.
+
+We need to produce multiple parts. Let's identify key parts:
+
+1. "Given a story, answer the question about the story." => The task is to read story and answer question.
+
+2. "The question is the last sentence in the input." => Identify last sentence as question.
+
+3. "These stories can be difficult due to their length and how each story has at least one of the three following scenarios:" => There are scenarios.
+
+4. "the first is when the individual's belief matches reality" => scenario 1.
+
+5. "the second is when the individual's belief does not match reality" => scenario 2.
+
+6. "the third is when an individual has a false belief about another individual's beliefs." => scenario 3.
+
+7. "The question will ask about the location of an object in the story with respect to either none or one of the three scenarios." => question about location relative to scenario.
+
+We might also include: "The question will ask about the location of an object in the story with respect to either none or one of the three scenarios." So we need to interpret.
+
+We need to produce sample usage for each part. For each part, we need to show a sample response that meets the criteria from the key part, and explain why.
+
+We need to produce a final answer with all parts.
+
+Let's produce maybe 7 parts.
+
+For each part, we need to show sample usage: maybe a short story and a question, and the answer that meets the criteria.
+
+We need to explain why it meets the criteria.
+
+Let's craft.
+
+Part 1: "Given a story, answer the
+================================================================================
+Prompt: <|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutof...
+Generated: analysisWe need to break the definition into small parts. The definition is the instruction: "Given ...
+TTFT: 93.81 ms
+Query Latency: 10851.00 ms
+Input Tokens: 507
+Output Tokens: 512
+Tokens/sec (decode): 47.50
+================================================================================
+
+
+Processing query 6/10 (max_tokens=128)...
+  File: mlperf_p5_in991_out128.txt
+
+[Generating] TTFT: 120.50 ms
+analysisWe need to produce a one-sentence description of the article. The article is about how to properly set up and light a charcoal grill, including steps like removing grate, opening vents, cleaning ash, arranging briquettes into a pyramid, using lighter fluid sparingly, lighting the grill, and maintaining coals. So one sentence summarizing that. Let's craft: "The article explains step‑by‑step how to prepare, ignite, and manage a charcoal grill—removing the grate, opening vents, arranging briquettes into a pyramid, using lighter fluid carefully, lighting the fire, and maintaining even heat for cooking." That
+================================================================================
+Prompt: <|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutof...
+Generated: analysisWe need to produce a one-sentence description of the article. The article is about how to pr...
+TTFT: 120.50 ms
+Query Latency: 2778.15 ms
+Input Tokens: 905
+Output Tokens: 128
+Tokens/sec (decode): 47.79
+================================================================================
+
+
+Processing query 7/10 (max_tokens=128)...
+  File: mlperf_p6_in994_out128.txt
+
+[Generating] TTFT: 118.44 ms
+analysisWe need to write a title for this article. The article is about tax reform, the difficulty, Romney's comments, revenue estimates, deficits, etc. Title should capture the main theme: tax reform is hard, Romney's proposals, revenue from eliminating deductions, deficits. Maybe something like "Tax Reform: Romney's Deductions, the $40 Billion Gap, and the Hard Truth About Deficits". Or "The Hard Truth About Tax Reform: Romney's Deductions and the $40 Billion Deficit". Or "Tax Reform is Hard: Romney's Deductions and the $40 Billion Gap". The article is
+================================================================================
+Prompt: <|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutof...
+Generated: analysisWe need to write a title for this article. The article is about tax reform, the difficulty, ...
+TTFT: 118.44 ms
+Query Latency: 2795.54 ms
+Input Tokens: 919
+Output Tokens: 128
+Tokens/sec (decode): 47.44
+================================================================================
+
+
+Processing query 8/10 (max_tokens=256)...
+  File: mlperf_p7_in1472_out256.txt
+
+[Generating] TTFT: 139.04 ms
+analysisWe need to produce a summary of the article. The article is about Japanese fans cleaning up after themselves after a World Cup match, showing respect, etc. The article includes quotes from Scott McIntyre, professor Scott North, etc. It also mentions Senegal fans doing similar. The summary should capture key points: Japanese fans cleaning up, cultural background, respect, pride, etc. Also mention that it's not just about passion but also respect. Also mention that this is a habit from childhood, taught in schools. Also mention that it's a global phenomenon, with Senegal fans also cleaning. The article also mentions that the act is a statement about caring for the planet. Also mention that the act is a class act, and that the World Cup brings nations together. Also mention that the Japanese fans had a victory over Colombia, but also that they lost later. The article also mentions that the fans had large rubbish bags, etc. The summary should be detailed and long. Let's produce a comprehensive summary.assistantfinal**Summary of the Article: “Japanese Fans Cleaning Up After Themselves After the Game – Massive Respect”**
+
+The piece paints a vivid picture of a cultural phenomenon that has become a hallmark of Japanese football fandom: the meticulous, almost ritualistic
+================================================================================
+Prompt: <|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutof...
+Generated: analysisWe need to produce a summary of the article. The article is about Japanese fans cleaning up ...
+TTFT: 139.04 ms
+Query Latency: 5517.50 ms
+Input Tokens: 1298
+Output Tokens: 256
+Tokens/sec (decode): 47.41
+================================================================================
+
+
+Processing query 9/10 (max_tokens=197)...
+  File: mlperf_p8_in1660_out197.txt
+
+[Generating] TTFT: 153.44 ms
+analysisThe user wants a shorter version of the article. They provided a long article about actors gaining or losing weight for roles. They want a shorter version. So we need to summarize. The article is long, with many examples. We need to produce a concise summary. The user didn't specify length, but "shorter version" implies a concise summary. We should keep key points: actors who gained or lost weight, some examples, mention the extremes, mention health concerns. We should not include the entire article. We should produce a summary. Let's produce a paragraph or two. Use bullet points? The user didn't specify format. We can produce a concise summary in paragraph form. Let's do that.assistantfinal**Shortened version**
+
+Actors routinely alter their bodies—sometimes dramatically—to fit a role, and the extremes can take a toll on health. Russell Crowe, for instance, gained 63 lb for *Body of Lies* and again
+================================================================================
+Prompt: <|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutof...
+Generated: analysisThe user wants a shorter version of the article. They provided a long article about actors g...
+TTFT: 153.44 ms
+Query Latency: 4297.64 ms
+Input Tokens: 1465
+Output Tokens: 197
+Tokens/sec (decode): 47.30
+================================================================================
+
+
+Processing query 10/10 (max_tokens=128)...
+  File: mlperf_p9_in2048_out128.txt
+
+[Generating] TTFT: 187.94 ms
+analysisWe need to provide a useful explanation or interpretation of the code. It's a C++ code for a benchmark stage in some system. We should explain the purpose, structure, key components, flow, and maybe highlight important parts like handling of models, execution providers, scheduling tasks, progress tracking, logging, etc. Also mention the use of JSON config, executor factory, etc. Provide a high-level overview and then dive into details. Also mention potential issues or improvements. Provide context: likely part of a benchmarking framework for AI models. Provide explanation of classes: BenchmargStage, ScenarioConfig, ScenarioData, etc. Provide
+================================================================================
+Prompt: <|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutof...
+Generated: analysisWe need to provide a useful explanation or interpretation of the code. It's a C++ code for a...
+TTFT: 187.94 ms
+Query Latency: 2869.83 ms
+Input Tokens: 1923
+Output Tokens: 128
+Tokens/sec (decode): 47.35
+================================================================================
+
+
+================================================================================
+BENCHMARK SUMMARY
+================================================================================
+Number of queries: 10
+Average TTFT: 129.71 ms 
+Average Tokens/sec: 47.53
+Average Latency: 4573.57 ms
+Total Output Tokens: 2122
+Overall Throughput: 46.40 tokens/sec
+================================================================================
+
+Results saved to: /app/tensorrt_llm/examples/llm-api/mlperf_results.json
