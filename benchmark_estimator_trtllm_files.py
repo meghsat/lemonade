@@ -72,7 +72,7 @@ def load_prompts(args) -> List[Dict[str, Any]]:
             raise FileNotFoundError(f"Prompts folder not found: {folder_path}")
 
         # Pattern: mlperf_p1_in{isl}_out{osl}.txt
-        pattern = re.compile(r'mlperf_p\d+_in(\d+)_out(\d+)\.txt')
+        pattern = re.compile(r'phi_p\d+_in(\d+)_out(\d+)\.txt')
 
         prompt_data = []
         for file_path in sorted(folder_path.glob('*.txt')):
@@ -116,7 +116,7 @@ def setup_llm(args) -> LLM:
 
     llm = LLM(
         model=args.model_dir,
-        backend='tensorrt',
+        backend='pytorch',
         kv_cache_config=kv_cache_config,
         max_seq_len=args.max_seq_len,
         max_batch_size=args.max_batch_size,
@@ -268,7 +268,7 @@ async def main_async(args, llm, prompts, base_sampling_params):
         else:
             sampling_params = base_sampling_params
             print(f"\nProcessing query {idx}/{len(prompts)}...")
-
+        run_warmup(llm, sampling_params, 5)
         metrics = await benchmark_single_query_async(llm, prompt_text, sampling_params)
 
         metrics.update({k: v for k, v in prompt_data.items() if k != 'prompt'})
@@ -295,15 +295,15 @@ def main():
     model_load_time = time.perf_counter() - model_load_start
     print(f"Model loaded in {model_load_time:.2f} seconds\n")
 
-    new_prompts = []
-    for prompt_data in prompts:
-        messages = [{"role": "user", "content": prompt_data['prompt']}]
-        formatted = llm.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True)
-        new_prompt_data = prompt_data.copy()
-        new_prompt_data['prompt'] = formatted
-        new_prompts.append(new_prompt_data)
-    prompts = new_prompts
+    # new_prompts = []
+    # for prompt_data in prompts:
+    #     messages = [{"role": "user", "content": prompt_data['prompt']}]
+    #     formatted = llm.tokenizer.apply_chat_template(
+    #         messages, tokenize=False, add_generation_prompt=True)
+    #     new_prompt_data = prompt_data.copy()
+    #     new_prompt_data['prompt'] = formatted
+    #     new_prompts.append(new_prompt_data)
+    # prompts = new_prompts
 
     # Setup sampling parameters
     sampling_params = SamplingParams(
