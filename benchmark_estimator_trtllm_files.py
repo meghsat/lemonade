@@ -1,5 +1,5 @@
 ## docker run --gpus all -it -v ~/phi35_quantization:/workspace/phi35   --name tensorrt_phi35_v3   nvcr.io/nvidia/tensorrt-llm/release:spark-single-gpu-dev bash
-## /app/tensorrt_llm/examples/llm-api# python benchmark_metrics_prompt_files.py   --model_dir openai/gpt-oss-120b   --prompts_folder /app/tensorrt_llm/examples/llm-api/prompt_files   --output_file mlperf_results.json
+## /app/tensorrt_llm/examples/llm-api# python benchmark_metrics_prompt_files_v2.py   --model_dir openai/gpt-oss-120b   --prompts_folder /app/tensorrt_llm/examples/llm-api/prompt_files   --output_file mlperf_results.json
 import argparse
 import json
 import time
