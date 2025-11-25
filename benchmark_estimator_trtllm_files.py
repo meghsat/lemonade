@@ -1,9 +1,10 @@
 ## docker run --gpus all -it -v ~/phi35_quantization:/workspace/phi35   --name tensorrt_phi35_v4   nvcr.io/nvidia/tensorrt-llm/release:spark-single-gpu-dev bash
-## /app/tensorrt_llm/examples/llm-api# python benchmark_estimator_trtllm_files.py   --model_dir openai/gpt-oss-20b   --prompts_folder /app/tensorrt_llm/examples/llm-api/prompt_files   --output_file mlperf_results.json
+## /app/tensorrt_llm/examples/llm-api# python benchmark_estimator_trtllm_files.py   --model_dir openai/gpt-oss-20b   --prompts_folder /workspace/phi35/prompt_files   --output_file mlperf_results.json
 ## trtllm-bench --model openai/gpt-oss-20b throughput --dataset /workspace/phi35/prompts.jsonl --backend pytorch --streaming
 import argparse
 import json
 import time
+import gc
 from pathlib import Path
 from typing import List, Dict, Any
 import asyncio
@@ -55,6 +56,8 @@ def parse_arguments():
     # Benchmark settings
     parser.add_argument('--num_warmup', type=int, default=2,
                         help="Number of warmup iterations")
+    parser.add_argument('--num_iterations', type=int, default=5,
+                        help="Number of iterations per prompt for averaging")
     parser.add_argument('--output_file', type=str, default='benchmark_results.json',
                         help="Output JSON file for results")
     parser.add_argument('--trust_remote_code', action='store_true',
@@ -248,31 +251,94 @@ def calculate_aggregate_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]
     return aggregate
 
 
-async def main_async(args, llm, prompts, base_sampling_params):
+async def run_prompt_iterations(args, prompt_data, idx, total_prompts, base_sampling_params):
+    """Run multiple iterations of a single prompt with model refresh between iterations"""
+    prompt_text = prompt_data['prompt']
+
+    # Use per-prompt max_tokens if available, otherwise use base params
+    if 'max_tokens' in prompt_data:
+        sampling_params = SamplingParams(
+            max_tokens=prompt_data['max_tokens'],
+            temperature=base_sampling_params.temperature,
+            top_k=base_sampling_params.top_k,
+            top_p=base_sampling_params.top_p,
+        )
+        print(f"\n{'='*80}")
+        print(f"Processing query {idx}/{total_prompts} (max_tokens={prompt_data['max_tokens']})")
+        if 'filename' in prompt_data:
+            print(f"  File: {prompt_data['filename']}")
+        print(f"  Running {args.num_iterations} iterations with model refresh between each")
+        print(f"{'='*80}")
+    else:
+        sampling_params = base_sampling_params
+        print(f"\n{'='*80}")
+        print(f"Processing query {idx}/{total_prompts}")
+        print(f"  Running {args.num_iterations} iterations with model refresh between each")
+        print(f"{'='*80}")
+
+    iteration_results = []
+
+    for iteration in range(args.num_iterations):
+        print(f"\n--- Iteration {iteration + 1}/{args.num_iterations} ---")
+
+        # Reload model to clear cache
+        print(f"Reloading model to clear cache...")
+        llm = setup_llm(args)
+
+        # Run warmup for this iteration
+        run_warmup(llm, sampling_params, 5)
+
+        # Run the benchmark
+        metrics = await benchmark_single_query_async(llm, prompt_text, sampling_params)
+        iteration_results.append(metrics)
+
+        # Clean up model
+        del llm
+        gc.collect()
+
+        # Add a small delay to ensure cleanup
+        await asyncio.sleep(0.5)
+
+    # Calculate averages across iterations
+    avg_ttft = sum(r['ttft'] for r in iteration_results) / len(iteration_results)
+    avg_tokens_per_sec = sum(r['tokens_per_sec'] for r in iteration_results) / len(iteration_results)
+    avg_query_latency = sum(r['query_latency'] for r in iteration_results) / len(iteration_results)
+
+    # Use the first iteration's metadata and generated text
+    averaged_metrics = {
+        'ttft': avg_ttft,
+        'tokens_per_sec': avg_tokens_per_sec,
+        'query_latency': avg_query_latency,
+        'input_tokens': iteration_results[0]['input_tokens'],
+        'output_tokens': iteration_results[0]['output_tokens'],
+        'generated_text': iteration_results[0]['generated_text'],
+        'prompt': prompt_text,
+        'per_token_latencies': iteration_results[0]['per_token_latencies'],
+        'iterations': iteration_results,  # Store all iteration data
+        'num_iterations': args.num_iterations,
+    }
+
+    # Add prompt-specific metadata
+    averaged_metrics.update({k: v for k, v in prompt_data.items() if k != 'prompt'})
+
+    print(f"\n{'='*80}")
+    print(f"AVERAGED RESULTS FOR QUERY {idx}")
+    print(f"{'='*80}")
+    print(f"Average TTFT: {avg_ttft*1000:.2f} ms")
+    print(f"Average Tokens/sec: {avg_tokens_per_sec:.2f}")
+    print(f"Average Query Latency: {avg_query_latency*1000:.2f} ms")
+    print(f"Input Tokens: {averaged_metrics['input_tokens']}")
+    print(f"Output Tokens: {averaged_metrics['output_tokens']}")
+    print(f"{'='*80}\n")
+
+    return averaged_metrics
+
+
+async def main_async(args, prompts, base_sampling_params):
     results = []
 
     for idx, prompt_data in enumerate(prompts, 1):
-        prompt_text = prompt_data['prompt']
-
-        # Use per-prompt max_tokens if available, otherwise use base params
-        if 'max_tokens' in prompt_data:
-            sampling_params = SamplingParams(
-                max_tokens=prompt_data['max_tokens'],
-                temperature=base_sampling_params.temperature,
-                top_k=base_sampling_params.top_k,
-                top_p=base_sampling_params.top_p,
-            )
-            print(f"\nProcessing query {idx}/{len(prompts)} (max_tokens={prompt_data['max_tokens']})...")
-            if 'filename' in prompt_data:
-                print(f"  File: {prompt_data['filename']}")
-        else:
-            sampling_params = base_sampling_params
-            print(f"\nProcessing query {idx}/{len(prompts)}...")
-        run_warmup(llm, sampling_params, 5)
-        metrics = await benchmark_single_query_async(llm, prompt_text, sampling_params)
-
-        metrics.update({k: v for k, v in prompt_data.items() if k != 'prompt'})
-
+        metrics = await run_prompt_iterations(args, prompt_data, idx, len(prompts), base_sampling_params)
         results.append(metrics)
 
     return results
@@ -283,27 +349,22 @@ def main():
 
     print(f"{'='*80}")
     print(f"Model: {args.model_dir}")
+    print(f"Iterations per prompt: {args.num_iterations}")
     print(f"{'='*80}\n")
 
     # Load prompts
     prompts = load_prompts(args)
 
-    # Initialize model
-    print("Loading model...")
+    # Initial model load for timing measurement
+    print("Loading model (initial)...")
     model_load_start = time.perf_counter()
     llm = setup_llm(args)
     model_load_time = time.perf_counter() - model_load_start
     print(f"Model loaded in {model_load_time:.2f} seconds\n")
 
-    # new_prompts = []
-    # for prompt_data in prompts:
-    #     messages = [{"role": "user", "content": prompt_data['prompt']}]
-    #     formatted = llm.tokenizer.apply_chat_template(
-    #         messages, tokenize=False, add_generation_prompt=True)
-    #     new_prompt_data = prompt_data.copy()
-    #     new_prompt_data['prompt'] = formatted
-    #     new_prompts.append(new_prompt_data)
-    # prompts = new_prompts
+    # Clean up initial model - it will be reloaded for each iteration
+    del llm
+    gc.collect()
 
     # Setup sampling parameters
     sampling_params = SamplingParams(
@@ -313,17 +374,13 @@ def main():
         top_p=args.top_p,
     )
 
-    # Run warmup
-    if args.num_warmup > 0:
-        run_warmup(llm, sampling_params, args.num_warmup)
-
     print("Starting benchmark...")
     try:
-        results = asyncio.run(main_async(args, llm, prompts, sampling_params))
+        results = asyncio.run(main_async(args, prompts, sampling_params))
         streaming_mode = True
     except (AttributeError, TypeError) as e:
-        print(f"Async streaming failed")
-       
+        print(f"Async streaming failed: {e}")
+
         streaming_mode = False
 
     # Calculate aggregate metrics
@@ -353,21 +410,36 @@ def main():
             'top_p': args.top_p,
             'max_seq_len': args.max_seq_len,
             'max_batch_size': args.max_batch_size,
+            'num_iterations': args.num_iterations,
         },
         'aggregate_metrics': aggregate_metrics,
         'per_query_results': [
             {
                 'query_index': idx + 1,
                 'filename': r.get('filename', None),
-                'ttft': r['ttft'],
-                'ttft_ms': r['ttft'] * 1000,
-                'query_latency': r['query_latency'],
-                'query_latency_ms': r['query_latency'] * 1000,
+                'num_iterations': r.get('num_iterations', 1),
+                'averaged_ttft': r['ttft'],
+                'averaged_ttft_ms': r['ttft'] * 1000,
+                'averaged_query_latency': r['query_latency'],
+                'averaged_query_latency_ms': r['query_latency'] * 1000,
+                'averaged_tokens_per_sec': r['tokens_per_sec'],
                 'input_tokens': r['input_tokens'],
                 'output_tokens': r['output_tokens'],
-                'tokens_per_sec': r['tokens_per_sec'],
                 'prompt': r['prompt'][:100] + '...' if len(r['prompt']) > 100 else r['prompt'],
                 'generated_text': r['generated_text'][:100] + '...' if len(r['generated_text']) > 100 else r['generated_text'],
+                'individual_iterations': [
+                    {
+                        'iteration': i + 1,
+                        'ttft': it['ttft'],
+                        'ttft_ms': it['ttft'] * 1000,
+                        'query_latency': it['query_latency'],
+                        'query_latency_ms': it['query_latency'] * 1000,
+                        'tokens_per_sec': it['tokens_per_sec'],
+                        'input_tokens': it['input_tokens'],
+                        'output_tokens': it['output_tokens'],
+                    }
+                    for i, it in enumerate(r.get('iterations', []))
+                ] if 'iterations' in r else []
             }
             for idx, r in enumerate(results)
         ]
