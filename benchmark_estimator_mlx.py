@@ -105,7 +105,7 @@ class ApplePowerTracker:
         )
         self.powermetrics_thread.start()
 
-    def stop(self) -> Dict[str, float]:
+    def stop(self) -> Dict[str, any]:
         if not self.tracking_active:
             return {}
 
@@ -123,18 +123,21 @@ class ApplePowerTracker:
         ane_powers = [d['ane_power'] for d in self.powermetrics_data]
         combined_powers = [d['combined_power'] for d in self.powermetrics_data]
 
+        # Return raw readings for aggregation across multiple runs
         stats = {
-            'avg_gpu_power': sum(gpu_powers) / len(gpu_powers) if gpu_powers else 0,
-            'peak_gpu_power': max(gpu_powers) if gpu_powers else 0,
-            'avg_cpu_power': sum(cpu_powers) / len(cpu_powers) if cpu_powers else 0,
-            'peak_cpu_power': max(cpu_powers) if cpu_powers else 0,
-            'avg_ane_power': sum(ane_powers) / len(ane_powers) if ane_powers else 0,
-            'peak_ane_power': max(ane_powers) if ane_powers else 0,
-            'avg_combined_power': sum(combined_powers) / len(combined_powers) if combined_powers else 0,
-            'peak_combined_power': max(combined_powers) if combined_powers else 0,
+            'raw_readings': {
+                'gpu_powers': gpu_powers,
+                'cpu_powers': cpu_powers,
+                'ane_powers': ane_powers,
+                'combined_powers': combined_powers,
+            }
         }
 
-        print(f" [GPU: {stats['avg_gpu_power']:.1f}W, CPU: {stats['avg_cpu_power']:.1f}W, ANE: {stats['avg_ane_power']:.1f}W]", end='')
+        # Print inline stats for this run
+        avg_gpu = sum(gpu_powers) / len(gpu_powers) if gpu_powers else 0
+        avg_cpu = sum(cpu_powers) / len(cpu_powers) if cpu_powers else 0
+        avg_ane = sum(ane_powers) / len(ane_powers) if ane_powers else 0
+        print(f" [GPU: {avg_gpu:.1f}W, CPU: {avg_cpu:.1f}W, ANE: {avg_ane:.1f}W]", end='')
 
         return stats
 
@@ -147,12 +150,11 @@ def parse_filename(filename: str) -> Tuple[str, int, int, int]:
     if not match:
         raise ValueError(f"Filename '{filename}' does not match expected format")
 
-    model_name = match.group(1)
     prompt_num = int(match.group(2))
     input_tokens = int(match.group(3))
     output_tokens = int(match.group(4))
 
-    return model_name, prompt_num, input_tokens, output_tokens
+    return prompt_num, input_tokens, output_tokens
 
 
 def run_mlx_benchmark_with_metrics(
@@ -221,10 +223,10 @@ def run_benchmark_for_file(
     Returns:
         Dictionary with averaged benchmark results
     """
-    model_name, prompt_num, input_tokens, output_tokens = parse_filename(prompt_file.name)
+    prompt_num, input_tokens, output_tokens = parse_filename(prompt_file.name)
 
     print(f"\nBenchmarking: {prompt_file.name}")
-    print(f"  Model: {model_name}, Prompt: {prompt_num}, Input: {input_tokens}, Output: {output_tokens}")
+    print(f"  Prompt: {prompt_num}, Input: {input_tokens}, Output: {output_tokens}")
 
     with open(prompt_file, 'r') as f:
         prompt_text = f.read().strip()
@@ -256,7 +258,7 @@ def run_benchmark_for_file(
 
     # Average the metrics
     avg_metrics = {
-        'model': model_name,
+        'model': model,
         'prompt_num': prompt_num,
         'input_tokens': input_tokens,
         'output_tokens': output_tokens,
@@ -264,10 +266,8 @@ def run_benchmark_for_file(
         'num_runs': len(all_metrics),
     }
 
-    metric_keys = ['ttft', 'generation_tps', 'prompt_tps', 'peak_memory_gb',
-                   'avg_gpu_power', 'peak_gpu_power', 'avg_cpu_power', 'peak_cpu_power',
-                   'avg_ane_power', 'peak_ane_power',
-                   'avg_combined_power', 'peak_combined_power', 'total_time']
+    # Non-power metric keys - calculate avg/min/max across runs
+    metric_keys = ['ttft', 'generation_tps', 'prompt_tps', 'peak_memory_gb', 'total_time']
 
     for key in metric_keys:
         values = [m[key] for m in all_metrics if key in m]
@@ -275,6 +275,40 @@ def run_benchmark_for_file(
             avg_metrics[f'{key}_avg'] = sum(values) / len(values)
             avg_metrics[f'{key}_min'] = min(values)
             avg_metrics[f'{key}_max'] = max(values)
+
+    # Power metrics - collect ALL raw readings across all runs
+    all_gpu_powers = []
+    all_cpu_powers = []
+    all_ane_powers = []
+    all_combined_powers = []
+
+    for m in all_metrics:
+        if 'raw_readings' in m:
+            all_gpu_powers.extend(m['raw_readings']['gpu_powers'])
+            all_cpu_powers.extend(m['raw_readings']['cpu_powers'])
+            all_ane_powers.extend(m['raw_readings']['ane_powers'])
+            all_combined_powers.extend(m['raw_readings']['combined_powers'])
+
+    # Calculate avg/min/max from ALL readings across ALL runs
+    if all_gpu_powers:
+        avg_metrics['gpu_power_avg'] = sum(all_gpu_powers) / len(all_gpu_powers)
+        avg_metrics['gpu_power_min'] = min(all_gpu_powers)
+        avg_metrics['gpu_power_max'] = max(all_gpu_powers)
+
+    if all_cpu_powers:
+        avg_metrics['cpu_power_avg'] = sum(all_cpu_powers) / len(all_cpu_powers)
+        avg_metrics['cpu_power_min'] = min(all_cpu_powers)
+        avg_metrics['cpu_power_max'] = max(all_cpu_powers)
+
+    if all_ane_powers:
+        avg_metrics['ane_power_avg'] = sum(all_ane_powers) / len(all_ane_powers)
+        avg_metrics['ane_power_min'] = min(all_ane_powers)
+        avg_metrics['ane_power_max'] = max(all_ane_powers)
+
+    if all_combined_powers:
+        avg_metrics['combined_power_avg'] = sum(all_combined_powers) / len(all_combined_powers)
+        avg_metrics['combined_power_min'] = min(all_combined_powers)
+        avg_metrics['combined_power_max'] = max(all_combined_powers)
 
     return avg_metrics
 
@@ -395,25 +429,27 @@ def main():
             if 'peak_memory_gb_avg' in result:
                 print(f"  Peak Memory:         {result['peak_memory_gb_avg']:.2f} GB")
 
-            # Power metrics
+            # Power metrics - simplified to show avg/min/max across all runs
             has_power = False
-            if 'avg_gpu_power_avg' in result and result['avg_gpu_power_avg'] > 0:
-                print(f"  Avg GPU Power:       {result['avg_gpu_power_avg']:.2f}W")
+
+            # GPU Power
+            if 'gpu_power_avg' in result and result['gpu_power_avg'] > 0:
+                print(f"  GPU Power:           avg={result['gpu_power_avg']:.2f}W, min={result['gpu_power_min']:.2f}W, max={result['gpu_power_max']:.2f}W")
                 has_power = True
-            if 'peak_gpu_power_avg' in result and result['peak_gpu_power_avg'] > 0:
-                print(f"  Peak GPU Power:      {result['peak_gpu_power_avg']:.2f}W")
+
+            # CPU Power
+            if 'cpu_power_avg' in result and result['cpu_power_avg'] > 0:
+                print(f"  CPU Power:           avg={result['cpu_power_avg']:.2f}W, min={result['cpu_power_min']:.2f}W, max={result['cpu_power_max']:.2f}W")
                 has_power = True
-            if 'avg_cpu_power_avg' in result and result['avg_cpu_power_avg'] > 0:
-                print(f"  Avg CPU Power:       {result['avg_cpu_power_avg']:.2f}W")
+
+            # ANE Power
+            if 'ane_power_avg' in result and result['ane_power_avg'] > 0:
+                print(f"  ANE Power:           avg={result['ane_power_avg']:.2f}W, min={result['ane_power_min']:.2f}W, max={result['ane_power_max']:.2f}W")
                 has_power = True
-            if 'avg_ane_power_avg' in result and result['avg_ane_power_avg'] > 0:
-                print(f"  Avg ANE Power:       {result['avg_ane_power_avg']:.2f}W")
-                has_power = True
-            if 'peak_ane_power_avg' in result and result['peak_ane_power_avg'] > 0:
-                print(f"  Peak ANE Power:      {result['peak_ane_power_avg']:.2f}W")
-                has_power = True
-            if 'avg_combined_power_avg' in result and result['avg_combined_power_avg'] > 0:
-                print(f"  Avg Combined Power:  {result['avg_combined_power_avg']:.2f}W")
+
+            # Combined Power
+            if 'combined_power_avg' in result and result['combined_power_avg'] > 0:
+                print(f"  Combined Power:      avg={result['combined_power_avg']:.2f}W, min={result['combined_power_min']:.2f}W, max={result['combined_power_max']:.2f}W")
                 has_power = True
 
             if not has_power:
