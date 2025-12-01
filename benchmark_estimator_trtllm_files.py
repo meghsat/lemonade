@@ -265,7 +265,6 @@ async def benchmark_single_query_async(llm: LLM, prompt: str, sampling_params: S
 
 
 async def run_warmup(llm: LLM, prompt: str, sampling_params: SamplingParams, num_warmup: int) -> List[Dict[str, Any]]:
-    prompt = "This is a warmup prompt to initialize the model."
     input_ids = llm.tokenizer.encode(prompt)
     if hasattr(input_ids, 'input_ids'):
         token_ids = input_ids.input_ids.tolist() if hasattr(input_ids.input_ids, 'tolist') else list(input_ids.input_ids)
