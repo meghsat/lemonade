@@ -34,6 +34,16 @@ class LlamaCppBench(Bench):
         self.peak_cpu_power_list = []
         self.avg_cpu_power_list = []
 
+        # AGT-specific power metrics
+        self.peak_processor_package_power_list = []
+        self.avg_processor_package_power_list = []
+        self.peak_cpu_igpu_power_list = []
+        self.avg_cpu_igpu_power_list = []
+        self.peak_npu_peripheral_power_list = []
+        self.avg_npu_peripheral_power_list = []
+        self.peak_igpu_power_list = []
+        self.avg_igpu_power_list = []
+
         # Per-prompt label tracking
         self.prompt_labels = []
 
@@ -77,7 +87,11 @@ class LlamaCppBench(Bench):
         parsed_args = Tool.parse(self, state, args, known_only)
 
         if parsed_args.cli:
+            # Save prompt_label from our parser before calling parent
+            prompt_labels = getattr(parsed_args, 'prompt_label', None)
             parsed_args = super().parse(state, args, known_only)
+            # Restore prompt_label after parent parse
+            parsed_args.prompt_label = prompt_labels
         else:
             # Make sure prompts is a list of integers
             if parsed_args.prompts is None:
@@ -277,6 +291,23 @@ class LlamaCppBench(Bench):
             if len(self.power_plot_list) > idx:
                 results["Power Usage Plot"] = self.power_plot_list[idx]
 
+        # Display AGT power metrics from per-prompt lists
+        if len(self.peak_processor_package_power_list) > idx:
+            results["Peak Processor Package Power (AGT)"] = self.peak_processor_package_power_list[idx]
+            results["Avg Processor Package Power (AGT)"] = self.avg_processor_package_power_list[idx]
+
+        if len(self.peak_cpu_igpu_power_list) > idx:
+            results["Peak CPU+iGPU Power (AGT)"] = self.peak_cpu_igpu_power_list[idx]
+            results["Avg CPU+iGPU Power (AGT)"] = self.avg_cpu_igpu_power_list[idx]
+
+        if len(self.peak_npu_peripheral_power_list) > idx:
+            results["Peak NPU+Peripheral Power (AGT)"] = self.peak_npu_peripheral_power_list[idx]
+            results["Avg NPU+Peripheral Power (AGT)"] = self.avg_npu_peripheral_power_list[idx]
+
+        if len(self.peak_igpu_power_list) > idx:
+            results["Peak iGPU Power (AGT)"] = self.peak_igpu_power_list[idx]
+            results["Avg iGPU Power (AGT)"] = self.avg_igpu_power_list[idx]
+
         for key, value in results.items():
             output.write(f"  {key}: {value}\n")
 
@@ -331,6 +362,7 @@ class LlamaCppBench(Bench):
         """Store per-prompt power metrics from filesystem into lists"""
         from lemonade.profilers.nvidia_power import Keys as NvidiaKeys
         from lemonade.profilers.apple_power import Keys as AppleKeys
+        from lemonade.profilers.agt_power import Keys as AGTKeys
         import lemonade.common.filesystem as fs
 
         # Load stats from the YAML file (not from state.stats attribute)
@@ -355,6 +387,35 @@ class LlamaCppBench(Bench):
                 self.avg_cpu_power_list.append(stats[AppleKeys.AVG_CPU_POWER])
                 if AppleKeys.POWER_USAGE_PLOT in stats:
                     self.power_plot_list.append(stats[AppleKeys.POWER_USAGE_PLOT])
+
+            # Check for AGT power metrics
+            elif AGTKeys.PEAK_PROCESSOR_PACKAGE_POWER in stats:
+                self.peak_processor_package_power_list.append(stats[AGTKeys.PEAK_PROCESSOR_PACKAGE_POWER])
+                self.avg_processor_package_power_list.append(stats[AGTKeys.AVERAGE_PROCESSOR_PACKAGE_POWER])
+
+                # CPU+iGPU power (may be None if not available)
+                if AGTKeys.PEAK_CPU_IGPU_POWER in stats:
+                    self.peak_cpu_igpu_power_list.append(stats[AGTKeys.PEAK_CPU_IGPU_POWER])
+                    self.avg_cpu_igpu_power_list.append(stats[AGTKeys.AVERAGE_CPU_IGPU_POWER])
+
+                # NPU+Peripheral power (may be None if not available)
+                if AGTKeys.PEAK_NPU_PERIPHERAL_POWER in stats:
+                    self.peak_npu_peripheral_power_list.append(stats[AGTKeys.PEAK_NPU_PERIPHERAL_POWER])
+                    self.avg_npu_peripheral_power_list.append(stats[AGTKeys.AVERAGE_NPU_PERIPHERAL_POWER])
+
+                # iGPU power (may be None if not available)
+                if AGTKeys.PEAK_IGPU_POWER in stats:
+                    self.peak_igpu_power_list.append(stats[AGTKeys.PEAK_IGPU_POWER])
+                    self.avg_igpu_power_list.append(stats[AGTKeys.AVERAGE_IGPU_POWER])
+
+                # Temperature
+                if AGTKeys.PEAK_IGPU_TEMP in stats:
+                    self.peak_gpu_temp_list.append(stats[AGTKeys.PEAK_IGPU_TEMP])
+                    self.avg_gpu_temp_list.append(stats[AGTKeys.AVERAGE_IGPU_TEMP])
+
+                # Power plot
+                if AGTKeys.POWER_USAGE_PLOT in stats:
+                    self.power_plot_list.append(stats[AGTKeys.POWER_USAGE_PLOT])
 
     def run_llama_bench_exe(self, state, prompts, iterations, output_tokens, gpu_cooldown=5, prompt_labels=None):
         import time

@@ -173,3 +173,6 @@ mac-gguf-models/
 *.png
 *.lemonadebuild
 gpt-oss-20b-mxfp4-logs.txt
+prompt_files/
+.claude/settings.local.json
+nul

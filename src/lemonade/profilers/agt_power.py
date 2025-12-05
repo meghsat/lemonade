@@ -39,8 +39,38 @@ class Keys:
     POWER_USAGE_DATA = "power_usage_data_agt"
     # Path to the file containing the power usage plot
     POWER_USAGE_DATA_CSV = "power_usage_data_file_agt"
-    # Maximum power consumed by the APU processor package during the tools sequence
+    # Maximum power consumed by the APU processor package (CPU+GPU+NPU) during the tools sequence
     PEAK_PROCESSOR_PACKAGE_POWER = "peak_processor_package_power_agt"
+    # Average power consumed by the APU processor package (CPU+GPU+NPU) during the tools sequence
+    AVERAGE_PROCESSOR_PACKAGE_POWER = "average_processor_package_power_agt"
+    # Maximum power consumed by the CPU+iGPU power rail during the tools sequence
+    PEAK_CPU_IGPU_POWER = "peak_cpu_igpu_power_agt"
+    # Average power consumed by the CPU+iGPU power rail during the tools sequence
+    AVERAGE_CPU_IGPU_POWER = "average_cpu_igpu_power_agt"
+    # Maximum power consumed by the NPU+peripheral power rail during the tools sequence
+    PEAK_NPU_PERIPHERAL_POWER = "peak_npu_peripheral_power_agt"
+    # Average power consumed by the NPU+peripheral power rail during the tools sequence
+    AVERAGE_NPU_PERIPHERAL_POWER = "average_npu_peripheral_power_agt"
+    # Maximum power consumed by the iGPU during the tools sequence
+    PEAK_IGPU_POWER = "peak_igpu_power_agt"
+    # Average power consumed by the iGPU during the tools sequence
+    AVERAGE_IGPU_POWER = "average_igpu_power_agt"
+    # Maximum temperature of the iGPU during the tools sequence
+    PEAK_IGPU_TEMP = "peak_igpu_temp_agt"
+    # Average temperature of the iGPU during the tools sequence
+    AVERAGE_IGPU_TEMP = "average_igpu_temp_agt"
+    # Maximum power consumed by CPU cores 8-15 during the tools sequence
+    PEAK_CPU_CORES_8_15_POWER = "peak_cpu_cores_8_15_power_agt"
+    # Average power consumed by CPU cores 8-15 during the tools sequence
+    AVERAGE_CPU_CORES_8_15_POWER = "average_cpu_cores_8_15_power_agt"
+    # Maximum estimated iGPU power during the tools sequence
+    PEAK_IGPU_ESTIMATE_POWER = "peak_igpu_estimate_power_agt"
+    # Average estimated iGPU power during the tools sequence
+    AVERAGE_IGPU_ESTIMATE_POWER = "average_igpu_estimate_power_agt"
+    # Maximum telemetry CPU+iGPU power during the tools sequence
+    PEAK_TELEMETRY_CPU_IGPU_POWER = "peak_telemetry_cpu_igpu_power_agt"
+    # Average telemetry CPU+iGPU power during the tools sequence
+    AVERAGE_TELEMETRY_CPU_IGPU_POWER = "average_telemetry_cpu_igpu_power_agt"
 
 
 # Add column to the Lemonade performance report table for the power data
@@ -64,7 +94,11 @@ class AGTPowerProfiler(Profiler):
     # mapping from short name to full name of the measurement in the CSV file produced by AGT
     columns_dict = {
         "time": "Time Stamp",
-        "cpu_package_power": "CPU0 Power Correlation SOCKET Power ",
+        "socket_power": "CPU0 Power Correlation SOCKET Power ",
+        "cpu+igpu_power": "CPU0 Power Correlation VDDCR_VDD Power ",
+        "npu+peripheral_power": "CPU0 Power Correlation VDDCR_SOC Power ",
+        "igpu_power": "CPU0 GFX GFX Power",
+        "igpu_temp": "CPU0 GFX GFX Temp",
         "npu_clock": "CPU0 Frequencies Actual Frequency NPUHCLK",
         "gpu_clock": "CPU0 GFX GFX Freq Eff",
         # for processors with classic and dense cores
@@ -73,6 +107,17 @@ class AGTPowerProfiler(Profiler):
         # for multi CCD processors
         "classic_cpu_usage_0": "CPU0 DPM Activity Monitors Busy Value CCD0_C0",
         "classic_cpu_usage_1": "CPU0 DPM Activity Monitors Busy Value CCD1_C0",
+        # individual core power measurements (CORE8-CORE15)
+        "cpu_core8_power": "CPU0 CORES CORE8 Power",
+        "cpu_core9_power": "CPU0 CORES CORE9 Power",
+        "cpu_core10_power": "CPU0 CORES CORE10 Power",
+        "cpu_core11_power": "CPU0 CORES CORE11 Power",
+        "cpu_core12_power": "CPU0 CORES CORE12 Power",
+        "cpu_core13_power": "CPU0 CORES CORE13 Power",
+        "cpu_core14_power": "CPU0 CORES CORE14 Power",
+        "cpu_core15_power": "CPU0 CORES CORE15 Power",
+        # telemetry power measurement
+        "telemetry_cpu+igpu_power": "CPU0 SVI3 Telemetry Power VDDCR_VDD",
         #
         "apu_stapm_value": "CPU0 INFRASTRUCTURE1 Value STAPM",
         "apu_stapm_limit": "CPU0 INFRASTRUCTURE1 Limit STAPM",
@@ -99,12 +144,23 @@ class AGTPowerProfiler(Profiler):
     @staticmethod
     def time_to_seconds(time_str):
 
-        # Parse the time string
-        match = re.search(r"\b(\d{2}:\d{2}:\d{2}.\d{3})", time_str)
+        # Parse the time string - try different formats
+        # Format 1: HH:MM:SS.fff (with milliseconds)
+        match = re.search(r"\b(\d{2}:\d{2}:\d{2}\.\d{3})", time_str)
         if match:
             time_obj = datetime.strptime(match.group(), "%H:%M:%S.%f")
         else:
-            raise ValueError(f"Could not parse {time_str}")
+            # Format 2: HH:MM:SS (without milliseconds)
+            match = re.search(r"\b(\d{2}:\d{2}:\d{2})\b", time_str)
+            if match:
+                time_obj = datetime.strptime(match.group(), "%H:%M:%S")
+            else:
+                # Format 3: HH:MM (without seconds)
+                match = re.search(r"\b(\d{2}:\d{2})\b", time_str)
+                if match:
+                    time_obj = datetime.strptime(match.group(), "%H:%M")
+                else:
+                    raise ValueError(f"Could not parse {time_str}")
 
         # Calculate the total seconds
         total_seconds = (
@@ -136,7 +192,25 @@ class AGTPowerProfiler(Profiler):
     def __init__(self, parser_arg_value):
         super().__init__()
         self.warmup_period = parser_arg_value
-        self.status_stats += [Keys.PEAK_PROCESSOR_PACKAGE_POWER, Keys.POWER_USAGE_PLOT]
+        self.status_stats += [
+            Keys.PEAK_PROCESSOR_PACKAGE_POWER,
+            Keys.AVERAGE_PROCESSOR_PACKAGE_POWER,
+            Keys.PEAK_CPU_IGPU_POWER,
+            Keys.AVERAGE_CPU_IGPU_POWER,
+            Keys.PEAK_NPU_PERIPHERAL_POWER,
+            Keys.AVERAGE_NPU_PERIPHERAL_POWER,
+            Keys.PEAK_IGPU_POWER,
+            Keys.AVERAGE_IGPU_POWER,
+            Keys.PEAK_IGPU_TEMP,
+            Keys.AVERAGE_IGPU_TEMP,
+            Keys.PEAK_CPU_CORES_8_15_POWER,
+            Keys.AVERAGE_CPU_CORES_8_15_POWER,
+            Keys.PEAK_IGPU_ESTIMATE_POWER,
+            Keys.AVERAGE_IGPU_ESTIMATE_POWER,
+            Keys.PEAK_TELEMETRY_CPU_IGPU_POWER,
+            Keys.AVERAGE_TELEMETRY_CPU_IGPU_POWER,
+            Keys.POWER_USAGE_PLOT,
+        ]
         self.tracking_active = False
         self.build_dir = None
         self.csv_path = None
@@ -229,6 +303,21 @@ class AGTPowerProfiler(Profiler):
             state.save_stat(Keys.POWER_USAGE_PLOT, "NONE")
             return
 
+        # Calculate CPU0 CORES CORE[8-15] Power (sum of all core powers)
+        core_columns = [
+            "cpu_core8_power", "cpu_core9_power", "cpu_core10_power", "cpu_core11_power",
+            "cpu_core12_power", "cpu_core13_power", "cpu_core14_power", "cpu_core15_power"
+        ]
+        # Check if all core columns exist in the dataframe
+        cores_available = all(col in df.columns for col in core_columns)
+        if cores_available:
+            # Sum all core power columns
+            df["cpu_cores_8_15_power"] = df[core_columns].sum(axis=1)
+
+            # Calculate iGPU estimate power if cpu+igpu_power is available
+            if "cpu+igpu_power" in df.columns:
+                df["igpu_estimate_power"] = df["cpu+igpu_power"] - df["cpu_cores_8_15_power"]
+
         # Remap csv data time to elapsed seconds (i.e., substract out initial time)
         try:
             initial_data_time = self.time_to_seconds(df["time"].iloc[0])
@@ -260,7 +349,58 @@ class AGTPowerProfiler(Profiler):
             delta = since_midnight - initial_data_time
             df["time"] = df["time"] - delta
 
-        peak_power = max(df["cpu_package_power"])
+        # Calculate socket power (APU package: CPU+GPU+NPU)
+        peak_socket_power = max(df["socket_power"])
+        average_socket_power = df["socket_power"].mean()
+
+        # Calculate CPU+iGPU power metrics
+        peak_cpu_igpu_power = None
+        average_cpu_igpu_power = None
+        if "cpu+igpu_power" in df.columns:
+            peak_cpu_igpu_power = max(df["cpu+igpu_power"])
+            average_cpu_igpu_power = df["cpu+igpu_power"].mean()
+
+        # Calculate NPU+peripheral power metrics
+        peak_npu_peripheral_power = None
+        average_npu_peripheral_power = None
+        if "npu+peripheral_power" in df.columns:
+            peak_npu_peripheral_power = max(df["npu+peripheral_power"])
+            average_npu_peripheral_power = df["npu+peripheral_power"].mean()
+
+        # Calculate iGPU power metrics
+        peak_igpu_power = None
+        average_igpu_power = None
+        if "igpu_power" in df.columns:
+            peak_igpu_power = max(df["igpu_power"])
+            average_igpu_power = df["igpu_power"].mean()
+
+        # Calculate iGPU temperature metrics
+        peak_igpu_temp = None
+        average_igpu_temp = None
+        if "igpu_temp" in df.columns:
+            peak_igpu_temp = max(df["igpu_temp"])
+            average_igpu_temp = df["igpu_temp"].mean()
+
+        # Calculate CPU cores 8-15 power metrics
+        peak_cpu_cores_8_15_power = None
+        average_cpu_cores_8_15_power = None
+        if "cpu_cores_8_15_power" in df.columns:
+            peak_cpu_cores_8_15_power = max(df["cpu_cores_8_15_power"])
+            average_cpu_cores_8_15_power = df["cpu_cores_8_15_power"].mean()
+
+        # Calculate iGPU estimate power metrics
+        peak_igpu_estimate_power = None
+        average_igpu_estimate_power = None
+        if "igpu_estimate_power" in df.columns:
+            peak_igpu_estimate_power = max(df["igpu_estimate_power"])
+            average_igpu_estimate_power = df["igpu_estimate_power"].mean()
+
+        # Calculate telemetry CPU+iGPU power metrics
+        peak_telemetry_cpu_igpu_power = None
+        average_telemetry_cpu_igpu_power = None
+        if "telemetry_cpu+igpu_power" in df.columns:
+            peak_telemetry_cpu_igpu_power = max(df["telemetry_cpu+igpu_power"])
+            average_telemetry_cpu_igpu_power = df["telemetry_cpu+igpu_power"].mean()
 
         # Scale value metrics with limits to percentages
         for col_name in df.columns:
@@ -285,7 +425,7 @@ class AGTPowerProfiler(Profiler):
 
             # Extract power data time series
             x_time = df["time"].to_numpy()
-            y_power = df["cpu_package_power"].to_numpy()
+            y_power = df["socket_power"].to_numpy()
 
             # Extract data for each stage in the build
             self.data = []
@@ -333,10 +473,10 @@ class AGTPowerProfiler(Profiler):
         else:
             ax1.plot(
                 df["time"],
-                df["cpu_package_power"],
+                df["socket_power"],
             )
         # Add title and labels to plots
-        ax1.set_ylabel(self.columns_dict["cpu_package_power"])
+        ax1.set_ylabel(self.columns_dict["socket_power"])
         title_str = "AGT Stats\n" + "\n".join(textwrap.wrap(state.build_name, 60))
         ax1.set_title(title_str)
         ax1.legend()
@@ -434,4 +574,40 @@ class AGTPowerProfiler(Profiler):
         state.save_stat(Keys.POWER_USAGE_PLOT, plot_path)
         state.save_stat(Keys.POWER_USAGE_DATA, self.data)
         state.save_stat(Keys.POWER_USAGE_DATA_CSV, self.csv_path)
-        state.save_stat(Keys.PEAK_PROCESSOR_PACKAGE_POWER, f"{peak_power:0.1f} W")
+        state.save_stat(Keys.PEAK_PROCESSOR_PACKAGE_POWER, f"{peak_socket_power:0.1f} W")
+        state.save_stat(Keys.AVERAGE_PROCESSOR_PACKAGE_POWER, f"{average_socket_power:0.1f} W")
+
+        if peak_cpu_igpu_power is not None:
+            state.save_stat(Keys.PEAK_CPU_IGPU_POWER, f"{peak_cpu_igpu_power:0.1f} W")
+        if average_cpu_igpu_power is not None:
+            state.save_stat(Keys.AVERAGE_CPU_IGPU_POWER, f"{average_cpu_igpu_power:0.1f} W")
+
+        if peak_npu_peripheral_power is not None:
+            state.save_stat(Keys.PEAK_NPU_PERIPHERAL_POWER, f"{peak_npu_peripheral_power:0.1f} W")
+        if average_npu_peripheral_power is not None:
+            state.save_stat(Keys.AVERAGE_NPU_PERIPHERAL_POWER, f"{average_npu_peripheral_power:0.1f} W")
+
+        if peak_igpu_power is not None:
+            state.save_stat(Keys.PEAK_IGPU_POWER, f"{peak_igpu_power:0.1f} W")
+        if average_igpu_power is not None:
+            state.save_stat(Keys.AVERAGE_IGPU_POWER, f"{average_igpu_power:0.1f} W")
+
+        if peak_igpu_temp is not None:
+            state.save_stat(Keys.PEAK_IGPU_TEMP, f"{peak_igpu_temp:0.1f} °C")
+        if average_igpu_temp is not None:
+            state.save_stat(Keys.AVERAGE_IGPU_TEMP, f"{average_igpu_temp:0.1f} °C")
+
+        if peak_cpu_cores_8_15_power is not None:
+            state.save_stat(Keys.PEAK_CPU_CORES_8_15_POWER, f"{peak_cpu_cores_8_15_power:0.1f} W")
+        if average_cpu_cores_8_15_power is not None:
+            state.save_stat(Keys.AVERAGE_CPU_CORES_8_15_POWER, f"{average_cpu_cores_8_15_power:0.1f} W")
+
+        if peak_igpu_estimate_power is not None:
+            state.save_stat(Keys.PEAK_IGPU_ESTIMATE_POWER, f"{peak_igpu_estimate_power:0.1f} W")
+        if average_igpu_estimate_power is not None:
+            state.save_stat(Keys.AVERAGE_IGPU_ESTIMATE_POWER, f"{average_igpu_estimate_power:0.1f} W")
+
+        if peak_telemetry_cpu_igpu_power is not None:
+            state.save_stat(Keys.PEAK_TELEMETRY_CPU_IGPU_POWER, f"{peak_telemetry_cpu_igpu_power:0.1f} W")
+        if average_telemetry_cpu_igpu_power is not None:
+            state.save_stat(Keys.AVERAGE_TELEMETRY_CPU_IGPU_POWER, f"{average_telemetry_cpu_igpu_power:0.1f} W")

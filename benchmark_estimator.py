@@ -9,7 +9,9 @@ import statistics
 import math
 
 if len(sys.argv) != 8:
-    print("Usage: python script.py <vendor> <model [ hf_checkpoint | directory ]> <prompt_dir_path> <cache_base_path> <prompt_prefix [ mlperf | textgen ]> <iterations> <warmups>")
+    print(
+        "Usage: python script.py <vendor> <model [ hf_checkpoint | directory ]> <prompt_dir_path> <cache_base_path> <prompt_prefix [ mlperf | textgen ]> <iterations> <warmups>"
+    )
     sys.exit(1)
 
 VENDOR = sys.argv[1]
@@ -27,6 +29,7 @@ os.makedirs(CACHE_PATH, exist_ok=True)
 
 FILENAME_PATTERN = re.compile(rf"^{FILE_PREFIX}_p(\d+)(?:_in\d+)?_out(\d+)\.txt$")
 
+
 def parse_filename(filename):
     match = FILENAME_PATTERN.match(filename)
     if match:
@@ -34,6 +37,7 @@ def parse_filename(filename):
         out_value = int(match.group(2))
         return part_number, out_value
     return None
+
 
 def get_model_from_path(hf_path: str) -> str:
     """
@@ -58,17 +62,23 @@ def get_model_from_path(hf_path: str) -> str:
                 print(f"Model already exported at {output_dir} → skipping export")
             else:
                 cmd = [
-                    "optimum-cli", "export", "openvino",
-                    "-m", checkpoint,
-                    "--weight-format", "int4",
+                    "optimum-cli",
+                    "export",
+                    "openvino",
+                    "-m",
+                    checkpoint,
+                    "--weight-format",
+                    "int4",
                     "--sym",
-                    "--group-size", "-1",
-                    "--ratio", "1.0",
+                    "--group-size",
+                    "-1",
+                    "--ratio",
+                    "1.0",
                     "--all-layers",
                     "--awq",
                     "--scale-estimation",
                     "--dataset=wikitext2",
-                    output_dir
+                    output_dir,
                 ]
                 print(f"[INTEL] Running command: {' '.join(cmd)}")
                 subprocess.run(cmd, check=True)
@@ -92,20 +102,20 @@ def get_model_from_path(hf_path: str) -> str:
 
     return model_path
 
+
 def is_nvidia_arm64():
-    is_arm64 = platform.machine().lower() in ['aarch64', 'arm64']
+    is_arm64 = platform.machine().lower() in ["aarch64", "arm64"]
 
     # Check for nvidia-smi availability
     has_nvidia = False
     try:
-        result = subprocess.run(['nvidia-smi'],
-                              capture_output=True,
-                              timeout=5)
+        result = subprocess.run(["nvidia-smi"], capture_output=True, timeout=5)
         has_nvidia = result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
     return is_arm64 and has_nvidia
+
 
 def process_csv_with_scores(csv_path, model_path):
     """
@@ -139,7 +149,7 @@ def process_csv_with_scores(csv_path, model_path):
 
     # Read the CSV
     rows = []
-    with open(csv_path, 'r', newline='') as csvfile:
+    with open(csv_path, "r", newline="") as csvfile:
         reader = csv.DictReader(csvfile)
         fieldnames = reader.fieldnames
         for row in reader:
@@ -155,8 +165,8 @@ def process_csv_with_scores(csv_path, model_path):
 
     for row in rows:
         try:
-            ttft = float(row.get('Seconds To First Token', 0))
-            tps = float(row.get('Token Generation Tokens Per Second', 0))
+            ttft = float(row.get("Seconds To First Token", 0))
+            tps = float(row.get("Token Generation Tokens Per Second", 0))
             if ttft > 0:
                 ttft_values.append(ttft)
             if tps > 0:
@@ -176,30 +186,41 @@ def process_csv_with_scores(csv_path, model_path):
 
     ttft_score = c1 / average_ttft if average_ttft > 0 else 0
     ots_score = c2 * average_tps
-    overall_score = math.sqrt(ttft_score * ots_score) if ttft_score > 0 and ots_score > 0 else 0
+    overall_score = (
+        math.sqrt(ttft_score * ots_score) if ttft_score > 0 and ots_score > 0 else 0
+    )
 
     print(f"  TTFT Score: {ttft_score:.3f}")
     print(f"  OTS Score: {ots_score:.3f}")
     print(f"  Overall Score: {overall_score:.3f}")
 
-    new_fieldnames = list(fieldnames) + ['C1', 'C2', 'Average TTFT', 'Average TPS', 'TTFT Score', 'OTS Score', 'Overall Score']
+    new_fieldnames = list(fieldnames) + [
+        "C1",
+        "C2",
+        "Average TTFT",
+        "Average TPS",
+        "TTFT Score",
+        "OTS Score",
+        "Overall Score",
+    ]
 
     for row in rows:
-        row['C1'] = c1
-        row['C2'] = c2
-        row['Average TTFT'] = f"{average_ttft:.3f}"
-        row['Average TPS'] = f"{average_tps:.3f}"
-        row['TTFT Score'] = f"{ttft_score:.3f}"
-        row['OTS Score'] = f"{ots_score:.3f}"
-        row['Overall Score'] = f"{overall_score:.3f}"
+        row["C1"] = c1
+        row["C2"] = c2
+        row["Average TTFT"] = f"{average_ttft:.3f}"
+        row["Average TPS"] = f"{average_tps:.3f}"
+        row["TTFT Score"] = f"{ttft_score:.3f}"
+        row["OTS Score"] = f"{ots_score:.3f}"
+        row["Overall Score"] = f"{overall_score:.3f}"
 
     # Write back to CSV
-    with open(csv_path, 'w', newline='') as csvfile:
+    with open(csv_path, "w", newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=new_fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
     print(f"✓ Updated CSV with averages and scores: {csv_path}")
+
 
 def main():
     tasks = []
@@ -216,74 +237,133 @@ def main():
 
     model_path = get_model_from_path(MODEL_PATH)
 
-    use_llamacpp_with_prompts = is_nvidia_arm64()
-
-    if use_llamacpp_with_prompts:
-        print(f"Detected Nvidia ARM64 platform - using llamacpp with prompt files")
-
     for part_num, out_value, fname in tasks:
         full_path = os.path.join(PROMPTS_PATH, fname)
 
         try:
-            if use_llamacpp_with_prompts:
+            if is_nvidia_arm64():
                 # Read prompt file content
-                with open(full_path, 'r', encoding='utf-8') as f:
+                with open(full_path, "r", encoding="utf-8") as f:
                     prompt_content = f.read().strip()
 
                 print(f"Running lemonade with prompt file: {fname}")
 
                 # Use llamacpp-bench with prompt content (requires --cli flag for text prompts)
                 cmd = [
-                    "lemonade", "-d", CACHE_PATH,
-                    "-i", model_path,
-                    "--power-nvidia", "--memory",
-                    "llamacpp-load", "--device", "igpu",
+                    "lemonade",
+                    "-d",
+                    CACHE_PATH,
+                    "-i",
+                    model_path,
+                    "--power-nvidia",
+                    "--memory",
+                    "llamacpp-load",
+                    "--device",
+                    "igpu",
                     "llamacpp-bench",
                     "--cli",  # Required for text prompts!
-                    "--iterations", str(ITERATIONS),
-                    "--warmup-iterations", str(WARMUPS),
-                    "--prompts", full_path,
-                    "--output-tokens", str(out_value),
-                    "--prompt-label", fname
+                    "--iterations",
+                    str(ITERATIONS),
+                    "--warmup-iterations",
+                    str(WARMUPS),
+                    "--prompts",
+                    full_path,
+                    "--output-tokens",
+                    str(out_value),
+                    "--prompt-label",
+                    fname,
                 ]
 
             elif VENDOR == "AMD":
-                print(f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}")
+                print(
+                    f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
+                )
                 cmd = [
-                    "lemonade", "-d", CACHE_PATH,
-                    "-i", model_path,
-                    "oga-load", "--device", "hybrid", "--dtype", "int4",
-                    "oga-bench", "--prompts", full_path,
-                    "--iterations", str(ITERATIONS), "--warmup-iterations", str(WARMUPS),
-                    "--output-tokens", str(out_value)
+                    "lemonade",
+                    "-d",
+                    CACHE_PATH,
+                    "-i",
+                    model_path,
+                    "--power-agt",
+                    "--memory",
+                    "llamacpp-load",
+                    "--device",
+                    "igpu",
+                    "llamacpp-bench",
+                    "--cli",
+                    "--prompts",
+                    full_path,
+                    "--iterations",
+                    str(ITERATIONS),
+                    "--warmup-iterations",
+                    str(WARMUPS),
+                    "--output-tokens",
+                    str(out_value),
+                    "--prompt-label",
+                    fname,
                 ]
+                # cmd = [
+                #     "lemonade", "-d", CACHE_PATH,
+                #     "-i", model_path, "--power-agt",
+                #     "oga-load", "--device", "hybrid", "--dtype", "int4",
+                #     "oga-bench", "--prompts", full_path,
+                #     "--iterations", str(ITERATIONS), "--warmup-iterations", str(WARMUPS),
+                #     "--output-tokens", str(out_value)
+                # ]
             elif VENDOR == "INTEL":
-                print(f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}")
+                print(
+                    f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
+                )
                 cmd = [
-                    "lemonade", "-d", CACHE_PATH,
-                    "-i", model_path,
-                    "openvino-load", "--device", "NPU", "-bp", full_path,
-                    "-r", str(out_value),
+                    "lemonade",
+                    "-d",
+                    CACHE_PATH,
+                    "-i",
+                    model_path,
+                    "openvino-load",
+                    "--device",
+                    "NPU",
+                    "-bp",
+                    full_path,
+                    "-r",
+                    str(out_value),
                     "openvino-bench",
-                    "--iterations", str(ITERATIONS), "--warmup-iterations", str(WARMUPS),
-                    "--output-tokens", str(out_value),
-                    "--prompts", full_path,
+                    "--iterations",
+                    str(ITERATIONS),
+                    "--warmup-iterations",
+                    str(WARMUPS),
+                    "--output-tokens",
+                    str(out_value),
+                    "--prompts",
+                    full_path,
                 ]
 
             elif VENDOR == "APPLE":
-                print(f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}")
+                print(
+                    f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
+                )
                 cmd = [
-                    "lemonade", "-d", CACHE_PATH,
-                    "-i", model_path,
+                    "lemonade",
+                    "-d",
+                    CACHE_PATH,
+                    "-i",
+                    model_path,
                     "--power-apple",
-                    "llamacpp-load", "--device", "igpu",
+                    "llamacpp-load",
+                    "--device",
+                    "igpu",
                     "llamacpp-bench",
                     "--cli",
-                    "--iterations", str(ITERATIONS),
-                    "--warmup-iterations", str(WARMUPS),
-                    "--prompts", full_path,
-                    "--output-tokens", str(out_value),
-                    "--prompt-label", fname
+                    "--iterations",
+                    str(ITERATIONS),
+                    "--warmup-iterations",
+                    str(WARMUPS),
+                    "--prompts",
+                    full_path,
+                    "--output-tokens",
+                    str(out_value),
+                    "--prompt-label",
+                    fname,
                 ]
 
             print(f"Running: {' '.join(cmd)}")
@@ -309,11 +389,18 @@ def main():
     if len(failed_tasks) < len(tasks):
         print(f"\nGenerating report from cache: {CACHE_PATH}")
         try:
-            subprocess.run([
-                "lemonade", "report",
-                "-i", CACHE_PATH,
-                "--no-save", "--perf", "--lean"
-            ], check=True)
+            subprocess.run(
+                [
+                    "lemonade",
+                    "report",
+                    "-i",
+                    CACHE_PATH,
+                    "--no-save",
+                    "--perf",
+                    "--lean",
+                ],
+                check=True,
+            )
         except subprocess.CalledProcessError as e:
             print(f"Report generation failed: {e}")
     else:
@@ -323,6 +410,7 @@ def main():
         print("\nSummary of failed tasks:")
         for f in failed_tasks:
             print(f" - {f}")
+
 
 if __name__ == "__main__":
     main()
