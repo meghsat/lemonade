@@ -43,6 +43,14 @@ class LlamaCppBench(Bench):
         self.avg_npu_peripheral_power_list = []
         self.peak_igpu_power_list = []
         self.avg_igpu_power_list = []
+        self.peak_igpu_temp_agt_list = []
+        self.avg_igpu_temp_agt_list = []
+        self.peak_cpu_cores_8_15_power_list = []
+        self.avg_cpu_cores_8_15_power_list = []
+        self.peak_igpu_estimate_power_list = []
+        self.avg_igpu_estimate_power_list = []
+        self.peak_telemetry_cpu_igpu_power_list = []
+        self.avg_telemetry_cpu_igpu_power_list = []
 
         # Per-prompt label tracking
         self.prompt_labels = []
@@ -308,6 +316,22 @@ class LlamaCppBench(Bench):
             results["Peak iGPU Power (AGT)"] = self.peak_igpu_power_list[idx]
             results["Avg iGPU Power (AGT)"] = self.avg_igpu_power_list[idx]
 
+        if len(self.peak_igpu_temp_agt_list) > idx:
+            results["Peak iGPU Temp (AGT)"] = self.peak_igpu_temp_agt_list[idx]
+            results["Avg iGPU Temp (AGT)"] = self.avg_igpu_temp_agt_list[idx]
+
+        if len(self.peak_cpu_cores_8_15_power_list) > idx:
+            results["Peak CPU Cores 8-15 Power (AGT)"] = self.peak_cpu_cores_8_15_power_list[idx]
+            results["Avg CPU Cores 8-15 Power (AGT)"] = self.avg_cpu_cores_8_15_power_list[idx]
+
+        if len(self.peak_igpu_estimate_power_list) > idx:
+            results["Peak iGPU Estimate Power (AGT)"] = self.peak_igpu_estimate_power_list[idx]
+            results["Avg iGPU Estimate Power (AGT)"] = self.avg_igpu_estimate_power_list[idx]
+
+        if len(self.peak_telemetry_cpu_igpu_power_list) > idx:
+            results["Peak Telemetry CPU+iGPU Power (AGT)"] = self.peak_telemetry_cpu_igpu_power_list[idx]
+            results["Avg Telemetry CPU+iGPU Power (AGT)"] = self.avg_telemetry_cpu_igpu_power_list[idx]
+
         for key, value in results.items():
             output.write(f"  {key}: {value}\n")
 
@@ -412,6 +436,23 @@ class LlamaCppBench(Bench):
                 if AGTKeys.PEAK_IGPU_TEMP in stats:
                     self.peak_gpu_temp_list.append(stats[AGTKeys.PEAK_IGPU_TEMP])
                     self.avg_gpu_temp_list.append(stats[AGTKeys.AVERAGE_IGPU_TEMP])
+                    self.peak_igpu_temp_agt_list.append(stats[AGTKeys.PEAK_IGPU_TEMP])
+                    self.avg_igpu_temp_agt_list.append(stats[AGTKeys.AVERAGE_IGPU_TEMP])
+
+                # CPU Cores 8-15 power
+                if AGTKeys.PEAK_CPU_CORES_8_15_POWER in stats:
+                    self.peak_cpu_cores_8_15_power_list.append(stats[AGTKeys.PEAK_CPU_CORES_8_15_POWER])
+                    self.avg_cpu_cores_8_15_power_list.append(stats[AGTKeys.AVERAGE_CPU_CORES_8_15_POWER])
+
+                # iGPU estimate power
+                if AGTKeys.PEAK_IGPU_ESTIMATE_POWER in stats:
+                    self.peak_igpu_estimate_power_list.append(stats[AGTKeys.PEAK_IGPU_ESTIMATE_POWER])
+                    self.avg_igpu_estimate_power_list.append(stats[AGTKeys.AVERAGE_IGPU_ESTIMATE_POWER])
+
+                # Telemetry CPU+iGPU power
+                if AGTKeys.PEAK_TELEMETRY_CPU_IGPU_POWER in stats:
+                    self.peak_telemetry_cpu_igpu_power_list.append(stats[AGTKeys.PEAK_TELEMETRY_CPU_IGPU_POWER])
+                    self.avg_telemetry_cpu_igpu_power_list.append(stats[AGTKeys.AVERAGE_TELEMETRY_CPU_IGPU_POWER])
 
                 # Power plot
                 if AGTKeys.POWER_USAGE_PLOT in stats:
