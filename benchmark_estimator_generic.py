@@ -8,10 +8,11 @@ import csv
 import statistics
 import math
 
-if len(sys.argv) != 8:
+if len(sys.argv) < 8 or len(sys.argv) > 9:
     print(
-        "Usage: python script.py <vendor> <model [ hf_checkpoint | directory ]> <prompt_dir_path> <cache_base_path> <prompt_prefix [ mlperf | textgen ]> <iterations> <warmups>"
+        "Usage: python script.py <vendor> <model [ hf_checkpoint | directory ]> <prompt_dir_path> <cache_base_path> <prompt_prefix [ mlperf | textgen ]> <iterations> <warmups> [backend]"
     )
+    print("  backend (optional): llamacpp (default), oga, or openvino")
     sys.exit(1)
 
 VENDOR = sys.argv[1]
@@ -21,6 +22,7 @@ CACHE_BASE = sys.argv[4]
 FILE_PREFIX = sys.argv[5]
 ITERATIONS = sys.argv[6]
 WARMUPS = sys.argv[7]
+BACKEND = sys.argv[8].lower() if len(sys.argv) == 9 else "llamacpp"
 
 # Generate unique cache directory using timestamp
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -278,65 +280,93 @@ def main():
                 print(
                     f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
                 )
-                cmd = [
-                    "lemonade",
-                    "-d",
-                    CACHE_PATH,
-                    "-i",
-                    model_path,
-                    "--power-agt",
-                    "--memory",
-                    "llamacpp-load",
-                    "--device",
-                    "igpu",
-                    "llamacpp-bench",
-                    "--cli",
-                    "--prompts",
-                    full_path,
-                    "--iterations",
-                    str(ITERATIONS),
-                    "--warmup-iterations",
-                    str(WARMUPS),
-                    "--output-tokens",
-                    str(out_value),
-                    "--prompt-label",
-                    fname,
-                ]
-                # cmd = [
-                #     "lemonade", "-d", CACHE_PATH,
-                #     "-i", model_path, "--power-agt",
-                #     "oga-load", "--device", "hybrid", "--dtype", "int4",
-                #     "oga-bench", "--prompts", full_path,
-                #     "--iterations", str(ITERATIONS), "--warmup-iterations", str(WARMUPS),
-                #     "--output-tokens", str(out_value)
-                # ]
+                if BACKEND == "oga":
+                    cmd = [
+                        "lemonade", "-d", CACHE_PATH,
+                        "-i", model_path, "--power-agt",
+                        "oga-load", "--device", "hybrid", "--dtype", "int4",
+                        "oga-bench", "--prompts", full_path,
+                        "--iterations", str(ITERATIONS), "--warmup-iterations", str(WARMUPS),
+                        "--output-tokens", str(out_value)
+                    ]
+                else:  # default llamacpp
+                    cmd = [
+                        "lemonade",
+                        "-d",
+                        CACHE_PATH,
+                        "-i",
+                        model_path,
+                        "--power-agt",
+                        "--memory",
+                        "llamacpp-load",
+                        "--device",
+                        "igpu",
+                        "llamacpp-bench",
+                        "--cli",
+                        "--prompts",
+                        full_path,
+                        "--iterations",
+                        str(ITERATIONS),
+                        "--warmup-iterations",
+                        str(WARMUPS),
+                        "--output-tokens",
+                        str(out_value),
+                        "--prompt-label",
+                        fname,
+                    ]
             elif VENDOR == "INTEL":
                 print(
                     f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
                 )
-                cmd = [
-                    "lemonade",
-                    "-d",
-                    CACHE_PATH,
-                    "-i",
-                    model_path,
-                    "openvino-load",
-                    "--device",
-                    "NPU",
-                    "-bp",
-                    full_path,
-                    "-r",
-                    str(out_value),
-                    "openvino-bench",
-                    "--iterations",
-                    str(ITERATIONS),
-                    "--warmup-iterations",
-                    str(WARMUPS),
-                    "--output-tokens",
-                    str(out_value),
-                    "--prompts",
-                    full_path,
-                ]
+                if BACKEND == "openvino":
+                    cmd = [
+                        "lemonade",
+                        "-d",
+                        CACHE_PATH,
+                        "-i",
+                        model_path,
+                        "openvino-load",
+                        "--device",
+                        "NPU",
+                        "-bp",
+                        full_path,
+                        "-r",
+                        str(out_value),
+                        "openvino-bench",
+                        "--iterations",
+                        str(ITERATIONS),
+                        "--warmup-iterations",
+                        str(WARMUPS),
+                        "--output-tokens",
+                        str(out_value),
+                        "--prompts",
+                        full_path,
+                    ]
+                else:  # default llamacpp
+                    cmd = [
+                        "lemonade",
+                        "-d",
+                        CACHE_PATH,
+                        "-i",
+                        model_path,
+                        "--power-hwinfo",
+                        "--memory",
+                        "llamacpp-load",
+                        "--device",
+                        "igpu",
+                        "llamacpp-bench",
+                        "--cli",
+                        "--prompts",
+                        full_path,
+                        "--iterations",
+                        str(ITERATIONS),
+                        "--warmup-iterations",
+                        str(WARMUPS),
+                        "--output-tokens",
+                        str(out_value),
+                        "--prompt-label",
+                        fname,
+                    ]
 
             elif VENDOR == "APPLE":
                 print(
