@@ -40,6 +40,8 @@ class Keys:
     POWER_USAGE_DATA_CSV = "power_usage_data_file_hwinfo"
     # Maximum power consumed by the CPU processor package during the tools sequence
     PEAK_PROCESSOR_PACKAGE_POWER = "peak_processor_package_power_hwinfo"
+    # Average power consumed by the CPU processor package during the tools sequence
+    AVERAGE_PROCESSOR_PACKAGE_POWER = "average_processor_package_power_hwinfo"
 
 
 # Add column to the Lemonade performance report table for the power data
@@ -155,7 +157,11 @@ class HWINFOPowerProfiler(Profiler):
     def __init__(self, parser_arg_value):
         super().__init__()
         self.warmup_period = parser_arg_value
-        self.status_stats += [Keys.PEAK_PROCESSOR_PACKAGE_POWER, Keys.POWER_USAGE_PLOT]
+        self.status_stats += [
+            Keys.PEAK_PROCESSOR_PACKAGE_POWER,
+            Keys.AVERAGE_PROCESSOR_PACKAGE_POWER,
+            Keys.POWER_USAGE_PLOT,
+        ]
         self.tracking_active = False
         self.build_dir = None
         self.csv_path = None
@@ -287,6 +293,7 @@ class HWINFOPowerProfiler(Profiler):
             df["time"] = df["time"] - delta
 
         peak_power = max(df["cpu_package_power"])
+        avg_power = df["cpu_package_power"].mean()
 
         # Create a figure
         fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(16, 8))
@@ -427,3 +434,4 @@ class HWINFOPowerProfiler(Profiler):
         state.save_stat(Keys.POWER_USAGE_DATA, self.data)
         state.save_stat(Keys.POWER_USAGE_DATA_CSV, self.csv_path)
         state.save_stat(Keys.PEAK_PROCESSOR_PACKAGE_POWER, f"{peak_power:0.1f} W")
+        state.save_stat(Keys.AVERAGE_PROCESSOR_PACKAGE_POWER, f"{avg_power:0.1f} W")

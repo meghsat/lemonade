@@ -60,31 +60,31 @@ def get_model_from_path(hf_path: str) -> str:
         output_dir = f"{checkpoint.split('/')[-1]}_ov-int4-CHw"
 
         if VENDOR == "INTEL":
-            if os.path.exists(output_dir):
-                print(f"Model already exported at {output_dir} → skipping export")
-            else:
-                cmd = [
-                    "optimum-cli",
-                    "export",
-                    "openvino",
-                    "-m",
-                    checkpoint,
-                    "--weight-format",
-                    "int4",
-                    "--sym",
-                    "--group-size",
-                    "-1",
-                    "--ratio",
-                    "1.0",
-                    "--all-layers",
-                    "--awq",
-                    "--scale-estimation",
-                    "--dataset=wikitext2",
-                    output_dir,
-                ]
-                print(f"[INTEL] Running command: {' '.join(cmd)}")
-                subprocess.run(cmd, check=True)
-            model_path = output_dir
+            # if os.path.exists(output_dir):
+            #     print(f"Model already exported at {output_dir} → skipping export")
+            # else:
+            #     cmd = [
+            #         "optimum-cli",
+            #         "export",
+            #         "openvino",
+            #         "-m",
+            #         checkpoint,
+            #         "--weight-format",
+            #         "int4",
+            #         "--sym",
+            #         "--group-size",
+            #         "-1",
+            #         "--ratio",
+            #         "1.0",
+            #         "--all-layers",
+            #         "--awq",
+            #         "--scale-estimation",
+            #         "--dataset=wikitext2",
+            #         output_dir,
+            #     ]
+            #     print(f"[INTEL] Running command: {' '.join(cmd)}")
+            #     subprocess.run(cmd, check=True)
+            model_path = checkpoint
 
         elif VENDOR == "AMD":
             print(f"[AMD] Using Hugging Face checkpoint directly: {checkpoint}")
@@ -243,7 +243,7 @@ def main():
         full_path = os.path.join(PROMPTS_PATH, fname)
 
         try:
-            if is_nvidia_arm64():
+            if VENDOR == "NVIDIA" and is_nvidia_arm64():
                 # Read prompt file content
                 with open(full_path, "r", encoding="utf-8") as f:
                     prompt_content = f.read().strip()
@@ -325,9 +325,10 @@ def main():
                         CACHE_PATH,
                         "-i",
                         model_path,
+                      # "--power-hwinfo",
                         "openvino-load",
                         "--device",
-                        "NPU",
+                        "GPU",
                         "-bp",
                         full_path,
                         "-r",

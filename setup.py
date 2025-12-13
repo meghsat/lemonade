@@ -82,6 +82,18 @@ setup(
         ],
         "model-generate": [
             "model-generate==1.5.0; platform_system=='Windows' and python_version=='3.10'",
+        ],
+        "openvino": [
+            "onnxruntime >=1.10.1,<1.22.0;platform_system=='Linux' and extra != 'llm-oga-cuda'",
+            "onnxruntime-directml >=1.19.0,<1.22.0;platform_system=='Windows' and extra != 'llm-oga-cuda'",
+            "onnxruntime-gpu >=1.19.1,<1.22.0;extra == 'llm-oga-cuda'",
+            "nncf==2.14.1",
+            "onnx==1.18.0",
+            "optimum-intel==1.22.0",
+            "openvino==2025.4",
+            "openvino-tokenizers==2025.4",
+            "openvino-genai==2025.4",
+            "lemonade-sdk[dev]"
         ]
     },
     classifiers=[],

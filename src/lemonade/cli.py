@@ -70,6 +70,9 @@ from lemonade.tools.huggingface.load import HuggingfaceLoad
 from lemonade.tools.huggingface.bench import HuggingfaceBench
 from lemonade.tools.oga.load import OgaLoad
 from lemonade.tools.oga.bench import OgaBench
+from lemonade.tools.openvino.bench import OpenVinoBench
+from lemonade.tools.openvino.load import OpenVinoLoad
+
 from lemonade.tools.llamacpp.bench import LlamaCppBench
 from lemonade.tools.llamacpp.load import LoadLlamaCpp
 
@@ -97,6 +100,8 @@ def main():
         HuggingfaceBench,
         OgaLoad,
         OgaBench,
+        OpenVinoLoad,
+        OpenVinoBench,
         LemonadeReport,
         # Inherited from lemonade
         Cache,
