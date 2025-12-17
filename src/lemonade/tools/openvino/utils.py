@@ -92,7 +92,10 @@ class OpenVinoModel(ModelAdapter):
                 "MIN_RESPONSE_LEN": int(min_response_len),
             }
         else:
-            pipe_config = {}
+            pipe_config = {
+                "KV_CACHE_PRECISION": "u8"
+            }
+            
 
         pipe = ov_genai.LLMPipeline(input_folder, device, **pipe_config)
         return pipe

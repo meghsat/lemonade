@@ -1,0 +1,1 @@
+python benchmark_estimator_generic.py "INTEL" "C:\Users\user\Downloads\gpt-oss-20b-int4"  ./prompt_files ./cache_gptoss20b_int4_mlperf phi 3 3 openvino

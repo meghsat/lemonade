@@ -1,0 +1,16 @@
+docker run --name ovino_vllm `
+  -p 8000:8000 `
+  -v ${PWD}/models:/models `
+  openvino/model_server:latest `
+  --rest_port 8000 `
+  --source_model meta-llama/Llama-3.1-8B-Instruct `
+  --model_repository_path /models `
+  --task text_generation `
+  --enable_prefix_caching true `
+  --kv_cache_precision u8 `
+  --target_device GPU
+
+
+ovms --rest_port 8000 --source_model meta-llama/Llama-3.1-8B-Instruct --model_repository_path models --model_name meta-llama/Llama-3.1-8B-Instruct --task text_generation --pipeline_type VLM --target_device GPU
+
+pip3 install -r requirements/xpu.txt . --extra-index-url https://download.pytorch.org/whl/xpu
