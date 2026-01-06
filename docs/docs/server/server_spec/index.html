@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.ico">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.618322db.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -791,15 +791,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#oga-endpoints-overview" class="md-nav__link">
+  <a href="#endpoints-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        OGA Endpoints Overview
+        Endpoints Overview
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="OGA Endpoints Overview">
+    <nav class="md-nav" aria-label="Endpoints Overview">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -814,10 +814,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#additional-endpoints" class="md-nav__link">
+  <a href="#llamacpp-endpoints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Additional Endpoints
+        llama.cpp Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lemonade-specific-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lemonade-Specific Endpoints
       
     </span>
   </a>
@@ -830,10 +841,82 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#start-the-rest-api-server" class="md-nav__link">
+  <a href="#multi-model-support" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Start the REST API Server
+        Multi-Model Support
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multi-Model Support">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device Constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#eviction-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Eviction Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-model-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Model Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#start-the-http-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Start the HTTP Server
       
     </span>
   </a>
@@ -953,15 +1036,15 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#post-apiv1responses" class="md-nav__link">
+  <a href="#post-apiv1embeddings" class="md-nav__link">
     <span class="md-ellipsis">
       
-        POST /api/v1/responses
+        POST /api/v1/embeddings
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="POST /api/v1/responses">
+    <nav class="md-nav" aria-label="POST /api/v1/embeddings">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -969,17 +1052,6 @@
     <span class="md-ellipsis">
       
         Parameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#streaming-events" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Streaming Events
       
     </span>
   </a>
@@ -1014,15 +1086,15 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiv1models" class="md-nav__link">
+  <a href="#post-apiv1reranking" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/v1/models
+        POST /api/v1/reranking
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="GET /api/v1/models">
+    <nav class="md-nav" aria-label="POST /api/v1/reranking">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1064,15 +1136,15 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiv1modelsmodel_id" class="md-nav__link">
+  <a href="#post-apiv1responses" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/v1/models/{model_id}
+        POST /api/v1/responses
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="GET /api/v1/models/{model_id}">
+    <nav class="md-nav" aria-label="POST /api/v1/responses">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1080,6 +1152,17 @@
     <span class="md-ellipsis">
       
         Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#streaming-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Streaming Events
       
     </span>
   </a>
@@ -1108,137 +1191,25 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#error-responses" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Error responses
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
 </li>
         
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#additional-endpoints_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Additional Endpoints
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Additional Endpoints">
-      <ul class="md-nav__list">
-        
           <li class="md-nav__item">
-  <a href="#post-apiv1pull" class="md-nav__link">
+  <a href="#post-apiv1audiotranscriptions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        POST /api/v1/pull
+        POST /api/v1/audio/transcriptions
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="POST /api/v1/pull">
+    <nav class="md-nav" aria-label="POST /api/v1/audio/transcriptions">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#parameters_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#post-apiv1delete" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        POST /api/v1/delete
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="POST /api/v1/delete">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#parameters_6" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#post-apiv1load" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        POST /api/v1/load
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="POST /api/v1/load">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#parameters_7" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#post-apiv1unload" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        POST /api/v1/unload
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="POST /api/v1/unload">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#parameters_8" class="md-nav__link">
     <span class="md-ellipsis">
       
         Parameters
@@ -1276,19 +1247,19 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#post-apiv1params" class="md-nav__link">
+  <a href="#get-apiv1models" class="md-nav__link">
     <span class="md-ellipsis">
       
-        POST /api/v1/params
+        GET /api/v1/models
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="POST /api/v1/params">
+    <nav class="md-nav" aria-label="GET /api/v1/models">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#parameters_9" class="md-nav__link">
+  <a href="#parameters_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         Parameters
@@ -1326,19 +1297,19 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiv1health" class="md-nav__link">
+  <a href="#get-apiv1modelsmodel_id" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/v1/health
+        GET /api/v1/models/{model_id}
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="GET /api/v1/health">
+    <nav class="md-nav" aria-label="GET /api/v1/models/{model_id}">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#parameters_10" class="md-nav__link">
+  <a href="#parameters_7" class="md-nav__link">
     <span class="md-ellipsis">
       
         Parameters
@@ -1370,25 +1341,231 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#error-responses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error responses
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#additional-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additional Endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Additional Endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apiv1pull" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/v1/pull
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="POST /api/v1/pull">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#streaming-response-streamtrue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Streaming Response (stream=true)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiv1stats" class="md-nav__link">
+  <a href="#post-apiv1delete" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/v1/stats
+        POST /api/v1/delete
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="GET /api/v1/stats">
+    <nav class="md-nav" aria-label="POST /api/v1/delete">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiv1load" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/v1/load
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="POST /api/v1/load">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-model-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-model options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example requests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response-format_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiv1unload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/v1/unload
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="POST /api/v1/unload">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#parameters_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-requests_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example requests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response-format_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiv1health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/v1/health
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GET /api/v1/health">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_12" class="md-nav__link">
     <span class="md-ellipsis">
       
         Parameters
@@ -1410,7 +1587,57 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#response-format_8" class="md-nav__link">
+  <a href="#response-format_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiv1stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/v1/stats
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GET /api/v1/stats">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-request_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example request
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response-format_11" class="md-nav__link">
     <span class="md-ellipsis">
       
         Response format
@@ -1438,7 +1665,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#parameters_12" class="md-nav__link">
+  <a href="#parameters_14" class="md-nav__link">
     <span class="md-ellipsis">
       
         Parameters
@@ -1449,7 +1676,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#example-request_9" class="md-nav__link">
+  <a href="#example-request_10" class="md-nav__link">
     <span class="md-ellipsis">
       
         Example request
@@ -1460,7 +1687,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#response-format_9" class="md-nav__link">
+  <a href="#response-format_12" class="md-nav__link">
     <span class="md-ellipsis">
       
         Response format
@@ -1596,15 +1823,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#oga-endpoints-overview" class="md-nav__link">
+  <a href="#endpoints-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        OGA Endpoints Overview
+        Endpoints Overview
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="OGA Endpoints Overview">
+    <nav class="md-nav" aria-label="Endpoints Overview">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1619,10 +1846,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#additional-endpoints" class="md-nav__link">
+  <a href="#llamacpp-endpoints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Additional Endpoints
+        llama.cpp Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lemonade-specific-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lemonade-Specific Endpoints
       
     </span>
   </a>
@@ -1635,10 +1873,82 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#start-the-rest-api-server" class="md-nav__link">
+  <a href="#multi-model-support" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Start the REST API Server
+        Multi-Model Support
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multi-Model Support">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device Constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#eviction-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Eviction Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-model-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Model Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#start-the-http-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Start the HTTP Server
       
     </span>
   </a>
@@ -1758,15 +2068,15 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#post-apiv1responses" class="md-nav__link">
+  <a href="#post-apiv1embeddings" class="md-nav__link">
     <span class="md-ellipsis">
       
-        POST /api/v1/responses
+        POST /api/v1/embeddings
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="POST /api/v1/responses">
+    <nav class="md-nav" aria-label="POST /api/v1/embeddings">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1774,17 +2084,6 @@
     <span class="md-ellipsis">
       
         Parameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#streaming-events" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Streaming Events
       
     </span>
   </a>
@@ -1819,15 +2118,15 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiv1models" class="md-nav__link">
+  <a href="#post-apiv1reranking" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/v1/models
+        POST /api/v1/reranking
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="GET /api/v1/models">
+    <nav class="md-nav" aria-label="POST /api/v1/reranking">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1869,15 +2168,15 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiv1modelsmodel_id" class="md-nav__link">
+  <a href="#post-apiv1responses" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/v1/models/{model_id}
+        POST /api/v1/responses
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="GET /api/v1/models/{model_id}">
+    <nav class="md-nav" aria-label="POST /api/v1/responses">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1885,6 +2184,17 @@
     <span class="md-ellipsis">
       
         Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#streaming-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Streaming Events
       
     </span>
   </a>
@@ -1913,137 +2223,25 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#error-responses" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Error responses
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
 </li>
         
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#additional-endpoints_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Additional Endpoints
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Additional Endpoints">
-      <ul class="md-nav__list">
-        
           <li class="md-nav__item">
-  <a href="#post-apiv1pull" class="md-nav__link">
+  <a href="#post-apiv1audiotranscriptions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        POST /api/v1/pull
+        POST /api/v1/audio/transcriptions
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="POST /api/v1/pull">
+    <nav class="md-nav" aria-label="POST /api/v1/audio/transcriptions">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#parameters_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#post-apiv1delete" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        POST /api/v1/delete
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="POST /api/v1/delete">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#parameters_6" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#post-apiv1load" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        POST /api/v1/load
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="POST /api/v1/load">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#parameters_7" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#post-apiv1unload" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        POST /api/v1/unload
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="POST /api/v1/unload">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#parameters_8" class="md-nav__link">
     <span class="md-ellipsis">
       
         Parameters
@@ -2081,19 +2279,19 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#post-apiv1params" class="md-nav__link">
+  <a href="#get-apiv1models" class="md-nav__link">
     <span class="md-ellipsis">
       
-        POST /api/v1/params
+        GET /api/v1/models
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="POST /api/v1/params">
+    <nav class="md-nav" aria-label="GET /api/v1/models">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#parameters_9" class="md-nav__link">
+  <a href="#parameters_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         Parameters
@@ -2131,19 +2329,19 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiv1health" class="md-nav__link">
+  <a href="#get-apiv1modelsmodel_id" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/v1/health
+        GET /api/v1/models/{model_id}
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="GET /api/v1/health">
+    <nav class="md-nav" aria-label="GET /api/v1/models/{model_id}">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#parameters_10" class="md-nav__link">
+  <a href="#parameters_7" class="md-nav__link">
     <span class="md-ellipsis">
       
         Parameters
@@ -2175,25 +2373,231 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#error-responses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error responses
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#additional-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additional Endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Additional Endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apiv1pull" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/v1/pull
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="POST /api/v1/pull">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#streaming-response-streamtrue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Streaming Response (stream=true)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiv1stats" class="md-nav__link">
+  <a href="#post-apiv1delete" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/v1/stats
+        POST /api/v1/delete
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="GET /api/v1/stats">
+    <nav class="md-nav" aria-label="POST /api/v1/delete">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiv1load" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/v1/load
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="POST /api/v1/load">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-model-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-model options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example requests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response-format_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiv1unload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/v1/unload
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="POST /api/v1/unload">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#parameters_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-requests_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example requests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response-format_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiv1health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/v1/health
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GET /api/v1/health">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_12" class="md-nav__link">
     <span class="md-ellipsis">
       
         Parameters
@@ -2215,7 +2619,57 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#response-format_8" class="md-nav__link">
+  <a href="#response-format_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiv1stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/v1/stats
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GET /api/v1/stats">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-request_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example request
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response-format_11" class="md-nav__link">
     <span class="md-ellipsis">
       
         Response format
@@ -2243,7 +2697,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#parameters_12" class="md-nav__link">
+  <a href="#parameters_14" class="md-nav__link">
     <span class="md-ellipsis">
       
         Parameters
@@ -2254,7 +2708,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#example-request_9" class="md-nav__link">
+  <a href="#example-request_10" class="md-nav__link">
     <span class="md-ellipsis">
       
         Example request
@@ -2265,7 +2719,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#response-format_9" class="md-nav__link">
+  <a href="#response-format_12" class="md-nav__link">
     <span class="md-ellipsis">
       
         Response format
@@ -2306,8 +2760,8 @@
 
 
 <h1 id="lemonade-server-spec">Lemonade Server Spec</h1>
-<p>The <code>lemonade</code> SDK provides a standards-compliant server process that provides a REST API to enable communication with other applications.</p>
-<p>Lemonade Server currently supports two backends:</p>
+<p>The Lemonade Server is a standards-compliant server process that provides an HTTP API to enable integration with other applications.</p>
+<p>Lemonade Server currently supports these backends:</p>
 <table>
 <thead>
 <tr>
@@ -2318,14 +2772,14 @@
 </thead>
 <tbody>
 <tr>
-<td><a href="https://github.com/microsoft/onnxruntime-genai">ONNX Runtime GenAI (OGA)</a></td>
-<td><code>.ONNX</code></td>
-<td>Lemonade's built-in server, recommended for standard use on AMD platforms.</td>
-</tr>
-<tr>
 <td><a href="https://github.com/ggml-org/llama.cpp">Llama.cpp</a></td>
 <td><code>.GGUF</code></td>
 <td>Uses llama.cpp's <code>llama-server</code> backend. More details <a href="#gguf-support">here</a>.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/microsoft/onnxruntime-genai">ONNX Runtime GenAI (OGA)</a></td>
+<td><code>.ONNX</code></td>
+<td>Uses Lemonade's own <code>ryzenai-server</code> backend.</td>
 </tr>
 <tr>
 <td><a href="https://github.com/FastFlowLM/FastFlowLM">FastFlowLM</a></td>
@@ -2334,42 +2788,77 @@
 </tr>
 </tbody>
 </table>
-<h2 id="oga-endpoints-overview">OGA Endpoints Overview</h2>
-<p>Right now, the <a href="#openai-compatible-endpoints">key endpoints of the OpenAI API</a> are available.</p>
-<p>We are also actively investigating and developing <a href="#additional-endpoints">additional endpoints</a> that will improve the experience of local applications.</p>
+<h2 id="endpoints-overview">Endpoints Overview</h2>
+<p>The <a href="#openai-compatible-endpoints">key endpoints of the OpenAI API</a> are available.</p>
+<p>We are also actively investigating and developing <a href="#lemonade-specific-endpoints">additional endpoints</a> that will improve the experience of local applications.</p>
 <h3 id="openai-compatible-endpoints">OpenAI-Compatible Endpoints</h3>
 <ul>
 <li>POST <code>/api/v1/chat/completions</code> - Chat Completions (messages -&gt; completion)</li>
 <li>POST <code>/api/v1/completions</code> - Text Completions (prompt -&gt; completion)</li>
+<li>POST <code>/api/v1/embeddings</code> - Embeddings (text -&gt; vector representations)</li>
 <li>POST <code>/api/v1/responses</code> - Chat Completions (prompt|messages -&gt; event)</li>
+<li>POST <code>/api/v1/audio/transcriptions</code> - Audio Transcription (audio -&gt; text)</li>
 <li>GET <code>/api/v1/models</code> - List models available locally</li>
 <li>GET <code>/api/v1/models/{model_id}</code> - Retrieve a specific model by ID</li>
 </ul>
-<h3 id="additional-endpoints">Additional Endpoints</h3>
-<blockquote>
-<p>🚧 These additional endpoints are a preview that is under active development. The API specification is subject to change.</p>
-</blockquote>
-<p>These additional endpoints were inspired by the <a href="https://lmstudio.ai/docs/app/api/endpoints/openai">LM Studio REST API</a>, <a href="https://github.com/ollama/ollama/blob/main/docs/api.md">Ollama API</a>, and <a href="https://platform.openai.com/docs/api-reference/introduction">OpenAI API</a>.</p>
-<p>They focus on enabling client applications by extending existing cloud-focused APIs (e.g., OpenAI) to also include the ability to load and unload models before completion requests are made. These extensions allow for a greater degree of UI/UX responsiveness in native applications by allowing applications to:</p>
+<h3 id="llamacpp-endpoints">llama.cpp Endpoints</h3>
+<p>These endpoints defined by <code>llama.cpp</code> extend the OpenAI-compatible API with additional functionality.</p>
 <ul>
-<li>Pre-load models at UI-loading-time, as opposed to completion-request time.</li>
-<li>Load models from the local system that were downloaded by other applications (i.e., a common system-wide models cache).</li>
-<li>Unload models to save memory space.</li>
+<li>POST <code>/api/v1/reranking</code> - Reranking (query + documents -&gt; relevance-scored documents)</li>
 </ul>
-<p>The additional endpoints under development are:</p>
+<h3 id="lemonade-specific-endpoints">Lemonade-Specific Endpoints</h3>
+<p>We have designed a set of Lemonade-specific endpoints to enable client applications by extending the existing cloud-focused APIs (e.g., OpenAI). These extensions allow for a greater degree of UI/UX responsiveness in native applications by allowing applications to:</p>
+<ul>
+<li>Download models at setup time.</li>
+<li>Pre-load models at UI-loading-time, as opposed to completion-request time.</li>
+<li>Unload models to save memory space.</li>
+<li>Understand system resources and state to make dynamic choices.</li>
+</ul>
+<p>The additional endpoints are:</p>
 <ul>
 <li>POST <code>/api/v1/pull</code> - Install a model</li>
 <li>POST <code>/api/v1/load</code> - Load a model</li>
 <li>POST <code>/api/v1/unload</code> - Unload a model</li>
-<li>POST <code>/api/v1/params</code> - Set generation parameters</li>
 <li>GET <code>/api/v1/health</code> - Check server health</li>
 <li>GET <code>/api/v1/stats</code> - Performance statistics from the last request</li>
 <li>GET <code>/api/v1/system-info</code> - System information and device enumeration</li>
 </ul>
-<blockquote>
-<p>🚧 We are in the process of developing this interface. Let us know what's important to you on Github or by email (lemonade at amd dot com).</p>
-</blockquote>
-<h2 id="start-the-rest-api-server">Start the REST API Server</h2>
+<h2 id="multi-model-support">Multi-Model Support</h2>
+<p>Lemonade Server supports loading multiple models simultaneously, allowing you to keep frequently-used models in memory for faster switching. The server uses a Least Recently Used (LRU) cache policy to automatically manage model eviction when limits are reached.</p>
+<h3 id="configuration">Configuration</h3>
+<p>Use the <code>--max-loaded-models</code> option to specify how many models to keep loaded:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Load up to 3 LLMs, 2 embedding models, 1 reranking model, and 1 audio model</span>
+lemonade-server<span class="w"> </span>serve<span class="w"> </span>--max-loaded-models<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">1</span>
+
+<span class="c1"># Load up to 5 LLMs (embeddings, reranking, and audio default to 1 each)</span>
+lemonade-server<span class="w"> </span>serve<span class="w"> </span>--max-loaded-models<span class="w"> </span><span class="m">5</span>
+</code></pre></div>
+<p><strong>Default:</strong> <code>1 1 1 1</code> (one model of each type)</p>
+<h3 id="model-types">Model Types</h3>
+<p>Models are categorized into these types:
+- <strong>LLM</strong> - Chat and completion models (default type)
+- <strong>Embedding</strong> - Models for generating text embeddings (identified by the <code>embeddings</code> label)
+- <strong>Reranking</strong> - Models for document reranking (identified by the <code>reranking</code> label)
+- <strong>Audio</strong> - Models for audio transcription using Whisper (identified by the <code>audio</code> label)</p>
+<p>Each type has its own independent limit and LRU cache.</p>
+<h3 id="device-constraints">Device Constraints</h3>
+<ul>
+<li><strong>NPU Exclusivity:</strong> Only one model can use the NPU at a time. Loading a new NPU model will evict any existing NPU model regardless of type or limits.</li>
+<li><strong>CPU/GPU:</strong> No inherent limits beyond available RAM. Multiple models can coexist on CPU or GPU.</li>
+</ul>
+<h3 id="eviction-policy">Eviction Policy</h3>
+<p>When a model slot is full:
+1. The least recently used model of that type is evicted
+2. The new model is loaded
+3. If loading fails (except file-not-found errors), all models are evicted and the load is retried</p>
+<p>Models currently processing inference requests cannot be evicted until they finish.</p>
+<h3 id="per-model-settings">Per-Model Settings</h3>
+<p>Each model can be loaded with custom settings (context size, llamacpp backend, llamacpp args) via the <code>/api/v1/load</code> endpoint. These per-model settings override the default values set via CLI arguments or environment variables. See the <a href="#post-apiv1load"><code>/api/v1/load</code> endpoint documentation</a> for details.</p>
+<p><strong>Setting Priority Order:</strong>
+1. Values passed explicitly in <code>/api/v1/load</code> request (highest priority)
+2. Values from <code>lemonade-server</code> CLI arguments or environment variables
+3. Hardcoded defaults in <code>lemonade-router</code> (lowest priority)</p>
+<h2 id="start-the-http-server">Start the HTTP Server</h2>
 <blockquote>
 <p><strong>NOTE:</strong> This server is intended for use on local systems only. Do not expose the server port to the open internet.</p>
 </blockquote>
@@ -2464,9 +2953,6 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
-<p>Note: The value for <code>model</code> is either a <a href="../server_models/">Lemonade Server model name</a>, or a checkpoint that has been pre-loaded using the <a href="#post-apiv1load">load endpoint</a>.</p>
-</blockquote>
 <h4 id="example-request">Example request</h4>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">PowerShell</label><label for="__tabbed_1_2">Bash</label></div>
 <div class="tabbed-content">
@@ -2621,9 +3107,6 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
-<p>Note: The value for <code>model</code> is either a <a href="../server_models/">Lemonade Server model name</a>, or a checkpoint that has been pre-loaded using the <a href="#post-apiv1load">load endpoint</a>.</p>
-</blockquote>
 <h4 id="example-request_1">Example request</h4>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">PowerShell</label><label for="__tabbed_3_2">Bash</label></div>
 <div class="tabbed-content">
@@ -2664,9 +3147,216 @@
 <span class="w">  </span><span class="p">}],</span>
 <span class="p">}</span>
 </code></pre></div>
+<h3 id="post-apiv1embeddings"><code>POST /api/v1/embeddings</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-fully_available-green" /></sub></h3>
+<p>Embeddings API. You provide input text and receive vector representations (embeddings) that can be used for semantic search, clustering, and similarity comparisons. This API will also load the model if it is not already loaded.</p>
+<blockquote>
+<p><strong>Note:</strong> This endpoint is only available for models using the <code>llamacpp</code> or <code>flm</code> recipes. ONNX models (OGA recipes) do not support embeddings.</p>
+</blockquote>
+<h4 id="parameters_2">Parameters</h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Required</th>
+<th>Description</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>input</code></td>
+<td>Yes</td>
+<td>The input text or array of texts to embed. Can be a string or an array of strings.</td>
+<td><sub><img alt="Status" src="https://img.shields.io/badge/available-green" /></sub></td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>Yes</td>
+<td>The model to use for generating embeddings.</td>
+<td><sub><img alt="Status" src="https://img.shields.io/badge/available-green" /></sub></td>
+</tr>
+<tr>
+<td><code>encoding_format</code></td>
+<td>No</td>
+<td>The format to return embeddings in. Supported values: <code>"float"</code> (default), <code>"base64"</code>.</td>
+<td><sub><img alt="Status" src="https://img.shields.io/badge/available-green" /></sub></td>
+</tr>
+</tbody>
+</table>
+<h4 id="example-request_2">Example request</h4>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">PowerShell</label><label for="__tabbed_4_2">Bash</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="nb">Invoke-WebRequest</span> <span class="p">`</span>
+  <span class="n">-Uri</span> <span class="s2">&quot;http://localhost:8000/api/v1/embeddings&quot;</span> <span class="p">`</span>
+  <span class="n">-Method</span> <span class="n">POST</span> <span class="p">`</span>
+  <span class="n">-Headers</span> <span class="p">@{</span> <span class="s2">&quot;Content-Type&quot;</span> <span class="p">=</span> <span class="s2">&quot;application/json&quot;</span> <span class="p">}</span> <span class="p">`</span>
+  <span class="n">-Body</span> <span class="s1">&#39;{</span>
+<span class="s1">    &quot;model&quot;: &quot;nomic-embed-text-v1-GGUF&quot;,</span>
+<span class="s1">    &quot;input&quot;: [&quot;Hello, world!&quot;, &quot;How are you?&quot;],</span>
+<span class="s1">    &quot;encoding_format&quot;: &quot;float&quot;</span>
+<span class="s1">  }&#39;</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/embeddings<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<span class="s1">        &quot;model&quot;: &quot;nomic-embed-text-v1-GGUF&quot;,</span>
+<span class="s1">        &quot;input&quot;: [&quot;Hello, world!&quot;, &quot;How are you?&quot;],</span>
+<span class="s1">        &quot;encoding_format&quot;: &quot;float&quot;</span>
+<span class="s1">      }&#39;</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h4 id="response-format_2">Response format</h4>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;list&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;embedding&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;index&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;embedding&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">0.0234</span><span class="p">,</span><span class="w"> </span><span class="mf">-0.0567</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0891</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">]</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;embedding&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;index&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;embedding&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">0.0456</span><span class="p">,</span><span class="w"> </span><span class="mf">-0.0678</span><span class="p">,</span><span class="w"> </span><span class="mf">0.1234</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;model&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;nomic-embed-text-v1-GGUF&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;usage&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;prompt_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;total_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><strong>Field Descriptions:</strong></p>
+<ul>
+<li><code>object</code> - Type of response object, always <code>"list"</code></li>
+<li><code>data</code> - Array of embedding objects</li>
+<li><code>object</code> - Type of embedding object, always <code>"embedding"</code></li>
+<li><code>index</code> - Index position of the input text in the request</li>
+<li><code>embedding</code> - Vector representation as an array of floats</li>
+<li><code>model</code> - Model identifier used to generate the embeddings</li>
+<li><code>usage</code> - Token usage statistics</li>
+<li><code>prompt_tokens</code> - Number of tokens in the input</li>
+<li><code>total_tokens</code> - Total tokens processed</li>
+</ul>
+<h3 id="post-apiv1reranking"><code>POST /api/v1/reranking</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-fully_available-green" /></sub></h3>
+<p>Reranking API. You provide a query and a list of documents, and receive the documents reordered by their relevance to the query with relevance scores. This is useful for improving search results quality. This API will also load the model if it is not already loaded.</p>
+<blockquote>
+<p><strong>Note:</strong> This endpoint follows API conventions similar to OpenAI's format but is not part of the official OpenAI API. It is inspired by llama.cpp and other inference server implementations.</p>
+<p><strong>Note:</strong> This endpoint is only available for models using the <code>llamacpp</code> recipe. It is not available for FLM or ONNX models.</p>
+</blockquote>
+<h4 id="parameters_3">Parameters</h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Required</th>
+<th>Description</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>query</code></td>
+<td>Yes</td>
+<td>The search query text.</td>
+<td><sub><img alt="Status" src="https://img.shields.io/badge/available-green" /></sub></td>
+</tr>
+<tr>
+<td><code>documents</code></td>
+<td>Yes</td>
+<td>Array of document strings to be reranked.</td>
+<td><sub><img alt="Status" src="https://img.shields.io/badge/available-green" /></sub></td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>Yes</td>
+<td>The model to use for reranking.</td>
+<td><sub><img alt="Status" src="https://img.shields.io/badge/available-green" /></sub></td>
+</tr>
+</tbody>
+</table>
+<h4 id="example-request_3">Example request</h4>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">PowerShell</label><label for="__tabbed_5_2">Bash</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="nb">Invoke-WebRequest</span> <span class="p">`</span>
+  <span class="n">-Uri</span> <span class="s2">&quot;http://localhost:8000/api/v1/reranking&quot;</span> <span class="p">`</span>
+  <span class="n">-Method</span> <span class="n">POST</span> <span class="p">`</span>
+  <span class="n">-Headers</span> <span class="p">@{</span> <span class="s2">&quot;Content-Type&quot;</span> <span class="p">=</span> <span class="s2">&quot;application/json&quot;</span> <span class="p">}</span> <span class="p">`</span>
+  <span class="n">-Body</span> <span class="s1">&#39;{</span>
+<span class="s1">    &quot;model&quot;: &quot;bge-reranker-v2-m3-GGUF&quot;,</span>
+<span class="s1">    &quot;query&quot;: &quot;What is the capital of France?&quot;,</span>
+<span class="s1">    &quot;documents&quot;: [</span>
+<span class="s1">      &quot;Paris is the capital of France.&quot;,</span>
+<span class="s1">      &quot;Berlin is the capital of Germany.&quot;,</span>
+<span class="s1">      &quot;Madrid is the capital of Spain.&quot;</span>
+<span class="s1">    ]</span>
+<span class="s1">  }&#39;</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/reranking<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<span class="s1">        &quot;model&quot;: &quot;bge-reranker-v2-m3-GGUF&quot;,</span>
+<span class="s1">        &quot;query&quot;: &quot;What is the capital of France?&quot;,</span>
+<span class="s1">        &quot;documents&quot;: [</span>
+<span class="s1">          &quot;Paris is the capital of France.&quot;,</span>
+<span class="s1">          &quot;Berlin is the capital of Germany.&quot;,</span>
+<span class="s1">          &quot;Madrid is the capital of Spain.&quot;</span>
+<span class="s1">        ]</span>
+<span class="s1">      }&#39;</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h4 id="response-format_3">Response format</h4>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;model&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bge-reranker-v2-m3-GGUF&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;list&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;results&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;index&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;relevance_score&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">8.60673713684082</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;index&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;relevance_score&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">-5.3886260986328125</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;index&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;relevance_score&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">-3.555561065673828</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;usage&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;prompt_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">51</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;total_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">51</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><strong>Field Descriptions:</strong></p>
+<ul>
+<li><code>model</code> - Model identifier used for reranking</li>
+<li><code>object</code> - Type of response object, always <code>"list"</code></li>
+<li><code>results</code> - Array of all documents with relevance scores</li>
+<li><code>index</code> - Original index of the document in the input array</li>
+<li><code>relevance_score</code> - Relevance score assigned by the model (higher = more relevant)</li>
+<li><code>usage</code> - Token usage statistics</li>
+<li><code>prompt_tokens</code> - Number of tokens in the input</li>
+<li><code>total_tokens</code> - Total tokens processed</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> The results are returned in their original input order, not sorted by relevance score. To get documents ranked by relevance, you need to sort the results by <code>relevance_score</code> in descending order on the client side.</p>
+</blockquote>
 <h3 id="post-apiv1responses"><code>POST /api/v1/responses</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-partially_available-green" /></sub></h3>
 <p>Responses API. You provide an input and receive a response. This API will also load the model if it is not already loaded.</p>
-<h4 id="parameters_2">Parameters</h4>
+<h4 id="parameters_4">Parameters</h4>
 <table>
 <thead>
 <tr>
@@ -2727,9 +3417,6 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
-<p>Note: The value for <code>model</code> is either a <a href="../server_models/">Lemonade Server model name</a>, or a checkpoint that has been pre-loaded using the <a href="#post-apiv1load">load endpoint</a>.</p>
-</blockquote>
 <h4 id="streaming-events">Streaming Events</h4>
 <p>The Responses API uses semantic events for streaming. Each event is typed with a predefined schema, so you can listen for events you care about. Our initial implementation only offers support to:</p>
 <ul>
@@ -2738,8 +3425,8 @@
 <li><code>response.completed</code></li>
 </ul>
 <p>For a full list of event types, see the <a href="https://platform.openai.com/docs/api-reference/responses-streaming">API reference for streaming</a>.</p>
-<h4 id="example-request_2">Example request</h4>
-<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">PowerShell</label><label for="__tabbed_4_2">Bash</label></div>
+<h4 id="example-request_4">Example request</h4>
+<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">PowerShell</label><label for="__tabbed_6_2">Bash</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="nb">Invoke-WebRequest</span> <span class="n">-Uri</span> <span class="s2">&quot;http://localhost:8000/api/v1/responses&quot;</span> <span class="p">`</span>
@@ -2764,8 +3451,8 @@
 </div>
 </div>
 </div>
-<h4 id="response-format_2">Response format</h4>
-<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Non-streaming responses</label><label for="__tabbed_5_2">Streaming Responses</label></div>
+<h4 id="response-format_4">Response format</h4>
+<div class="tabbed-set tabbed-alternate" data-tabs="7:2"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Non-streaming responses</label><label for="__tabbed_7_2">Streaming Responses</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
@@ -2788,10 +3475,79 @@
 </div>
 </div>
 </div>
+<h3 id="post-apiv1audiotranscriptions"><code>POST /api/v1/audio/transcriptions</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-partial-yellow" /></sub></h3>
+<p>Audio Transcription API. You provide an audio file and receive a text transcription. This API will also load the model if it is not already loaded.</p>
+<blockquote>
+<p><strong>Note:</strong> This endpoint uses <a href="https://github.com/ggerganov/whisper.cpp">whisper.cpp</a> as the backend. Whisper models are automatically downloaded when first used.</p>
+<p><strong>Limitations:</strong> Only <code>wav</code> audio format and <code>json</code> response format are currently supported.</p>
+</blockquote>
+<h4 id="parameters_5">Parameters</h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Required</th>
+<th>Description</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>file</code></td>
+<td>Yes</td>
+<td>The audio file to transcribe. Supported formats: wav.</td>
+<td><sub><img alt="Status" src="https://img.shields.io/badge/partial-yellow" /></sub></td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>Yes</td>
+<td>The Whisper model to use for transcription (e.g., <code>Whisper-Tiny</code>, <code>Whisper-Base</code>, <code>Whisper-Small</code>).</td>
+<td><sub><img alt="Status" src="https://img.shields.io/badge/available-green" /></sub></td>
+</tr>
+<tr>
+<td><code>language</code></td>
+<td>No</td>
+<td>The language of the audio (ISO 639-1 code, e.g., <code>en</code>, <code>es</code>, <code>fr</code>). If not specified, Whisper will auto-detect the language.</td>
+<td><sub><img alt="Status" src="https://img.shields.io/badge/available-green" /></sub></td>
+</tr>
+<tr>
+<td><code>response_format</code></td>
+<td>No</td>
+<td>The format of the response. Currently only <code>json</code> is supported.</td>
+<td><sub><img alt="Status" src="https://img.shields.io/badge/available-green" /></sub></td>
+</tr>
+</tbody>
+</table>
+<h4 id="example-request_5">Example request</h4>
+<div class="tabbed-set tabbed-alternate" data-tabs="8:2"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1">Windows</label><label for="__tabbed_8_2">Linux/macOS</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/audio/transcriptions<span class="w"> </span>^
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">&quot;file=@C:\path\to\audio.wav&quot;</span><span class="w"> </span>^
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">&quot;model=Whisper-Tiny&quot;</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/audio/transcriptions<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">&quot;file=@/path/to/audio.wav&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">&quot;model=Whisper-Tiny&quot;</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h4 id="response-format_5">Response format</h4>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;text&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Hello, this is a sample transcription of the audio file.&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><strong>Field Descriptions:</strong></p>
+<ul>
+<li><code>text</code> - The transcribed text from the audio file</li>
+</ul>
 <h3 id="get-apiv1models"><code>GET /api/v1/models</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-fully_available-green" /></sub></h3>
-<p>Returns a list of key models available on the server in an OpenAI-compatible format. We also expanded each model object with the <code>checkpoint</code> and <code>recipe</code> fields, which may be used to load a model using the <code>load</code> endpoint.</p>
+<p>Returns a list of models available on the server in an OpenAI-compatible format. Each model object includes extended fields like <code>checkpoint</code>, <code>recipe</code>, <code>size</code>, <code>downloaded</code>, and <code>labels</code>.</p>
 <p>By default, only models available locally (downloaded) are shown, matching OpenAI API behavior.</p>
-<h4 id="parameters_3">Parameters</h4>
+<h4 id="parameters_6">Parameters</h4>
 <table>
 <thead>
 <tr>
@@ -2804,73 +3560,66 @@
 <tr>
 <td><code>show_all</code></td>
 <td>No</td>
-<td>If set to <code>true</code>, returns all models from the catalog with additional fields (<code>name</code>, <code>downloaded</code>, <code>labels</code>). Used by the CLI <code>list</code> command. Defaults to <code>false</code>.</td>
+<td>If set to <code>true</code>, returns all models from the catalog including those not yet downloaded. Defaults to <code>false</code>.</td>
 </tr>
 </tbody>
 </table>
-<h4 id="example-request_3">Example request</h4>
+<h4 id="example-request_6">Example request</h4>
 <div class="highlight"><pre><span></span><code><span class="c1"># Show only downloaded models (OpenAI-compatible)</span>
 curl<span class="w"> </span>http://localhost:8000/api/v1/models
 
-<span class="c1"># Show all models with download status (CLI usage)</span>
+<span class="c1"># Show all models including not-yet-downloaded (extended usage)</span>
 curl<span class="w"> </span>http://localhost:8000/api/v1/models?show_all<span class="o">=</span><span class="nb">true</span>
 </code></pre></div>
-<h4 id="response-format_3">Response format</h4>
-<p>Default response (only downloaded models):</p>
+<h4 id="response-format_6">Response format</h4>
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
 <span class="w">  </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;list&quot;</span><span class="p">,</span>
 <span class="w">  </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
 <span class="w">    </span><span class="p">{</span>
-<span class="w">      </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Qwen2.5-0.5B-Instruct-CPU&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Qwen3-0.6B-GGUF&quot;</span><span class="p">,</span>
 <span class="w">      </span><span class="nt">&quot;created&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1744173590</span><span class="p">,</span>
 <span class="w">      </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;model&quot;</span><span class="p">,</span>
 <span class="w">      </span><span class="nt">&quot;owned_by&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;lemonade&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;checkpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;amd/Qwen2.5-0.5B-Instruct-quantized_int4-float16-cpu-onnx&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;recipe&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;oga-cpu&quot;</span>
-<span class="w">    </span><span class="p">},</span>
-<span class="w">    </span><span class="p">{</span>
-<span class="w">      </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Llama-3.2-1B-Instruct-Hybrid&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;created&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1744173590</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;model&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;owned_by&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;lemonade&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;checkpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;amd/Llama-3.2-1B-Instruct-awq-g128-int4-asym-fp16-onnx-hybrid&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;recipe&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;oga-hybrid&quot;</span>
-<span class="w">    </span><span class="p">}</span>
-<span class="w">  </span><span class="p">]</span>
-<span class="p">}</span>
-</code></pre></div>
-<p>With <code>show_all=true</code> (includes all models with additional fields):</p>
-<div class="highlight"><pre><span></span><code><span class="p">{</span>
-<span class="w">  </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;list&quot;</span><span class="p">,</span>
-<span class="w">  </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<span class="w">    </span><span class="p">{</span>
-<span class="w">      </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Qwen2.5-0.5B-Instruct-CPU&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;model&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;created&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1744173590</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;owned_by&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;lemonade&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Qwen2.5-0.5B-Instruct-CPU&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;checkpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;amd/Qwen2.5-0.5B-Instruct-quantized_int4-float16-cpu-onnx&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;recipe&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;oga-cpu&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;checkpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;unsloth/Qwen3-0.6B-GGUF:Q4_0&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;recipe&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;llamacpp&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.38</span><span class="p">,</span>
 <span class="w">      </span><span class="nt">&quot;downloaded&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;labels&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;hot&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;cpu&quot;</span><span class="p">]</span>
+<span class="w">      </span><span class="nt">&quot;suggested&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;labels&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;reasoning&quot;</span><span class="p">]</span>
 <span class="w">    </span><span class="p">},</span>
 <span class="w">    </span><span class="p">{</span>
-<span class="w">      </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Llama-3.2-1B-Instruct-Hybrid&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;model&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Gemma-3-4b-it-GGUF&quot;</span><span class="p">,</span>
 <span class="w">      </span><span class="nt">&quot;created&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1744173590</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;model&quot;</span><span class="p">,</span>
 <span class="w">      </span><span class="nt">&quot;owned_by&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;lemonade&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Llama-3.2-1B-Instruct-Hybrid&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;checkpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;amd/Llama-3.2-1B-Instruct-awq-g128-int4-asym-fp16-onnx-hybrid&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;recipe&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;oga-hybrid&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;downloaded&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;labels&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;hot&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;hybrid&quot;</span><span class="p">]</span>
+<span class="w">      </span><span class="nt">&quot;checkpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ggml-org/gemma-3-4b-it-GGUF:Q4_K_M&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;recipe&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;llamacpp&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">3.61</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;downloaded&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;suggested&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;labels&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;hot&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;vision&quot;</span><span class="p">]</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">]</span>
 <span class="p">}</span>
 </code></pre></div>
+<p><strong>Field Descriptions:</strong></p>
+<ul>
+<li><code>object</code> - Type of response object, always <code>"list"</code></li>
+<li><code>data</code> - Array of model objects with the following fields:</li>
+<li><code>id</code> - Model identifier (used for loading and inference requests)</li>
+<li><code>created</code> - Unix timestamp of when the model entry was created</li>
+<li><code>object</code> - Type of object, always <code>"model"</code></li>
+<li><code>owned_by</code> - Owner of the model, always <code>"lemonade"</code></li>
+<li><code>checkpoint</code> - Full checkpoint identifier on Hugging Face</li>
+<li><code>recipe</code> - Backend/device recipe used to load the model (e.g., <code>"oga-cpu"</code>, <code>"oga-hybrid"</code>, <code>"llamacpp"</code>, <code>"flm"</code>)</li>
+<li><code>size</code> - Model size in GB (omitted for models without size information)</li>
+<li><code>downloaded</code> - Boolean indicating if the model is downloaded and available locally</li>
+<li><code>suggested</code> - Boolean indicating if the model is recommended for general use</li>
+<li><code>labels</code> - Array of tags describing the model (e.g., <code>"hot"</code>, <code>"reasoning"</code>, <code>"vision"</code>, <code>"embeddings"</code>, <code>"reranking"</code>, <code>"coding"</code>, <code>"tool-calling"</code>)</li>
+</ul>
 <h3 id="get-apiv1modelsmodel_id"><code>GET /api/v1/models/{model_id}</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-fully_available-green" /></sub></h3>
-<p>Retrieve a specific model by its ID in an OpenAI-compatible format. Returns detailed information about a single model including the <code>checkpoint</code> and <code>recipe</code> fields.</p>
-<h4 id="parameters_4">Parameters</h4>
+<p>Retrieve a specific model by its ID. Returns the same model object format as the list endpoint above.</p>
+<h4 id="parameters_7">Parameters</h4>
 <table>
 <thead>
 <tr>
@@ -2887,17 +3636,22 @@ curl<span class="w"> </span>http://localhost:8000/api/v1/models?show_all<span cl
 </tr>
 </tbody>
 </table>
-<h4 id="example-request_4">Example request</h4>
-<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>http://localhost:8000/api/v1/models/Llama-3.2-1B-Instruct-Hybrid
+<h4 id="example-request_7">Example request</h4>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>http://localhost:8000/api/v1/models/Qwen3-0.6B-GGUF
 </code></pre></div>
-<h4 id="response-format_4">Response format</h4>
+<h4 id="response-format_7">Response format</h4>
+<p>Returns a single model object with the same fields as described in the <a href="#get-apiv1models">models list endpoint</a> above.</p>
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
-<span class="w">  </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Llama-3.2-1B-Instruct-Hybrid&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Qwen3-0.6B-GGUF&quot;</span><span class="p">,</span>
 <span class="w">  </span><span class="nt">&quot;created&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1744173590</span><span class="p">,</span>
 <span class="w">  </span><span class="nt">&quot;object&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;model&quot;</span><span class="p">,</span>
 <span class="w">  </span><span class="nt">&quot;owned_by&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;lemonade&quot;</span><span class="p">,</span>
-<span class="w">  </span><span class="nt">&quot;checkpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;amd/Llama-3.2-1B-Instruct-awq-g128-int4-asym-fp16-onnx-hybrid&quot;</span><span class="p">,</span>
-<span class="w">  </span><span class="nt">&quot;recipe&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;oga-hybrid&quot;</span>
+<span class="w">  </span><span class="nt">&quot;checkpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;unsloth/Qwen3-0.6B-GGUF:Q4_0&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;recipe&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;llamacpp&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.38</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;downloaded&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;suggested&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;labels&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;reasoning&quot;</span><span class="p">]</span>
 <span class="p">}</span>
 </code></pre></div>
 <h4 id="error-responses">Error responses</h4>
@@ -2909,11 +3663,28 @@ curl<span class="w"> </span>http://localhost:8000/api/v1/models?show_all<span cl
 <span class="w">  </span><span class="p">}</span>
 <span class="p">}</span>
 </code></pre></div>
-<h2 id="additional-endpoints_1">Additional Endpoints</h2>
+<h2 id="additional-endpoints">Additional Endpoints</h2>
 <h3 id="post-apiv1pull"><code>POST /api/v1/pull</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-fully_available-green" /></sub></h3>
 <p>Register and install models for use with Lemonade Server.</p>
-<h4 id="parameters_5">Parameters</h4>
+<h4 id="parameters_8">Parameters</h4>
 <p>The Lemonade Server built-in model registry has a collection of model names that can be pulled and loaded. The <code>pull</code> endpoint can install any registered model, and it can also register-then-install any model available on Hugging Face.</p>
+<p><strong>Common Parameters</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>stream</code></td>
+<td>No</td>
+<td>If <code>true</code>, returns Server-Sent Events (SSE) with download progress. Defaults to <code>false</code>.</td>
+</tr>
+</tbody>
+</table>
 <p><strong>Install a Model that is Already Registered</strong></p>
 <table>
 <thead>
@@ -2978,12 +3749,22 @@ curl<span class="w"> </span>http://localhost:8000/api/v1/models?show_all<span cl
 <tr>
 <td><code>reasoning</code></td>
 <td>No</td>
-<td>Whether the model is a reasoning model, like DeepSeek (default: false).</td>
+<td>Whether the model is a reasoning model, like DeepSeek (default: false). Adds 'reasoning' label.</td>
 </tr>
 <tr>
 <td><code>vision</code></td>
 <td>No</td>
-<td>Whether the model has vision capabilities for processing images (default: false).</td>
+<td>Whether the model has vision capabilities for processing images (default: false). Adds 'vision' label.</td>
+</tr>
+<tr>
+<td><code>embedding</code></td>
+<td>No</td>
+<td>Whether the model is an embedding model (default: false). Adds 'embeddings' label.</td>
+</tr>
+<tr>
+<td><code>reranking</code></td>
+<td>No</td>
+<td>Whether the model is a reranking model (default: false). Adds 'reranking' label.</td>
 </tr>
 <tr>
 <td><code>mmproj</code></td>
@@ -3008,9 +3789,43 @@ curl<span class="w"> </span>http://localhost:8000/api/v1/models?show_all<span cl
 <span class="p">}</span>
 </code></pre></div>
 <p>In case of an error, the status will be <code>error</code> and the message will contain the error message.</p>
+<h4 id="streaming-response-streamtrue">Streaming Response (stream=true)</h4>
+<p>When <code>stream=true</code>, the endpoint returns Server-Sent Events with real-time download progress:</p>
+<div class="highlight"><pre><span></span><code>event: progress
+data: {&quot;file&quot;:&quot;model.gguf&quot;,&quot;file_index&quot;:1,&quot;total_files&quot;:2,&quot;bytes_downloaded&quot;:1073741824,&quot;bytes_total&quot;:2684354560,&quot;percent&quot;:40}
+
+event: progress
+data: {&quot;file&quot;:&quot;config.json&quot;,&quot;file_index&quot;:2,&quot;total_files&quot;:2,&quot;bytes_downloaded&quot;:1024,&quot;bytes_total&quot;:1024,&quot;percent&quot;:100}
+
+event: complete
+data: {&quot;file_index&quot;:2,&quot;total_files&quot;:2,&quot;percent&quot;:100}
+</code></pre></div>
+<p><strong>Event Types:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>progress</code></td>
+<td>Sent during download with current file and byte progress</td>
+</tr>
+<tr>
+<td><code>complete</code></td>
+<td>Sent when all files are downloaded successfully</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td>Sent if download fails, with <code>error</code> field containing the message</td>
+</tr>
+</tbody>
+</table>
 <h3 id="post-apiv1delete"><code>POST /api/v1/delete</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-fully_available-green" /></sub></h3>
 <p>Delete a model by removing it from local storage. If the model is currently loaded, it will be unloaded first.</p>
-<h4 id="parameters_6">Parameters</h4>
+<h4 id="parameters_9">Parameters</h4>
 <table>
 <thead>
 <tr>
@@ -3044,7 +3859,7 @@ curl<span class="w"> </span>http://localhost:8000/api/v1/models?show_all<span cl
 <p><a id="post-apiv1load"></a></p>
 <h3 id="post-apiv1load"><code>POST /api/v1/load</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-fully_available-green" /></sub></h3>
 <p>Explicitly load a registered model into memory. This is useful to ensure that the model is loaded before you make a request. Installs the model if necessary.</p>
-<h4 id="parameters_7">Parameters</h4>
+<h4 id="parameters_10">Parameters</h4>
 <table>
 <thead>
 <tr>
@@ -3059,39 +3874,71 @@ curl<span class="w"> </span>http://localhost:8000/api/v1/models?show_all<span cl
 <td>Yes</td>
 <td><a href="../server_models/">Lemonade Server model name</a> to load.</td>
 </tr>
+<tr>
+<td><code>ctx_size</code></td>
+<td>No</td>
+<td>Context size for the model. Overrides the default value for this model.</td>
+</tr>
+<tr>
+<td><code>llamacpp_backend</code></td>
+<td>No</td>
+<td>LlamaCpp backend to use (<code>vulkan</code>, <code>rocm</code>, <code>metal</code> or <code>cpu</code>). Only applies to llamacpp models.</td>
+</tr>
+<tr>
+<td><code>llamacpp_args</code></td>
+<td>No</td>
+<td>Custom arguments to pass to llama-server. The following are NOT allowed: <code>-m</code>, <code>--port</code>, <code>--ctx-size</code>, <code>-ngl</code>.</td>
+</tr>
 </tbody>
 </table>
-<p>Example request:</p>
+<p><strong>Setting Priority:</strong></p>
+<p>When loading a model, settings are applied in this priority order:
+1. Values explicitly passed in the <code>load</code> request (highest priority)
+2. Per-model values configurable in <code>recipe_options.json</code> (see below for details)
+3. Values set via <code>lemonade-server</code> CLI arguments or environment variables
+4. Default hardcoded values in <code>lemonade-router</code> (lowest priority)</p>
+<h4 id="per-model-options">Per-model options</h4>
+<p>You can configure a default <code>ctx_size</code>, <code>llamacpp_backend</code> and <code>llamacpp_args</code> on a per-model basis. To do this you need to create a file called <code>recipe_options.json</code> in the user's Lemonade cache (default: <code>~/.cache/lemonade</code>). An example <code>recipe_options.json</code> file follows:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;user.Qwen2.5-Coder-1.5B-Instruct&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;ctx_size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">16384</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;llamacpp_backend&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;vulkan&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;llamacpp_args&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;-np 2 -kvu&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;Qwen3-Coder-30B-A3B-Instruct-GGUF&quot;</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;llamacpp_backend&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;rocm&quot;</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Note that user models (i.e. those defined in <code>user_models.json</code>) must include the "user." prefix in their name when referencing them in <code>recipe_options.json</code>.</p>
+<h4 id="example-requests">Example requests</h4>
+<p>Basic load:</p>
 <div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/load<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
 <span class="s1">    &quot;model_name&quot;: &quot;Qwen2.5-0.5B-Instruct-CPU&quot;</span>
 <span class="s1">  }&#39;</span>
 </code></pre></div>
-<p>Response format:</p>
+<p>Load with custom settings:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/load<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<span class="s1">    &quot;model_name&quot;: &quot;llama-3.2-3b-instruct-GGUF&quot;,</span>
+<span class="s1">    &quot;ctx_size&quot;: 8192,</span>
+<span class="s1">    &quot;llamacpp_backend&quot;: &quot;rocm&quot;,</span>
+<span class="s1">    &quot;llamacpp_args&quot;: &quot;--flash-attn on --no-mmap&quot;</span>
+<span class="s1">  }&#39;</span>
+</code></pre></div>
+<h4 id="response-format_8">Response format</h4>
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
 <span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
 <span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="s2">&quot;Loaded model: Qwen2.5-0.5B-Instruct-CPU&quot;</span>
 <span class="p">}</span>
 </code></pre></div>
 <p>In case of an error, the status will be <code>error</code> and the message will contain the error message.</p>
-<h3 id="post-apiv1unload"><code>POST /api/v1/unload</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-partially_available-red" /></sub></h3>
+<h3 id="post-apiv1unload"><code>POST /api/v1/unload</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-fully_available-green" /></sub></h3>
 <p>Explicitly unload a model from memory. This is useful to free up memory while still leaving the server process running (which takes minimal resources but a few seconds to start).</p>
-<h4 id="parameters_8">Parameters</h4>
-<p>This endpoint does not take any parameters.</p>
-<h4 id="example-request_5">Example request</h4>
-<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/unload
-</code></pre></div>
-<h4 id="response-format_5">Response format</h4>
-<p><div class="highlight"><pre><span></span><code><span class="p">{</span>
-<span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
-<span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Model unloaded successfully&quot;</span>
-<span class="p">}</span>
-</code></pre></div>
-In case of an error, the status will be <code>error</code> and the message will contain the error message.</p>
-<h3 id="post-apiv1params"><code>POST /api/v1/params</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-in_development-yellow" /></sub></h3>
-<p>Set the generation parameters for text completion. These parameters will persist across requests until changed.</p>
-<h4 id="parameters_9">Parameters</h4>
+<h4 id="parameters_11">Parameters</h4>
 <table>
 <thead>
 <tr>
@@ -3102,83 +3949,97 @@ In case of an error, the status will be <code>error</code> and the message will 
 </thead>
 <tbody>
 <tr>
-<td><code>temperature</code></td>
+<td><code>model_name</code></td>
 <td>No</td>
-<td>Controls randomness in the output. Higher values (e.g. 0.8) make the output more random, lower values (e.g. 0.2) make it more focused and deterministic. Defaults to 0.7.</td>
-</tr>
-<tr>
-<td><code>top_p</code></td>
-<td>No</td>
-<td>Controls diversity via nucleus sampling. Keeps the cumulative probability of tokens above this value. Defaults to 0.95.</td>
-</tr>
-<tr>
-<td><code>top_k</code></td>
-<td>No</td>
-<td>Controls diversity by limiting to the k most likely next tokens. Defaults to 50.</td>
-</tr>
-<tr>
-<td><code>min_length</code></td>
-<td>No</td>
-<td>The minimum length of the generated text in tokens. Defaults to 0.</td>
-</tr>
-<tr>
-<td><code>max_length</code></td>
-<td>No</td>
-<td>The maximum length of the generated text in tokens. Defaults to 2048.</td>
-</tr>
-<tr>
-<td><code>do_sample</code></td>
-<td>No</td>
-<td>Whether to use sampling (true) or greedy decoding (false). Defaults to true.</td>
+<td>Name of the specific model to unload. If not provided, all loaded models will be unloaded.</td>
 </tr>
 </tbody>
 </table>
-<h4 id="example-request_6">Example request</h4>
-<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/params<span class="w"> </span><span class="se">\</span>
+<h4 id="example-requests_1">Example requests</h4>
+<p>Unload a specific model:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/unload<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
-<span class="s1">    &quot;temperature&quot;: 0.8,</span>
-<span class="s1">    &quot;top_p&quot;: 0.95,</span>
-<span class="s1">    &quot;max_length&quot;: 1000</span>
-<span class="s1">  }&#39;</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;model_name&quot;: &quot;Llama-3.2-1B-Instruct-Hybrid&quot;}&#39;</span>
 </code></pre></div>
-<h4 id="response-format_6">Response format</h4>
-<p><div class="highlight"><pre><span></span><code><span class="p">{</span>
+<p>Unload all models:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/unload
+</code></pre></div>
+<h4 id="response-format_9">Response format</h4>
+<p>Success response:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
 <span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
-<span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Generation parameters set successfully&quot;</span><span class="p">,</span>
-<span class="w">  </span><span class="nt">&quot;params&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;temperature&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.8</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;top_p&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.95</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;top_k&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">40</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;min_length&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;max_length&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1000</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">&quot;do_sample&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Model unloaded successfully&quot;</span>
 <span class="p">}</span>
 </code></pre></div>
-In case of an error, the status will be <code>error</code> and the message will contain the error message.</p>
+<p>Error response (model not found):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;error&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Model not found: Llama-3.2-1B-Instruct-Hybrid&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>In case of an error, the status will be <code>error</code> and the message will contain the error message.</p>
 <h3 id="get-apiv1health"><code>GET /api/v1/health</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-fully_available-green" /></sub></h3>
-<p>Check the health of the server. This endpoint will also return the currently loaded model.</p>
-<h4 id="parameters_10">Parameters</h4>
+<p>Check the health of the server. This endpoint returns information about loaded models.</p>
+<h4 id="parameters_12">Parameters</h4>
 <p>This endpoint does not take any parameters.</p>
-<h4 id="example-request_7">Example request</h4>
+<h4 id="example-request_8">Example request</h4>
 <div class="highlight"><pre><span></span><code>curl<span class="w"> </span>http://localhost:8000/api/v1/health
 </code></pre></div>
-<h4 id="response-format_7">Response format</h4>
+<h4 id="response-format_10">Response format</h4>
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
 <span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ok&quot;</span><span class="p">,</span>
 <span class="w">  </span><span class="nt">&quot;checkpoint_loaded&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;amd/Llama-3.2-1B-Instruct-awq-g128-int4-asym-fp16-onnx-hybrid&quot;</span><span class="p">,</span>
 <span class="w">  </span><span class="nt">&quot;model_loaded&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Llama-3.2-1B-Instruct-Hybrid&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;all_models_loaded&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;model_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Llama-3.2-1B-Instruct-Hybrid&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;checkpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;amd/Llama-3.2-1B-Instruct-awq-g128-int4-asym-fp16-onnx-hybrid&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;last_use&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1732123456.789</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;llm&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;device&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;gpu npu&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;backend_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http://127.0.0.1:8001/v1&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;model_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;nomic-embed-text-v1-GGUF&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;checkpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;nomic-ai/nomic-embed-text-v1-GGUF:Q4_K_S&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;last_use&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1732123450.123</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;embedding&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;device&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;gpu&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;backend_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http://127.0.0.1:8002/v1&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;max_models&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;llm&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;embedding&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;reranking&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">  </span><span class="p">}</span>
 <span class="p">}</span>
 </code></pre></div>
+<p><strong>Field Descriptions:</strong></p>
+<ul>
+<li><code>status</code> - Server health status, always <code>"ok"</code></li>
+<li><code>checkpoint_loaded</code> - Checkpoint identifier of the most recently accessed model</li>
+<li><code>model_loaded</code> - Model name of the most recently accessed model</li>
+<li><code>all_models_loaded</code> - Array of all currently loaded models with details:</li>
+<li><code>model_name</code> - Name of the loaded model</li>
+<li><code>checkpoint</code> - Full checkpoint identifier</li>
+<li><code>last_use</code> - Unix timestamp of last access (load or inference)</li>
+<li><code>type</code> - Model type: <code>"llm"</code>, <code>"embedding"</code>, or <code>"reranking"</code></li>
+<li><code>device</code> - Space-separated device list: <code>"cpu"</code>, <code>"gpu"</code>, <code>"npu"</code>, or combinations like <code>"gpu npu"</code></li>
+<li><code>backend_url</code> - URL of the backend server process handling this model (useful for debugging)</li>
+<li><code>max_models</code> - Maximum number of models that can be loaded simultaneously (set via <code>--max-loaded-models</code>):</li>
+<li><code>llm</code> - Maximum LLM/chat models</li>
+<li><code>embedding</code> - Maximum embedding models</li>
+<li><code>reranking</code> - Maximum reranking models</li>
+</ul>
 <h3 id="get-apiv1stats"><code>GET /api/v1/stats</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-fully_available-green" /></sub></h3>
 <p>Performance statistics from the last request.</p>
-<h4 id="parameters_11">Parameters</h4>
+<h4 id="parameters_13">Parameters</h4>
 <p>This endpoint does not take any parameters.</p>
-<h4 id="example-request_8">Example request</h4>
+<h4 id="example-request_9">Example request</h4>
 <div class="highlight"><pre><span></span><code>curl<span class="w"> </span>http://localhost:8000/api/v1/stats
 </code></pre></div>
-<h4 id="response-format_8">Response format</h4>
+<h4 id="response-format_11">Response format</h4>
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
 <span class="w">  </span><span class="nt">&quot;time_to_first_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2.14</span><span class="p">,</span>
 <span class="w">  </span><span class="nt">&quot;tokens_per_second&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">33.33</span><span class="p">,</span>
@@ -3199,7 +4060,7 @@ In case of an error, the status will be <code>error</code> and the message will 
 </ul>
 <h3 id="get-apiv1system-info"><code>GET /api/v1/system-info</code> <sub><img alt="Status" src="https://img.shields.io/badge/status-fully_available-green" /></sub></h3>
 <p>System information endpoint that provides complete hardware details and device enumeration.</p>
-<h4 id="parameters_12">Parameters</h4>
+<h4 id="parameters_14">Parameters</h4>
 <table>
 <thead>
 <tr>
@@ -3218,8 +4079,8 @@ In case of an error, the status will be <code>error</code> and the message will 
 </tr>
 </tbody>
 </table>
-<h4 id="example-request_9">Example request</h4>
-<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Basic system information</label><label for="__tabbed_6_2">Detailed system information</label></div>
+<h4 id="example-request_10">Example request</h4>
+<div class="tabbed-set tabbed-alternate" data-tabs="9:2"><input checked="checked" id="__tabbed_9_1" name="__tabbed_9" type="radio" /><input id="__tabbed_9_2" name="__tabbed_9" type="radio" /><div class="tabbed-labels"><label for="__tabbed_9_1">Basic system information</label><label for="__tabbed_9_2">Detailed system information</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code>curl<span class="w"> </span><span class="s2">&quot;http://localhost:8000/api/v1/system-info&quot;</span>
@@ -3231,8 +4092,8 @@ In case of an error, the status will be <code>error</code> and the message will 
 </div>
 </div>
 </div>
-<h4 id="response-format_9">Response format</h4>
-<div class="tabbed-set tabbed-alternate" data-tabs="7:1"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Basic response (verbose=false)</label></div>
+<h4 id="response-format_12">Response format</h4>
+<div class="tabbed-set tabbed-alternate" data-tabs="10:1"><input checked="checked" id="__tabbed_10_1" name="__tabbed_10" type="radio" /><div class="tabbed-labels"><label for="__tabbed_10_1">Basic response (verbose=false)</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
@@ -3279,12 +4140,13 @@ In case of an error, the status will be <code>error</code> and the message will 
 <li><strong>trace</strong>: Very detailed tracing information, including everything from debug level plus all input prompts.</li>
 </ul>
 <h1 id="gguf-support">GGUF Support</h1>
-<p>The OGA models (<code>*-CPU</code>, <code>*-Hybrid</code>) available in Lemonade Server use Lemonade's built-in server implementation. However, Lemonade SDK v7.0.1 introduced support for <a href="https://github.com/ggml-org/llama.cpp">llama.cpp's</a> <code>llama-server</code> as an alternative backend for CPU and GPU.</p>
 <p>The <code>llama-server</code> backend works with Lemonade's suggested <code>*-GGUF</code> models, as well as any .gguf model from Hugging Face. Windows, Ubuntu Linux, and macOS are supported. Details:
 - Lemonade Server wraps <code>llama-server</code> with support for the <code>lemonade-server</code> CLI, client web app, and endpoints (e.g., <code>models</code>, <code>pull</code>, <code>load</code>, etc.).
-  - The <code>chat/completions</code>, <code>completions</code>, <code>embeddings</code>, and <code>reranking</code> endpoints are supported. 
+  - The <code>chat/completions</code>, <code>completions</code>, <code>embeddings</code>, and <code>reranking</code> endpoints are supported.
+  - The <code>embeddings</code> endpoint requires embedding-specific models (e.g., nomic-embed-text models).
+  - The <code>reranking</code> endpoint requires reranker-specific models (e.g., bge-reranker models).
   - <code>responses</code> is not supported at this time.
-- A single Lemonade Server process can seamlessly switch between OGA and GGUF models.
+- A single Lemonade Server process can seamlessly switch between GGUF, ONNX, and FastFlowLM models.
   - Lemonade Server will attempt to load models onto GPU with Vulkan first, and if that doesn't work it will fall back to CPU.
   - From the end-user's perspective, OGA vs. GGUF should be completely transparent: they wont be aware of whether the built-in server or <code>llama-server</code> is serving their model.</p>
 <h2 id="installing-gguf-models">Installing GGUF Models</h2>
@@ -3326,7 +4188,8 @@ In case of an error, the status will be <code>error</code> and the message will 
 <p>Similar to the <a href="#gguf-support">llama-server support</a>, Lemonade can also route OpenAI API requests to a FastFlowLM <code>flm serve</code> backend.</p>
 <p>The <code>flm serve</code> backend works with Lemonade's suggested <code>*-FLM</code> models, as well as any model mentioned in <code>flm list</code>. Windows is the only supported operating system. Details:
 - Lemonade Server wraps <code>flm serve</code> with support for the <code>lemonade-server</code> CLI, client web app, and all Lemonade custom endpoints (e.g., <code>pull</code>, <code>load</code>, etc.).
-  - The only OpenAI API endpoints supported are <code>models</code> and <code>chat/completions stream=True</code>. 
+  - OpenAI API endpoints supported: <code>models</code>, <code>chat/completions</code> (streaming), and <code>embeddings</code>.
+  - The <code>embeddings</code> endpoint requires embedding-specific models supported by FLM.
 - A single Lemonade Server process can seamlessly switch between FLM, OGA, and GGUF models.</p>
 <h2 id="installing-flm-models">Installing FLM Models</h2>
 <p>To install an arbitrary FLM model:
@@ -3472,10 +4335,10 @@ Modifications Copyright (c) 2025 AMD-->
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.footer", "navigation.tracking", "navigation.expand", "navigation.top", "content.code.annotate", "content.code.copy"], "search": "../../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.footer", "navigation.tracking", "navigation.expand", "navigation.top", "content.code.annotate", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
         <script src="../../assets/carousel.js"></script>
       
