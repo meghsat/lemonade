@@ -1,6 +1,15 @@
 // News content data - easy to add new entries
 const newsData = [
     {
+        title: "Ryzen AI and Radeon are ready to run LLMs Locally",
+        url: "https://www.amd.com/en/developer/resources/technical-articles/2025/ryzen-ai-radeon-llms-with-lemonade.html",
+        date: "November 13, 2025",
+        description: "Learn about LLM use cases that run on a variety of AMD PCs.",
+        image: "https://www.amd.com/content/dam/amd/en/images/blogs/designs/generic-thumbnails/9851-industry-applications-use-cases-02.jpg",
+        imageStyle: "width: 100%; height: 100%; object-position: center top; ",
+        type: "blog"
+        },
+    {
     title: "Lemonade for GitHub Copilot",
     url: "https://youtu.be/HUwGxlH3yAg?si=0P-S48_PgrWy9WwI",
     date: "October 14, 2025",
@@ -10,7 +19,7 @@ const newsData = [
     type: "video"
     },
     {
-    title: "Dify + Lemonade for Agentic Worflows",
+    title: "Dify + Lemonade for Agentic Workflows",
     url: "https://www.amd.com/en/developer/resources/technical-articles/2025/harnessing-dify-and-local-llms-on-ryzen-ai-pcs-for-private-workf.html",
     date: "October 6, 2025",
     description: "Lemonade now available with Dify, enabling private AI workflows to run locally. Build powerful LLM + RAG apps without cloud dependencies or ML expertise.",

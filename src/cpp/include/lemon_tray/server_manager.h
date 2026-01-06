@@ -50,7 +50,12 @@ public:
         bool show_console = false,
         bool is_ephemeral = false,
         const std::string& llamacpp_args = "",
-        const std::string& host = "127.0.0.1"
+        const std::string& host = "127.0.0.1",
+        int max_llm_models = 1,
+        int max_embedding_models = 1,
+        int max_reranking_models = 1,
+        int max_audio_models = 1,
+        const std::string& extra_models_dir = ""
     );
     
     bool stop_server();
@@ -69,7 +74,8 @@ public:
     nlohmann::json get_health();
     nlohmann::json get_models();
     bool load_model(const std::string& model_name);
-    bool unload_model();
+    bool unload_model();  // Unload all models
+    bool unload_model(const std::string& model_name);  // Unload specific model
     
     // HTTP communication (public for custom requests)
     std::string make_http_request(
@@ -102,9 +108,15 @@ private:
     std::string log_level_;
     std::string llamacpp_backend_;
     std::string llamacpp_args_;
+    std::string extra_models_dir_;
     std::string host_;
+    std::string api_key_;
     int port_;
     int ctx_size_;
+    int max_llm_models_;
+    int max_embedding_models_;
+    int max_reranking_models_;
+    int max_audio_models_;
     bool show_console_;
     bool is_ephemeral_;  // Suppress output for ephemeral servers
     std::atomic<bool> server_started_;

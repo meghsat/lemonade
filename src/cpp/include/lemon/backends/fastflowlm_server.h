@@ -21,7 +21,9 @@ public:
     void load(const std::string& model_name,
              const ModelInfo& model_info,
              int ctx_size,
-             bool do_not_upgrade = false) override;
+             bool do_not_upgrade = false,
+             const std::string& llamacpp_backend = "vulkan",
+             const std::string& llamacpp_args = "") override;
     
     void unload() override;
     
@@ -39,18 +41,28 @@ public:
     // FLM uses /api/tags for readiness check instead of /health
     bool wait_for_ready() override;
     
+    // Override to transform model name to checkpoint for FLM
+    void forward_streaming_request(const std::string& endpoint, 
+                                   const std::string& request_body,
+                                   httplib::DataSink& sink) override;
+    
 private:
     // Existing methods
     std::string get_flm_path();
     bool check_npu_available();
     
     // Version management
-    std::string get_flm_latest_version();
-    std::pair<std::string, std::string> check_flm_version(); // returns (current, latest)
+    std::string get_flm_required_version();  // Get required version from backend_versions.json
+    std::string get_flm_installed_version(); // Get currently installed version (empty if not installed)
     bool compare_versions(const std::string& v1, const std::string& v2); // true if v1 >= v2
     
+    // NPU driver check
+    std::string get_min_npu_driver_version();  // Get minimum driver version from backend_versions.json
+    std::string get_npu_driver_version();      // Get current NPU driver version via WMI
+    bool check_npu_driver_version();           // Check if NPU driver meets minimum requirements
+    
     // Installation
-    void install_or_upgrade_flm();
+    void install_flm_if_needed();  // Install FLM if not present or version is too old
     bool download_flm_installer(const std::string& output_path);
     void run_flm_installer(const std::string& installer_path, bool silent);
     
@@ -58,7 +70,10 @@ private:
     void refresh_environment_path();
     bool verify_flm_installation(const std::string& expected_version, int max_retries = 10);
     
-    std::string model_name_;
+    // Cache for installed version (to avoid repeated calls to flm --version)
+    mutable std::string cached_installed_version_;
+    void invalidate_version_cache();  // Call after installation to force re-check
+    
     bool is_loaded_ = false;
 };
 

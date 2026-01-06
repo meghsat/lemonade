@@ -51,6 +51,7 @@ ServerManager::ServerManager()
     : server_pid_(0)
     , port_(8000)
     , ctx_size_(4096)
+    , host_("localhost")
     , show_console_(false)
     , is_ephemeral_(false)
     , server_started_(false)
@@ -78,50 +79,53 @@ bool ServerManager::start_server(
     bool show_console,
     bool is_ephemeral,
     const std::string& llamacpp_args,
-    const std::string& host)
+    const std::string& host,
+    int max_llm_models,
+    int max_embedding_models,
+    int max_reranking_models,
+    int max_audio_models,
+    const std::string& extra_models_dir)
 {
     if (is_server_running()) {
         DEBUG_LOG(this, "Server is already running");
         return true;
     }
-    
+
     server_binary_path_ = server_binary_path;
     port_ = port;
     ctx_size_ = ctx_size;
+    max_llm_models_ = max_llm_models;
+    max_embedding_models_ = max_embedding_models;
+    max_reranking_models_ = max_reranking_models;
+    max_audio_models_ = max_audio_models;
     log_file_ = log_file;
     log_level_ = log_level;
     llamacpp_backend_ = llamacpp_backend;
     show_console_ = show_console;
     is_ephemeral_ = is_ephemeral;
     llamacpp_args_ = llamacpp_args;
+    extra_models_dir_ = extra_models_dir;
     host_ = host;
+
+    const char* api_key_env = std::getenv("LEMONADE_API_KEY");
+    api_key_ = api_key_env ? std::string(api_key_env) : "";
     
     if (!spawn_process()) {
         std::cerr << "Failed to spawn server process" << std::endl;
         return false;
     }
     
-    // Wait for server to be ready (check health endpoint)
-    DEBUG_LOG(this, "Waiting for server to start...");
+    // Step 1: Wait for server process to start (check health endpoint)
+    DEBUG_LOG(this, "Waiting for server process to start...");
     DEBUG_LOG(this, "Will check health at: http://" << host_ << ":" << port_ << "/api/v1/health");
     
+    bool process_started = false;
     for (int i = 0; i < 5; ++i) {  // Wait up to 5 seconds
         DEBUG_LOG(this, "Health check attempt " << (i+1) << "/5...");
         std::this_thread::sleep_for(std::chrono::seconds(1));
         try {
             DEBUG_LOG(this, "Making HTTP request...");
             auto health = get_health();
-            DEBUG_LOG(this, "Health check succeeded!");
-            
-            // Print startup message based on server type
-            if (!is_ephemeral) {
-                // Persistent server: print startup message with URL
-                std::cout << "Lemonade Server v" << LEMON_VERSION_STRING << " started on port " << port_ << std::endl;
-                // Display localhost for 0.0.0.0 since that's what users can actually visit in a browser
-                std::string display_host = (host_ == "0.0.0.0") ? "localhost" : host_;
-                std::cout << "Chat and manage models: http://" << display_host << ":" << port_ << std::endl;
-            }
-            // Ephemeral server: no output
             
             server_started_ = true;
             
@@ -129,18 +133,11 @@ bool ServerManager::start_server(
             // Write PID file on Linux for efficient server discovery
             DEBUG_LOG(this, "About to write PID file (PID: " << server_pid_ << ", Port: " << port_ << ")");
             write_pid_file();
-            
-            // Verify PID file was written
-            std::ifstream verify_file("/tmp/lemonade-router.pid");
-            if (verify_file.good()) {
-                DEBUG_LOG(this, "PID file verified");
-            } else {
-                std::cerr << "[ServerManager] ERROR: PID file was not created!" << std::endl;
-            }
-            verify_file.close();
 #endif
             
-            return true;
+            DEBUG_LOG(this, "Server process is running!");
+            process_started = true;
+            break;  // Process is up, move to next step
         } catch (const std::exception& e) {
             DEBUG_LOG(this, "Health check failed: " << e.what());
         } catch (...) {
@@ -148,7 +145,79 @@ bool ServerManager::start_server(
         }
     }
     
-    std::cerr << "Server failed to start within timeout" << std::endl;
+    if (!process_started) {
+        std::cerr << "Server failed to start within timeout" << std::endl;
+        stop_server();
+        return false;
+    }
+    
+    // Step 2: Quick check if server is ready (try models endpoint with short timeout)
+    DEBUG_LOG(this, "Checking if server is ready...");
+    try {
+        // Use 1 second timeout for quick check
+        make_http_request("/api/v1/models", "GET", "", 1);
+        
+        // Success! Server is ready immediately
+        if (!is_ephemeral) {
+            std::cout << "Lemonade Server v" << LEMON_VERSION_STRING << " started on port " << port_ << std::endl;
+            // Display localhost for 0.0.0.0 since that's what users can actually visit in a browser
+            std::string display_host = (host_ == "0.0.0.0") ? "localhost" : host_;
+            std::cout << "API endpoint: http://" << display_host << ":" << port_ << "/api/v1" << std::endl;
+            std::cout << "Connect your apps to the endpoint above." << std::endl;
+            std::cout << "Documentation: https://lemonade-server.ai/" << std::endl;
+        }
+        
+        server_started_ = true;
+        
+#ifndef _WIN32
+        // Write PID file on Linux for efficient server discovery
+        DEBUG_LOG(this, "About to write PID file (PID: " << server_pid_ << ", Port: " << port_ << ")");
+        write_pid_file();
+#endif
+        
+        return true;
+        
+    } catch (const std::exception& e) {
+        DEBUG_LOG(this, "Quick check failed (expected on first run): " << e.what());
+    }
+    
+    // Step 3: Server is initializing, wait for it
+    std::cout << "Setting things up..." << std::endl;
+    
+    // Step 4: Poll models endpoint with longer timeout
+    for (int i = 0; i < 10; ++i) {
+        DEBUG_LOG(this, "Waiting for initialization... attempt " << (i+1) << "/10");
+        try {
+            // Use 10 second timeout for initialization wait
+            make_http_request("/api/v1/models", "GET", "", 10);
+            
+            // Success! Server is ready
+            if (!is_ephemeral) {
+                std::cout << "Lemonade Server v" << LEMON_VERSION_STRING << " started on port " << port_ << std::endl;
+                // Display localhost for 0.0.0.0 since that's what users can actually visit in a browser
+                std::string display_host = (host_ == "0.0.0.0") ? "localhost" : host_;
+                std::cout << "API endpoint: http://" << display_host << ":" << port_ << "/api/v1" << std::endl;
+                std::cout << "Connect your apps to the endpoint above." << std::endl;
+                std::cout << "Documentation: https://lemonade-server.ai/" << std::endl;
+            }
+            
+            server_started_ = true;
+            
+#ifndef _WIN32
+            // Write PID file on Linux for efficient server discovery
+            DEBUG_LOG(this, "About to write PID file (PID: " << server_pid_ << ", Port: " << port_ << ")");
+            write_pid_file();
+#endif
+            
+            return true;
+            
+        } catch (const std::exception& e) {
+            DEBUG_LOG(this, "Still initializing: " << e.what());
+            // Don't sleep here - the 10 second timeout handles the wait
+        }
+    }
+    
+    std::cerr << "Server failed to become ready within timeout" << std::endl;
     stop_server();
     return false;
 }
@@ -268,11 +337,11 @@ bool ServerManager::load_model(const std::string& model_name) {
     try {
         std::string body = "{\"model_name\": \"" + model_name + "\"}";
         
-        // Model loading can take a long time, so use extended timeout (240 seconds = 4 minutes)
-        DEBUG_LOG(this, "Loading model with extended timeout...");
+        // 24 hour timeout - models can be 100GB+ and downloads may need many retries
+        DEBUG_LOG(this, "Loading model...");
         DEBUG_LOG(this, "Request body: " << body);
         
-        std::string response = make_http_request("/api/v1/load", "POST", body, 240);
+        std::string response = make_http_request("/api/v1/load", "POST", body, 86400);
         DEBUG_LOG(this, "Load request succeeded");
         return true;
     } catch (const std::exception& e) {
@@ -282,12 +351,26 @@ bool ServerManager::load_model(const std::string& model_name) {
 }
 
 bool ServerManager::unload_model() {
+    // Unload all models by passing empty string
+    return unload_model("");
+}
+
+bool ServerManager::unload_model(const std::string& model_name) {
     try {
+        std::string body;
+        if (!model_name.empty()) {
+            body = "{\"model_name\": \"" + model_name + "\"}";
+        }
+        
         // Unload can take time, so use 30 second timeout
-        make_http_request("/api/v1/unload", "POST", "", 30);
+        make_http_request("/api/v1/unload", "POST", body, 30);
         return true;
     } catch (const std::exception& e) {
-        std::cerr << "Exception unloading model: " << e.what() << std::endl;
+        if (!model_name.empty()) {
+            std::cerr << "Exception unloading model '" << model_name << "': " << e.what() << std::endl;
+        } else {
+            std::cerr << "Exception unloading models: " << e.what() << std::endl;
+        }
         return false;
     }
 }
@@ -310,6 +393,14 @@ bool ServerManager::spawn_process() {
     cmdline += " --log-level debug";  // Always use debug logging for router
     if (!llamacpp_args_.empty()) {
         cmdline += " --llamacpp-args \"" + llamacpp_args_ + "\"";
+    }
+    // Multi-model support
+    cmdline += " --max-loaded-models " + std::to_string(max_llm_models_) + " " +
+               std::to_string(max_embedding_models_) + " " + std::to_string(max_reranking_models_) + " " +
+               std::to_string(max_audio_models_);
+    // Extra models directory
+    if (!extra_models_dir_.empty()) {
+        cmdline += " --extra-models-dir \"" + extra_models_dir_ + "\"";
     }
     
     DEBUG_LOG(this, "Starting server: " << cmdline);
@@ -517,6 +608,23 @@ bool ServerManager::spawn_process() {
             args.push_back(llamacpp_args_.c_str());
         }
         
+        // Multi-model support
+        args.push_back("--max-loaded-models");
+        std::string max_llm_str = std::to_string(max_llm_models_);
+        std::string max_emb_str = std::to_string(max_embedding_models_);
+        std::string max_rer_str = std::to_string(max_reranking_models_);
+        std::string max_aud_str = std::to_string(max_audio_models_);
+        args.push_back(max_llm_str.c_str());
+        args.push_back(max_emb_str.c_str());
+        args.push_back(max_rer_str.c_str());
+        args.push_back(max_aud_str.c_str());
+
+        // Extra models directory
+        if (!extra_models_dir_.empty()) {
+            args.push_back("--extra-models-dir");
+            args.push_back(extra_models_dir_.c_str());
+        }
+
         args.push_back(nullptr);
         
         execv(server_binary_path_.c_str(), const_cast<char**>(args.data()));
@@ -716,6 +824,10 @@ std::string ServerManager::make_http_request(
     httplib::Client cli(connect_host, port_);
     cli.set_connection_timeout(10, 0);  // 10 second connection timeout
     cli.set_read_timeout(timeout_seconds, 0);  // Configurable read timeout
+
+    if (api_key_ != "") {
+        cli.set_bearer_token_auth(api_key_);
+    }
     
     httplib::Result res;
     
@@ -729,7 +841,32 @@ std::string ServerManager::make_http_request(
     
     if (!res) {
         auto err = res.error();
-        throw std::runtime_error("HTTP request failed: connection error");
+        std::string error_msg;
+        switch (err) {
+            case httplib::Error::Read:
+                // Read error usually means server closed connection (shutdown, Ctrl+C, etc.)
+                error_msg = "Server connection closed (server may have shut down)";
+                break;
+            case httplib::Error::Write:
+                error_msg = "Connection write error";
+                break;
+            case httplib::Error::Connection:
+                error_msg = "Failed to connect to server at " + connect_host + ":" + std::to_string(port_);
+                break;
+            case httplib::Error::SSLConnection:
+                error_msg = "SSL connection error";
+                break;
+            case httplib::Error::SSLServerVerification:
+                error_msg = "SSL server verification failed";
+                break;
+            case httplib::Error::Canceled:
+                error_msg = "Request was canceled";
+                break;
+            default:
+                error_msg = "HTTP request failed (error code: " + std::to_string(static_cast<int>(err)) + ")";
+                break;
+        }
+        throw std::runtime_error(error_msg);
     }
     
     if (res->status != 200) {

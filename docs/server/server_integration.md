@@ -22,7 +22,7 @@ To identify if Lemonade Server is installed on a system, you can use the [`lemon
 lemonade-server --version
 ```
 
->Note: The `lemonade-server` CLI command is added to PATH when using the Windows Installer (Lemonade_Server_Installer.exe) and Debian Installer (lemonade-server-<VERSION>-Linux.deb).
+>Note: The `lemonade-server` CLI command is added to PATH when using the Windows Installer (lemonade-server-minimal.msi) and Debian Installer (lemonade-server-minimal_<VERSION>_amd64.deb).
 
 ### Checking Server Status
 
@@ -36,17 +36,17 @@ This command will return either `Server is not running` or `Server is running on
 
 ### Identifying Compatible Devices
 
-AMD Ryzen™ AI `Hybrid` models are available on Windows 11 on all AMD Ryzen™ AI 300 Series Processors. To programmatically identify supported devices, we recommend using a regular expression that checks if the CPU name converted to lowercase contains "ryzen ai" and a 3-digit number starting with 3 as shown below.
+AMD Ryzen™ AI `Hybrid` and `NPU` models are available on Windows 11 on all AMD Ryzen™ AI 300 Series, 400 Series, and Z2 Series Processors. To programmatically identify supported devices, we recommend using a regular expression that checks if the CPU name converted to lowercase contains "ryzen ai" and either a 3-digit number starting with 3 or 4, or "z2" as shown below.
 
 ```
-ryzen ai.*\b3\d{2}\b
+ryzen ai.*((\b[34]\d{2}\b)|(\bz2\b))
 ```
 
 Explanation:
 
 - `ryzen ai`: Matches the literal phrase "Ryzen AI".
 - `.*`: Allows any characters (including spaces) to appear after "Ryzen AI".
-- `\b3\d{2}\b`: Matches a three-digit number starting with 3, ensuring it's a standalone number.
+- `((\b[34]\d{2}\b)|(\bz2\b))`: Matches either a three-digit number starting with 3 or 4 (for 300/400 series), or "z2" (for Z2 series like Z2 Extreme), ensuring it's a standalone word.
 
 There are several ways to check the CPU name on a Windows computer. A reliable way of doing so is through cmd's `reg query` command as shown below.
 
@@ -64,13 +64,13 @@ The recommended way of directing users to the server installer is pointing users
 Latest version:
 
 ```bash
-https://github.com/lemonade-sdk/lemonade/releases/latest/download/Lemonade_Server_Installer.exe
+https://github.com/lemonade-sdk/lemonade/releases/latest/download/lemonade-server-minimal.msi
 ```
 
 Specific version:
 
 ```bash
-https://github.com/lemonade-sdk/lemonade/releases/download/v6.0.0/Lemonade_Server_Installer.exe
+https://github.com/lemonade-sdk/lemonade/releases/download/v9.0.0/lemonade-server-minimal.msi
 ```
 
 Please note that the Server Installer is only available on Windows. Apps that integrate with our server on macOS must install Lemonade from source as described [here](https://lemonade-server.ai/install_options.html).
@@ -123,29 +123,44 @@ To stop the server, you may use the `lemonade-server stop` command, or simply te
 
 ### Silent Installation
 
-Silent installation runs `Lemonade_Server_Installer.exe` without a GUI and automatically accepts all prompts.
+Silent installation runs `lemonade-server-minimal.msi` without a GUI and automatically accepts all prompts using the Windows Installer command-line interface.
 
-In a `cmd.exe` terminal:
-
-```bash
-Lemonade_Server_Installer.exe /S
-```
-
-The install directory can also be changed from the default by using `/D` as the last argument. 
-
-For example: 
+In a `cmd.exe` or PowerShell terminal:
 
 ```bash
-Lemonade_Server_Installer.exe /S /D=C:\a\new\path
+msiexec /i lemonade-server-minimal.msi /qn
 ```
 
-The available modes are documented [here](./server_models.md).
-
-Finally, if you don't want to create a desktop shortcut during installation, use the `/NoDesktopShortcut` parameter:
+The install directory can also be changed from the default using the `INSTALLDIR` property:
 
 ```bash
-Lemonade_Server_Installer.exe /S /NoDesktopShortcut
+msiexec /i lemonade-server-minimal.msi /qn INSTALLDIR="C:\a\new\path"
 ```
+
+If you don't want to create a desktop shortcut during installation, use the `ADDDESKTOPSHORTCUT=0` parameter:
+
+```bash
+msiexec /i lemonade-server-minimal.msi /qn ADDDESKTOPSHORTCUT=0
+```
+
+To add Lemonade Server to Windows startup:
+
+```bash
+msiexec /i lemonade-server-minimal.msi /qn ADDTOSTARTUP=1
+```
+
+You can combine multiple parameters:
+
+```bash
+msiexec /i lemonade-server-minimal.msi /qn INSTALLDIR="C:\Custom\Path" ADDDESKTOPSHORTCUT=0 ADDTOSTARTUP=1
+```
+
+**MSI Properties:**
+- `INSTALLDIR` - Custom installation directory (default: `%LOCALAPPDATA%\lemonade_server`)
+- `ADDDESKTOPSHORTCUT` - Create desktop shortcut (0=no, 1=yes, default: 1)
+- `ADDTOSTARTUP` - Add to Windows startup (0=no, 1=yes, default: 0)
+
+The available models are documented [here](./server_models.md).
 
 <!--This file was originally licensed under Apache 2.0. It has been modified.
 Modifications Copyright (c) 2025 AMD-->

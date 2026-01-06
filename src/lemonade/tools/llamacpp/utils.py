@@ -19,6 +19,7 @@ from dotenv import set_key, load_dotenv
 LLAMA_VERSION_VULKAN = "b6510"
 LLAMA_VERSION_ROCM = "b1066"
 LLAMA_VERSION_METAL = "b6510"
+LLAMA_VERSION_CPU = "b6510"
 
 
 def identify_rocm_arch_from_name(device_name: str) -> str | None:
@@ -131,17 +132,22 @@ def get_llama_version(backend: str) -> str:
         return LLAMA_VERSION_VULKAN
     elif backend == "metal":
         return LLAMA_VERSION_METAL
+    elif backend == "cpu":
+        return LLAMA_VERSION_CPU
     else:
         raise ValueError(
-            f"Unsupported backend: {backend}. Supported: vulkan, rocm, metal"
+            f"Unsupported backend: {backend}. Supported: vulkan, rocm, metal, cpu"
         )
 
 
 def get_llama_folder_path(backend: str):
     """
-    Get path for llama.cpp platform-specific executables folder
+    Get path for llama.cpp platform-specific executables folder.
+    Uses sys.prefix to get the environment root (works for both venv and conda):
+    - Conda: sys.executable is at env/python.exe, sys.prefix is env/
+    - Venv: sys.executable is at .venv/Scripts/python.exe, sys.prefix is .venv/
     """
-    return os.path.join(os.path.dirname(sys.executable), backend, "llama_server")
+    return os.path.join(sys.prefix, backend, "llama_server")
 
 
 def get_llama_exe_path(exe_name: str, backend: str):
@@ -240,6 +246,19 @@ def get_binary_url_and_filename(backend: str, target_arch: str = None):
                 f"Platform {system} not supported for Vulkan llamacpp. Supported: Windows, Ubuntu Linux"
             )
 
+    elif backend == "cpu":
+        # Original CPU support from ggml-org/llama.cpp
+        repo = "ggml-org/llama.cpp"
+        version = LLAMA_VERSION_CPU
+        if system == "windows":
+            filename = f"llama-{version}-bin-win-cpu-x64.zip"
+        elif system == "linux":
+            filename = f"llama-{version}-bin-ubuntu-x64.zip"
+        else:
+            raise NotImplementedError(
+                f"Platform {system} not supported for CPU llamacpp. Supported: Windows, Ubuntu Linux"
+            )
+
     elif backend == "metal":
         # Metal support for macOS Apple Silicon from ggml-org/llama.cpp
         repo = "ggml-org/llama.cpp"
@@ -256,7 +275,7 @@ def get_binary_url_and_filename(backend: str, target_arch: str = None):
                 f"Platform {system} not supported for Metal llamacpp. Metal is only supported on macOS"
             )
     else:
-        supported_backends = ["vulkan", "rocm", "metal"]
+        supported_backends = ["vulkan", "rocm", "metal", "cpu"]
         raise NotImplementedError(
             f"Unsupported backend: {backend}. Supported backends: {supported_backends}"
         )

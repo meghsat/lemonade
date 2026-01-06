@@ -1,66 +1,38 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.28)
 
 # Use static runtime library on Windows to avoid DLL dependencies
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-project(lemon_cpp VERSION 9.0.2)
+project(lemon_cpp VERSION 9.1.2)
+
+# ============================================================
+# Electron source paths (used by both runtime and installers)
+# ============================================================
+get_filename_component(ELECTRON_APP_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../../src/app" ABSOLUTE)
+set(ELECTRON_APP_BUILD_DIR "${ELECTRON_APP_SOURCE_DIR}/dist-app")
+if(WIN32)
+    set(ELECTRON_APP_UNPACKED_DIR "${ELECTRON_APP_BUILD_DIR}/win-unpacked")
+    set(ELECTRON_EXE_NAME "Lemonade.exe")
+elseif(APPLE)
+    set(ELECTRON_APP_UNPACKED_DIR "${ELECTRON_APP_BUILD_DIR}/mac")
+    set(ELECTRON_EXE_NAME "Lemonade.app")
+else()
+    set(ELECTRON_APP_UNPACKED_DIR "${ELECTRON_APP_BUILD_DIR}/linux-unpacked")
+    # Electron builder uses lowercase product name on Linux
+    set(ELECTRON_EXE_NAME "lemonade")
+endif()
 
 # C++ Standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Platform-specific configurations
-if(WIN32)
-    set(EXECUTABLE_NAME "lemonade-router")
-    # Set Windows target version to Windows 10 for cpp-httplib v0.26.0
-    add_compile_definitions(_WIN32_WINNT=0x0A00)
-    
-    # Add security-hardening compiler flags for MSVC
-    if(MSVC)
-        # Control Flow Guard - prevents control flow hijacking
-        add_compile_options(/guard:cf)
-        # Buffer Security Check - stack buffer overflow detection
-        add_compile_options(/GS)
-        
-        # Linker security flags
-        add_link_options(
-            /DYNAMICBASE      # Address Space Layout Randomization (ASLR)
-            /NXCOMPAT         # Data Execution Prevention (DEP)
-            /GUARD:CF         # Control Flow Guard
-        )
-    endif()
-else()
-    set(EXECUTABLE_NAME "lemonade-router")
-endif()
-
-# Enable cpp-httplib thread pool with 8 threads
-# This MUST be defined before including httplib.h
-add_compile_definitions(CPPHTTPLIB_THREAD_POOL_COUNT=8)
-
-# Dependencies
 include(FetchContent)
 
-# Disable building tests and examples for dependencies
-set(JSON_BuildTests OFF CACHE INTERNAL "")
-set(JSON_Install OFF CACHE INTERNAL "")
-set(CLI11_BUILD_TESTS OFF CACHE INTERNAL "")
-set(CLI11_BUILD_EXAMPLES OFF CACHE INTERNAL "")
-
-# Disable OpenSSL in cpp-httplib (not needed for localhost HTTP server)
-# All HTTPS downloads are handled by libcurl with native SSL backends:
-#   - Windows: Schannel (native)
-#   - macOS: SecureTransport (native)
-#   - Linux: OpenSSL (system library, not bundled)
-set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
-set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE BOOL "" FORCE)
-
-# cpp-httplib (MIT License)
-FetchContent_Declare(httplib
-    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-    GIT_TAG v0.26.0
-)
+# ============================================================
+# Common dependency declarations
+# ============================================================
 
 # nlohmann/json (MIT License)
 FetchContent_Declare(json
@@ -74,27 +46,54 @@ FetchContent_Declare(CLI11
     GIT_TAG v2.4.2
 )
 
+# libcurl (curl license - MIT/X derivate)
+FetchContent_Declare(curl
+    GIT_REPOSITORY https://github.com/curl/curl.git
+    GIT_TAG curl-8_5_0
+    EXCLUDE_FROM_ALL
+)
+
 # zstd (BSD License) - required by httplib for compression
 FetchContent_Declare(zstd
     GIT_REPOSITORY https://github.com/facebook/zstd.git
-    GIT_TAG v1.5.5
+    GIT_TAG v1.5.7
     SOURCE_SUBDIR build/cmake
+    EXCLUDE_FROM_ALL
 )
-set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
-set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
-set(ZSTD_BUILD_STATIC ON CACHE BOOL "" FORCE)
-set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 
-# libcurl (curl license - MIT/X derivate)
+# cpp-httplib (MIT License)
+FetchContent_Declare(httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG v0.26.0
+)
+
+
+# ============================================================
+# Common dependency configurations
+# ============================================================
+
+# Common configurations for all dependencies
+set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "")  # Build static libraries
+# Link to MSVC library statically
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+# === nlohmann/json ===
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+set(JSON_Install OFF CACHE INTERNAL "")
+FetchContent_MakeAvailable(json)
+
+# === CLI11 ===
+set(CLI11_BUILD_TESTS OFF CACHE INTERNAL "")
+set(CLI11_BUILD_EXAMPLES OFF CACHE INTERNAL "")
+FetchContent_MakeAvailable(CLI11)
+
+# === curl ===
+set(BUILD_STATIC_LIBS ON CACHE INTERNAL "")
 set(BUILD_CURL_EXE OFF CACHE INTERNAL "")
-set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "")
-set(CURL_STATICLIB ON CACHE INTERNAL "")
-set(HTTP_ONLY ON CACHE INTERNAL "")
-set(BUILD_TESTING OFF CACHE INTERNAL "")
 set(CURL_DISABLE_TESTS ON CACHE INTERNAL "")
-set(SKIP_INSTALL_ALL ON CACHE INTERNAL "")  # Don't install curl files
-
-# Enable native SSL backends per platform
+set(CURL_DISABLE_INSTALL ON CACHE INTERNAL "")
+set(HTTP_ONLY ON CACHE INTERNAL "")  # Disable protocols other than HTTP/S
+# Configure platform-specific SSL backends
 if(WIN32)
     set(CURL_STATIC_CRT ON CACHE INTERNAL "")  # Use static runtime on Windows
     set(CURL_USE_SCHANNEL ON CACHE INTERNAL "")
@@ -104,41 +103,71 @@ elseif(APPLE)
 else()
     set(CURL_USE_OPENSSL ON CACHE INTERNAL "")
 endif()
-FetchContent_Declare(curl
-    GIT_REPOSITORY https://github.com/curl/curl.git
-    GIT_TAG curl-8_5_0
+# Fetch curl (EXCLUDE_FROM_ALL prevents installation)
+FetchContent_MakeAvailable(curl)
+
+# === zstd ===
+set(ZSTD_BUILD_STATIC ON CACHE INTERNAL "")
+set(ZSTD_BUILD_PROGRAMS OFF CACHE INTERNAL "")
+set(ZSTD_BUILD_SHARED OFF CACHE INTERNAL "")
+set(ZSTD_BUILD_TESTS OFF CACHE INTERNAL "")
+# Fetch zstd (EXCLUDE_FROM_ALL prevents installation)
+FetchContent_MakeAvailable(zstd)
+add_library(zstd::libzstd ALIAS libzstd_static)  # Alias for httplib
+
+# === httplib ===
+# Disable OpenSSL in httplib (not needed for localhost HTTP server)
+# All HTTPS downloads are handled by libcurl with native SSL backends:
+#   - Windows: Schannel (native)
+#   - macOS: SecureTransport (native)
+#   - Linux: OpenSSL (system library, not bundled)
+set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE INTERNAL "")
+set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF CACHE INTERNAL "")
+# Use zstd for compression
+set(HTTPLIB_REQUIRE_ZSTD OFF CACHE INTERNAL "")           # Skip zstd checks
+set(HTTPLIB_USE_ZSTD_IF_AVAILABLE OFF CACHE INTERNAL "")  # Skip zstd checks
+set(HTTPLIB_IS_USING_ZSTD ON CACHE INTERNAL "")           # zstd is provided
+set(HTTPLIB_INSTALL OFF CACHE INTERNAL "")                # Prevent installing
+FetchContent_MakeAvailable(httplib)
+# Patch httplib includes due to manual zstd fetching
+target_include_directories(httplib INTERFACE
+    ${zstd_SOURCE_DIR}/lib
+    ${zstd_SOURCE_DIR}/lib/common
 )
 
-# Make dependencies available
-FetchContent_MakeAvailable(json CLI11 zstd)
 
-# Create alias for httplib compatibility
-# httplib expects zstd::libzstd but FetchContent builds libzstd_static
-if(TARGET libzstd_static AND NOT TARGET zstd::libzstd)
-    add_library(zstd::libzstd ALIAS libzstd_static)
+# ============================================================
+# Application: lemonade-router
+# ============================================================
+
+set(EXECUTABLE_NAME "lemonade-router")
+
+
+# ============================================================
+# Compilation configurations
+# ============================================================
+
+# Common compiler definitions
+# Enable httplib thread pool with 8 threads
+add_compile_definitions(CPPHTTPLIB_THREAD_POOL_COUNT=8)
+
+# Platform-specific compiler definitions
+if(WIN32)
+    # Set Windows target version to Windows 10 for httplib v0.26.0
+    add_compile_definitions(_WIN32_WINNT=0x0A00)
+    if(MSVC)
+        # Add security-hardening compiler flags for MSVC
+        # Control Flow Guard - prevents control flow hijacking
+        add_compile_options(/guard:cf)
+        # Buffer Security Check - stack buffer overflow detection
+        add_compile_options(/GS)
+    endif()
 endif()
 
-# Prevent httplib from searching for system zstd (we're providing it via FetchContent)
-set(ZSTD_FOUND TRUE CACHE BOOL "" FORCE)
-set(HTTPLIB_USE_ZSTD_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
 
-# Fetch curl but prevent it from installing
-FetchContent_GetProperties(curl)
-if(NOT curl_POPULATED)
-    FetchContent_Populate(curl)
-    # Prevent curl from installing any files
-    set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
-    add_subdirectory(${curl_SOURCE_DIR} ${curl_BINARY_DIR} EXCLUDE_FROM_ALL)
-    set(SKIP_INSTALL_ALL OFF CACHE BOOL "" FORCE)
-endif()
-
-# Fetch httplib but prevent it from installing
-FetchContent_GetProperties(httplib)
-if(NOT httplib_POPULATED)
-    FetchContent_Populate(httplib)
-    set(HTTPLIB_INSTALL OFF CACHE BOOL "" FORCE)
-    add_subdirectory(${httplib_SOURCE_DIR} ${httplib_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
+# ============================================================
+# Compilation
+# ============================================================
 
 # Generate version header from template
 configure_file(
@@ -155,12 +184,103 @@ if(WIN32)
         @ONLY
     )
     
-    # Generate NSIS installer script with version
+    # ============================================================
+    # WiX Toolset Configuration (Windows MSI Installer)
+    # ============================================================
+    
+    # Configure WiX Product.wxs template with version
     configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/Lemonade_Server_Installer.nsi.in
-        ${CMAKE_CURRENT_SOURCE_DIR}/Lemonade_Server_Installer.nsi
+        ${CMAKE_CURRENT_SOURCE_DIR}/installer/Product.wxs.in
+        ${CMAKE_CURRENT_BINARY_DIR}/installer/Product.wxs
         @ONLY
     )
+    
+    set(WIX_PRODUCT_WXS "${CMAKE_CURRENT_BINARY_DIR}/installer/Product.wxs")
+    set(WIX_FRAGMENT_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/installer/generate_electron_fragment.py")
+    
+    # Find WiX Toolset 5.0+ (unified 'wix' command) and Python for fragment generation
+    find_program(WIX_EXECUTABLE wix)
+    find_package(Python3 COMPONENTS Interpreter)
+    
+    if(WIX_EXECUTABLE)
+        execute_process(
+            COMMAND ${WIX_EXECUTABLE} --version
+            OUTPUT_VARIABLE WIX_VERSION_OUTPUT
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        message(STATUS "WiX Toolset found: ${WIX_EXECUTABLE}")
+        message(STATUS "WiX version: ${WIX_VERSION_OUTPUT}")
+        
+        file(TO_NATIVE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" WIX_SOURCE_DIR_NATIVE)
+        file(TO_NATIVE_PATH "${WIX_PRODUCT_WXS}" WIX_PRODUCT_WXS_NATIVE)
+        file(TO_NATIVE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lemonade-server-minimal.msi" WIX_MINIMAL_OUTPUT_NATIVE)
+        file(TO_NATIVE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lemonade.msi" WIX_FULL_OUTPUT_NATIVE)
+        file(TO_NATIVE_PATH "${ELECTRON_APP_UNPACKED_DIR}" WIX_ELECTRON_SOURCE_NATIVE)
+        set(WIX_ELECTRON_FRAGMENT "${CMAKE_CURRENT_BINARY_DIR}/installer/ElectronAppFragment.wxs")
+        file(TO_NATIVE_PATH "${WIX_ELECTRON_FRAGMENT}" WIX_ELECTRON_FRAGMENT_NATIVE)
+        
+        # Minimal installer (server only)
+        add_custom_target(wix_installer_minimal
+            COMMAND ${CMAKE_COMMAND} -E echo "Building WiX MSI installer (server only)..."
+            COMMAND ${WIX_EXECUTABLE} build
+                -arch x64
+                -ext WixToolset.UI.wixext
+                -d SourceDir="${WIX_SOURCE_DIR_NATIVE}"
+                -d IncludeElectron=0
+                -out "${WIX_MINIMAL_OUTPUT_NATIVE}"
+                "${WIX_PRODUCT_WXS_NATIVE}"
+            COMMAND ${CMAKE_COMMAND} -E echo "MSI installer created: lemonade-server-minimal.msi"
+            DEPENDS ${EXECUTABLE_NAME}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMENT "Building WiX MSI installer (server only)"
+        )
+        
+        set(WIX_INSTALLER_TARGETS wix_installer_minimal)
+        
+        if(Python3_FOUND)
+            add_custom_target(wix_installer_full
+                COMMAND ${CMAKE_COMMAND} -E echo "Building WiX MSI installer (with Electron app)..."
+                COMMAND ${Python3_EXECUTABLE} ${WIX_FRAGMENT_SCRIPT}
+                    --source "${ELECTRON_APP_UNPACKED_DIR}"
+                    --output "${WIX_ELECTRON_FRAGMENT}"
+                    --component-group "ElectronAppComponents"
+                    --root-id "ElectronAppDir"
+                    --path-variable "ElectronSourceDir"
+                COMMAND ${WIX_EXECUTABLE} build
+                    -arch x64
+                    -ext WixToolset.UI.wixext
+                    -d SourceDir="${WIX_SOURCE_DIR_NATIVE}"
+                    -d IncludeElectron=1
+                    -d ElectronSourceDir="${WIX_ELECTRON_SOURCE_NATIVE}"
+                    -out "${WIX_FULL_OUTPUT_NATIVE}"
+                    "${WIX_PRODUCT_WXS_NATIVE}"
+                    "${WIX_ELECTRON_FRAGMENT_NATIVE}"
+                COMMAND ${CMAKE_COMMAND} -E echo "MSI installer created: lemonade.msi"
+                DEPENDS ${EXECUTABLE_NAME}
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                COMMENT "Building WiX MSI installer (with Electron app)"
+            )
+            
+            if(TARGET electron-app)
+                add_dependencies(wix_installer_full electron-app)
+            endif()
+            
+            list(APPEND WIX_INSTALLER_TARGETS wix_installer_full)
+        else()
+            message(STATUS "Python 3 interpreter not found. Skipping the Electron-enabled MSI target 'wix_installer_full'.")
+        endif()
+        
+        add_custom_target(wix_installers
+            DEPENDS ${WIX_INSTALLER_TARGETS}
+        )
+        
+        message(STATUS "WiX installer targets configured. Run 'cmake --build . --target wix_installer_minimal' or 'wix_installer_full'.")
+    else()
+        message(STATUS "WiX Toolset not found. MSI installers will not be available.")
+        message(STATUS "  Install WiX Toolset 5.0.2 from: https://github.com/wixtoolset/wix/releases/download/v5.0.2/wix-cli-x64.msi")
+        message(STATUS "  Or visit: https://wixtoolset.org/")
+    endif()
+    
 endif()
 
 # Include directories
@@ -188,6 +308,7 @@ set(SOURCES
     server/backends/llamacpp_server.cpp
     server/backends/fastflowlm_server.cpp
     server/backends/ryzenaiserver.cpp
+    server/backends/whisper_server.cpp
 )
 
 # Add version resource file on Windows
@@ -198,7 +319,33 @@ endif()
 # Create executable
 add_executable(${EXECUTABLE_NAME} ${SOURCES})
 
-# Link libraries
+
+# ============================================================
+# Linking configurations
+# ============================================================
+
+# Platform-specific linking options
+if(WIN32)
+    if(MSVC)
+        # Linker security flags
+        add_link_options(
+            /DYNAMICBASE      # Address Space Layout Randomization (ASLR)
+            /NXCOMPAT         # Data Execution Prevention (DEP)
+            /GUARD:CF         # Control Flow Guard
+        )
+        # Embed manifest file
+        set_target_properties(${EXECUTABLE_NAME} PROPERTIES
+            LINK_FLAGS "/MANIFEST:EMBED /MANIFESTINPUT:${CMAKE_CURRENT_BINARY_DIR}/server/lemonade.manifest"
+        )
+    endif()
+endif()
+
+
+# ============================================================
+# Linking
+# ============================================================
+
+# Common linking
 target_link_libraries(${EXECUTABLE_NAME} PRIVATE
     httplib::httplib
     nlohmann_json::nlohmann_json
@@ -208,17 +355,21 @@ target_link_libraries(${EXECUTABLE_NAME} PRIVATE
 
 # Platform-specific linking
 if(WIN32)
-    target_link_libraries(${EXECUTABLE_NAME} PRIVATE ws2_32 wsock32 wbemuuid ole32 oleaut32)
-    
-    # Embed manifest file
-    if(MSVC)
-        set_target_properties(${EXECUTABLE_NAME} PROPERTIES
-            LINK_FLAGS "/MANIFEST:EMBED /MANIFESTINPUT:${CMAKE_CURRENT_BINARY_DIR}/server/lemonade.manifest"
-        )
-    endif()
+    target_link_libraries(${EXECUTABLE_NAME} PRIVATE
+        ws2_32
+        wsock32
+        wbemuuid
+        ole32
+        oleaut32
+    )
 endif()
 
-# Copy resources at build time to both the build directory and the Release directory
+
+# ============================================================
+# Resources
+# ============================================================
+
+# Copy resources to the build directory during configuration
 file(COPY ${CMAKE_SOURCE_DIR}/../../src/lemonade/tools/server/static
      DESTINATION ${CMAKE_BINARY_DIR}/resources)
 file(COPY ${CMAKE_SOURCE_DIR}/../../src/lemonade_server/server_models.json
@@ -226,7 +377,7 @@ file(COPY ${CMAKE_SOURCE_DIR}/../../src/lemonade_server/server_models.json
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/resources/backend_versions.json
      DESTINATION ${CMAKE_BINARY_DIR}/resources)
 
-# Also copy to Release and Debug directories for Visual Studio multi-config
+# Copy resources to the runtime directoriy after build
 add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_BINARY_DIR}/resources
@@ -234,15 +385,62 @@ add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
     COMMENT "Copying resources to output directory"
 )
 
+# ============================================================
+# Electron App Integration (Cross-Platform)
+# ============================================================
+
+# Find Node.js and npm for building the Electron app
+find_program(NODE_EXECUTABLE node)
+find_program(NPM_EXECUTABLE npm)
+
+# Custom target to build the Electron app
+if(NODE_EXECUTABLE AND NPM_EXECUTABLE)
+    if(WIN32)
+        set(ELECTRON_BUILD_TARGET "build:win")
+    elseif(APPLE)
+        set(ELECTRON_BUILD_TARGET "build:mac")
+    else()
+        set(ELECTRON_BUILD_TARGET "build:linux")
+    endif()
+    
+    add_custom_target(electron-app
+        COMMAND ${CMAKE_COMMAND} -E echo "Building Electron app for current platform..."
+        COMMAND ${CMAKE_COMMAND} -E chdir "${ELECTRON_APP_SOURCE_DIR}" ${NPM_EXECUTABLE} install
+        COMMAND ${CMAKE_COMMAND} -E chdir "${ELECTRON_APP_SOURCE_DIR}" ${NPM_EXECUTABLE} run ${ELECTRON_BUILD_TARGET}
+        COMMENT "Building Electron app with npm"
+        WORKING_DIRECTORY "${ELECTRON_APP_SOURCE_DIR}"
+        VERBATIM
+    )
+    
+    message(STATUS "Node.js found: ${NODE_EXECUTABLE}")
+    message(STATUS "npm found: ${NPM_EXECUTABLE}")
+    message(STATUS "Electron app can be built with: cmake --build . --target electron-app")
+else()
+    message(STATUS "Node.js or npm not found - Electron app build target disabled")
+    message(STATUS "Install Node.js to enable: https://nodejs.org/")
+endif()
+
+# Custom command to copy Electron app files after building the C++ server
+add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "Checking for Electron app at ${ELECTRON_APP_UNPACKED_DIR}..."
+    COMMAND ${CMAKE_COMMAND}
+        -DELECTRON_APP_UNPACKED_DIR=${ELECTRON_APP_UNPACKED_DIR}
+        -DTARGET_DIR=$<TARGET_FILE_DIR:${EXECUTABLE_NAME}>
+        -DELECTRON_EXE_NAME=${ELECTRON_EXE_NAME}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CopyElectronApp.cmake
+    COMMENT "Copying Electron app if available"
+    VERBATIM
+)
+
 # Add tray application subdirectory
 add_subdirectory(tray)
+
 
 # ============================================================
 # CPack Configuration for .deb Package (Linux only)
 # ============================================================
 if(UNIX AND NOT APPLE)
     set(CPACK_GENERATOR "DEB")
-    set(CPACK_PACKAGE_NAME "lemonade-server")
     set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
     set(CPACK_PACKAGE_VENDOR "Lemonade")
     set(CPACK_PACKAGE_CONTACT "lemonade@amd.com")
@@ -253,7 +451,6 @@ if(UNIX AND NOT APPLE)
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Lemonade Team <lemonade@amd.com>")
     set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
     set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libcurl4, libssl3, libz1, unzip")
     set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
     
     # Installation paths - use ~/.local for user install (no sudo needed)
@@ -273,8 +470,45 @@ if(UNIX AND NOT APPLE)
         DESTINATION share/lemonade-server/resources
     )
     
-    # Post-install script to make directories writable
-    set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/postinst")
+    # Check if Electron app is available for full package
+    option(INCLUDE_ELECTRON_APP "Include Electron app in deb package" OFF)
+    
+    if(INCLUDE_ELECTRON_APP AND EXISTS "${ELECTRON_APP_UNPACKED_DIR}/${ELECTRON_EXE_NAME}")
+        message(STATUS "Electron app found at ${ELECTRON_APP_UNPACKED_DIR}")
+        message(STATUS "Building full deb package with Electron app")
+        
+        # Full package name
+        set(CPACK_PACKAGE_NAME "lemonade")
+        set(CPACK_DEBIAN_PACKAGE_DEPENDS "libcurl4, libssl3, libz1, unzip, libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libsecret-1-0")
+        set(CPACK_DEBIAN_FILE_NAME "${CPACK_PACKAGE_NAME}_${CPACK_PACKAGE_VERSION}_${CPACK_DEBIAN_PACKAGE_ARCHITECTURE}.deb")
+        
+        # Install Electron app
+        install(DIRECTORY "${ELECTRON_APP_UNPACKED_DIR}/"
+            DESTINATION share/lemonade-server/app
+            USE_SOURCE_PERMISSIONS
+            PATTERN "*.so" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+        )
+        
+        # Post-install script for full package
+        # Note: CPack requires the script to be named 'postinst' exactly
+        # We copy postinst-full to a temporary postinst file for CPack
+        configure_file("${CMAKE_CURRENT_SOURCE_DIR}/postinst-full" 
+                       "${CMAKE_CURRENT_BINARY_DIR}/postinst" COPYONLY)
+        set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_BINARY_DIR}/postinst")
+    else()
+        # Minimal package (server only)
+        set(CPACK_PACKAGE_NAME "lemonade-server-minimal")
+        set(CPACK_DEBIAN_PACKAGE_DEPENDS "libcurl4, libssl3, libz1, unzip")
+        set(CPACK_DEBIAN_FILE_NAME "${CPACK_PACKAGE_NAME}_${CPACK_PACKAGE_VERSION}_${CPACK_DEBIAN_PACKAGE_ARCHITECTURE}.deb")
+        
+        # Post-install script for minimal package
+        set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/postinst")
+        
+        if(INCLUDE_ELECTRON_APP)
+            message(WARNING "INCLUDE_ELECTRON_APP is ON but Electron app not found at ${ELECTRON_APP_UNPACKED_DIR}")
+            message(WARNING "Building minimal deb package instead")
+        endif()
+    endif()
     
     include(CPack)
 endif()
