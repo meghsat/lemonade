@@ -9,7 +9,7 @@ from lemonade.cache import Keys
 default_iterations = 10
 default_warmup_runs = 5
 default_prompt_length = 64
-default_output_tokens = 32
+default_output_tokens = 1024
 default_prompt = "Hello, I am conscious and"
 
 
@@ -106,6 +106,15 @@ class Bench(Tool, ABC):
             f"{default_output_tokens})",
         )
 
+        parser.add_argument(
+            "--gpu-cooldown",
+            required=False,
+            type=int,
+            default=5,
+            help="Number of seconds to wait between prompt benchmarks to allow GPU to cool down "
+            "(default: 5 seconds). Only applies when multiple prompts are specified.",
+        )
+
         return parser
 
     def get_prompt_str(self, _state, token_length):
@@ -151,6 +160,7 @@ class Bench(Tool, ABC):
         iterations: int = default_iterations,
         warmup_iterations: int = default_warmup_runs,
         output_tokens: int = default_output_tokens,
+        gpu_cooldown: int = 5,
         **kwargs,
     ) -> State:
         """
@@ -161,8 +171,12 @@ class Bench(Tool, ABC):
             - warmup_iterations: subset of the iterations to treat as warmup,
                 and not included in the results.
             - output_tokens: Number of new tokens LLM to create.
+            - gpu_cooldown: Number of seconds to wait between prompts for GPU cooldown
             - kwargs: Additional parameters used by bench tools
         """
+        import time
+        import lemonade.common.printing as printing
+        from datetime import datetime
 
         if prompts is None:
             prompts = ["word " * (default_prompt_length - 2)]
@@ -174,6 +188,9 @@ class Bench(Tool, ABC):
         state.save_stat("warmup_iterations", warmup_iterations)
         state.save_stat("output_tokens", output_tokens)
 
+        # Check if profilers are available
+        has_profilers = hasattr(state, 'profilers') and state.profilers
+
         counter = 0
         report_progress_fn = lambda x: self.set_percent_progress(
             100 * (counter + x) / len(prompts)
@@ -181,6 +198,25 @@ class Bench(Tool, ABC):
         self.first_run_prompt = True
         for counter, prompt in enumerate(prompts):
             report_progress_fn(0)
+
+            # Restart profilers for this prompt if we're not on the first prompt
+            if has_profilers and counter > 0:
+                # Stop profilers from previous prompt
+                for profiler in state.profilers:
+                    profiler.stop()
+
+                # Wait for cooldown
+                printing.log_info(f"GPU cooldown for {gpu_cooldown}s before next prompt...")
+                time.sleep(gpu_cooldown)
+
+                # Restart profilers for this prompt
+                import lemonade.common.build as build
+                build_dir = build.output_dir(state.cache_dir, state.build_name)
+                for profiler in state.profilers:
+                    profiler.start(build_dir)
+
+                # Update start times for this prompt
+                state.profiler_start_times[f"prompt_{counter}"] = time.time()
 
             self.run_prompt(
                 state,
@@ -192,6 +228,31 @@ class Bench(Tool, ABC):
                 **kwargs,
             )
             self.first_run_prompt = False
+
+            # Generate profiler results for this prompt (for child classes that need it)
+            if has_profilers and hasattr(self, '_store_power_metrics'):
+                for profiler in state.profilers:
+                    profiler.stop()
+
+                # Generate plot with prompt-specific timestamp
+                current_time = datetime.now()
+                # Use counter for prompt identification in text mode
+                prompt_identifier = prompt if isinstance(prompt, int) else f"{counter}"
+                prompt_timestamp = current_time.strftime(f"%Y-%m-%d-%H%M%S_prompt_{prompt_identifier}")
+
+                for profiler in state.profilers:
+                    profiler.generate_results(state, prompt_timestamp, state.profiler_start_times)
+
+                # Store per-prompt power metrics (if child class implements it)
+                self._store_power_metrics(state)
+
+            # Display results for this prompt immediately (if child class implements it)
+            if hasattr(self, 'display_prompt_results'):
+                self.display_prompt_results(state, prompt, counter)
+
+        # Mark that we've already handled profiler output per-prompt
+        if has_profilers and hasattr(self, '_store_power_metrics'):
+            state.profilers_handled_by_tool = True
 
         self.set_percent_progress(None)
         self.save_stats(state)

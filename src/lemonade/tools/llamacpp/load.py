@@ -5,6 +5,7 @@ import lemonade.common.status as status
 from lemonade.state import State
 from lemonade.tools import FirstTool
 from lemonade.cache import Keys
+from lemonade.tools.llamacpp.utils import get_default_backend
 
 
 class LoadLlamaCpp(FirstTool):
@@ -65,11 +66,12 @@ class LoadLlamaCpp(FirstTool):
             help="Set this flag to indicate the model is a reasoning model",
         )
 
+        default_backend = get_default_backend()
         parser.add_argument(
             "--backend",
-            choices=["vulkan", "rocm", "cpu"],
-            default="vulkan",
-            help="Backend to use for llama.cpp (default: vulkan)",
+            choices=["vulkan", "rocm", "metal"],
+            default=default_backend,
+            help=f"Backend to use for llama.cpp (default: {default_backend})",
         )
 
         return parser

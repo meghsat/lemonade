@@ -15,11 +15,11 @@ import lemonade.common.printing as printing
 from lemonade.tools.adapter import PassthroughTokenizer, ModelAdapter
 from lemonade.common.system_info import get_system_info
 from dotenv import set_key, load_dotenv
-
+import re
 LLAMA_VERSION_VULKAN = "b6510"
 LLAMA_VERSION_ROCM = "b1066"
-LLAMA_VERSION_METAL = "b6510"
 LLAMA_VERSION_CPU = "b6510"
+LLAMA_VERSION_METAL = "b6940"
 
 
 def identify_rocm_arch_from_name(device_name: str) -> str | None:
@@ -208,6 +208,34 @@ def get_llama_installed_version(backend: str):
             llama_installed_version = f.read()
             return llama_installed_version
     return None
+
+
+def get_default_backend() -> str:
+    """
+    Get the default llamacpp backend based on the current platform.
+    Uses Metal for Apple Silicon Macs, Vulkan for everything else.
+
+    Returns:
+        str: The default backend name ('metal', 'vulkan', or 'rocm')
+    """
+    # Allow environment variable override
+    env_backend = os.environ.get("LEMONADE_LLAMACPP_BACKEND")
+    if env_backend:
+        # Validate the backend choice
+        valid_backends = ["vulkan", "rocm", "metal"]
+        env_backend_lower = env_backend.lower()
+        if env_backend_lower not in valid_backends:
+            logging.warning(
+                f"Invalid LEMONADE_LLAMACPP_BACKEND value '{env_backend}'. "
+                f"Valid options: {', '.join(valid_backends)}. Falling back to platform default."
+            )
+        else:
+            return env_backend_lower
+
+    # Platform-specific defaults: use metal for Apple Silicon, vulkan for everything else
+    if platform.system() == "Darwin" and platform.machine().lower() in ["arm64", "aarch64"]:
+        return "metal"
+    return "vulkan"
 
 
 def get_binary_url_and_filename(backend: str, target_arch: str = None):
@@ -714,6 +742,7 @@ def resolve_local_gguf_model(
                 f for f in files if f.endswith(".gguf") and "mmproj" not in f.lower()
             ]
             if gguf_files:
+                gguf_files.sort()
                 gguf_file_found = os.path.join(root, gguf_files[0])
                 break
 
@@ -901,8 +930,6 @@ class LlamaCppAdapter(ModelAdapter):
             str(n_predict),
             "-t",  # number of threads to use during generation
             str(self.threads),
-            "-p",
-            prompt,
             "-b",  # logical maximum batch size
             "1",
             "-ub",  # physical maximum batch size
@@ -1010,7 +1037,7 @@ class LlamaCppAdapter(ModelAdapter):
                 # Sample: llama_perf_context_print: prompt eval time =      35.26 ms /
                 #             3 tokens   (   11.75 ms per token,    85.09 tokens per second)
                 #
-                if "llama_perf_context_print: prompt eval time =" in line:
+                if re.search(r"^llama_perf_context_print:\s+prompt eval time", line):
                     parts = line.split("=")[1].split()
                     time_to_first_token_ms = float(parts[0])
                     self.time_to_first_token = time_to_first_token_ms / 1000
@@ -1020,7 +1047,7 @@ class LlamaCppAdapter(ModelAdapter):
                 # Sample: llama_perf_context_print:        eval time =    1991.14 ms /
                 #           63 runs   (   31.61 ms per token,    31.64 tokens per second)
                 #
-                if "llama_perf_context_print:        eval time =" in line:
+                if re.search(r"^llama_perf_context_print:\s+eval time", line):
                     parts = line.split("=")[1].split()
                     self.response_tokens = int(parts[3]) + 1  # include first token
                     response_time_ms = float(parts[0])

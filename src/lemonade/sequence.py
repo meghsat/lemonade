@@ -135,6 +135,11 @@ class Sequence:
         for profiler in self.profilers:
             profiler.start(build_dir)
 
+        # Store profilers in state so tools can access them
+        state.profilers = self.profilers
+        state.profiler_start_times = start_times
+        state.profiler_timestamp = timestamp
+
         self.show_monitor(state, monitor_setting)
 
         if state.build_status == build.FunctionStatus.SUCCESSFUL:
@@ -303,9 +308,10 @@ class Sequence:
                 )
                 state.invocation_info.status_message_color = printing.Colors.OKGREEN
 
-        # Generate profiler output
-        for profiler in self.profilers:
-            profiler.generate_results(state, timestamp, start_times)
+        # Generate profiler output (unless already handled by tool)
+        if not getattr(state, 'profilers_handled_by_tool', False):
+            for profiler in self.profilers:
+                profiler.generate_results(state, timestamp, start_times)
 
         if vars(state).get("models_found") and vars(state).get("invocation_info"):
 
