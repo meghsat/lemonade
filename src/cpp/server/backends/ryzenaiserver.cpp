@@ -22,8 +22,8 @@ namespace fs = std::filesystem;
 
 namespace lemon {
 
-RyzenAIServer::RyzenAIServer(const std::string& model_name, int port, bool debug)
-    : WrappedServer("RyzenAI-Server", debug ? "debug" : "info"), 
+RyzenAIServer::RyzenAIServer(const std::string& model_name, bool debug, ModelManager* model_manager)
+    : WrappedServer("RyzenAI-Server", debug ? "debug" : "info", model_manager), 
       model_name_(model_name),
       execution_mode_("auto"),
       is_loaded_(false) {
@@ -144,15 +144,15 @@ void RyzenAIServer::download_and_install() {
     // Download the ZIP file with throttled progress updates (once per second)
     // No authentication needed for public releases
     std::map<std::string, std::string> headers;
-    bool download_success = utils::HttpClient::download_file(
+    auto download_result = utils::HttpClient::download_file(
         url, 
         zip_path,
         utils::create_throttled_progress_callback(),
         headers
     );
     
-    if (!download_success) {
-        std::cerr << "\n[RyzenAI-Server ERROR] Failed to download ryzenai-server from GitHub release" << std::endl;
+    if (!download_result.success) {
+        std::cerr << "\n[RyzenAI-Server ERROR] Failed to download ryzenai-server: " << download_result.error_message << std::endl;
         std::cerr << "[RyzenAI-Server ERROR] Possible causes:" << std::endl;
         std::cerr << "[RyzenAI-Server ERROR]   - No internet connection or GitHub is down" << std::endl;
         std::cerr << "[RyzenAI-Server ERROR]   - No release has been published yet" << std::endl;
@@ -161,7 +161,7 @@ void RyzenAIServer::download_and_install() {
         throw std::runtime_error("Failed to download ryzenai-server from release");
     }
     
-    std::cout << std::endl << "[RyzenAI-Server] Download complete!" << std::endl;
+    std::cout << "[RyzenAI-Server] Download complete!" << std::endl;
     
     // Verify the downloaded file exists and is valid
     if (!fs::exists(zip_path)) {
@@ -268,7 +268,14 @@ std::string RyzenAIServer::determine_execution_mode(const std::string& model_pat
 void RyzenAIServer::load(const std::string& model_name,
                         const ModelInfo& model_info,
                         int ctx_size,
-                        bool do_not_upgrade) {
+                        bool do_not_upgrade,
+                        const std::string& llamacpp_backend,
+                        const std::string& llamacpp_args) {
+    // Note: llamacpp_backend and llamacpp_args parameters are not used by RyzenAI-Server
+    // They are part of the uniform interface for polymorphism
+    (void)llamacpp_backend;  // Suppress unused parameter warning
+    (void)llamacpp_args;     // Suppress unused parameter warning
+    
     std::cout << "[RyzenAI-Server] Loading model: " << model_name << std::endl;
     
     // Install/check RyzenAI-Server (will download if not found)
@@ -336,7 +343,9 @@ void RyzenAIServer::load(const std::string& model_name,
               << process_handle_.pid << std::endl;
     
     // Wait for server to be ready
-    wait_for_ready();
+    if (!wait_for_ready()) {
+        throw std::runtime_error("RyzenAI-Server failed to start (check logs for details)");
+    }
     
     is_loaded_ = true;
     std::cout << "[RyzenAI-Server] Model loaded on port " << port_ << std::endl;
@@ -388,12 +397,6 @@ json RyzenAIServer::responses(const json& request) {
     
     // Forward to /v1/responses endpoint
     return forward_request("/v1/responses", request);
-}
-
-void RyzenAIServer::parse_telemetry(const std::string& line) {
-    // RyzenAI-Server outputs telemetry in its responses, not in stdout
-    // So this method is a no-op for this backend
-    // Telemetry will be parsed from the JSON response itself
 }
 
 } // namespace lemon

@@ -28,6 +28,14 @@ struct AppConfig {
     bool show_version = false;
     std::string host = "localhost";
     std::string llamacpp_backend = "vulkan";  // Default to vulkan
+    std::string llamacpp_args = "";  // Custom arguments for llama-server
+    std::string extra_models_dir = "";  // Secondary directory for GGUF model discovery
+    
+    // Multi-model support
+    int max_llm_models = 1;
+    int max_embedding_models = 1;
+    int max_reranking_models = 1;
+    int max_audio_models = 1;
     
     // For commands that take arguments
     std::vector<std::string> command_args;
@@ -37,6 +45,16 @@ struct ModelInfo {
     std::string id;
     std::string checkpoint;
     std::string recipe;
+};
+
+// Information about a loaded model from the health endpoint
+struct LoadedModelInfo {
+    std::string model_name;
+    std::string checkpoint;
+    double last_use;
+    std::string type;  // "llm", "embedding", or "reranking"
+    std::string device;  // e.g., "gpu", "npu", "gpu npu"
+    std::string backend_url;
 };
 
 class TrayApp {
@@ -55,9 +73,11 @@ public:
     
 private:
     // Initialization
+    void load_env_defaults();
     void parse_arguments(int argc, char* argv[]);
     void print_usage(bool show_serve_options = false);
     void print_version();
+    void print_pull_help();
     bool find_server_binary();
     bool setup_logging();
     
@@ -71,7 +91,6 @@ private:
     
     // Helper functions for command execution
     bool is_server_running_on_port(int port);
-    bool wait_for_server_ready(int port, int timeout_seconds = 30);
     std::pair<int, int> get_server_info();  // Returns {pid, port}
     bool start_ephemeral_server(int port);
     
@@ -85,26 +104,29 @@ private:
     
     // Menu actions
     void on_load_model(const std::string& model_name);
-    void on_unload_model();
+    void on_unload_model();  // Unload all models (kept for backward compatibility)
+    void on_unload_specific_model(const std::string& model_name);  // Unload specific model
     void on_change_port(int new_port);
     void on_change_context_size(int new_ctx_size);
     void on_show_logs();
     void on_open_documentation();
-    void on_open_llm_chat();
-    void on_open_model_manager();
     void on_upgrade();
     void on_quit();
     
     // Helpers
     void open_url(const std::string& url);
+    void launch_electron_app();
+    bool find_electron_app();
     void show_notification(const std::string& title, const std::string& message);
     std::string get_loaded_model();
+    std::vector<LoadedModelInfo> get_all_loaded_models();
     std::vector<ModelInfo> get_downloaded_models();
     
     // Member variables
     AppConfig config_;
     std::unique_ptr<TrayInterface> tray_;
     std::unique_ptr<ServerManager> server_manager_;
+    std::string electron_app_path_;
     
     // State
     std::string loaded_model_;
@@ -125,6 +147,14 @@ private:
     HANDLE log_viewer_process_ = nullptr;
 #else
     pid_t log_viewer_pid_ = 0;
+#endif
+
+    // Electron app process tracking (for child process management and single-instance enforcement)
+#ifdef _WIN32
+    HANDLE electron_app_process_ = nullptr;
+    HANDLE electron_job_object_ = nullptr;  // Job object to ensure child closes with parent
+#else
+    pid_t electron_app_pid_ = 0;  // Process ID of the Electron app (macOS/Linux)
 #endif
 
     // Log tail thread for console output (when show_console is true)

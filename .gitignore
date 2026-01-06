@@ -166,6 +166,25 @@ cython_debug/
 
 .aider*
 
+# Claude files
+CLAUDE.*
+.settings.local.json
+
+# Bruno/GitHub files
+.bruno/
+
+# Cursor files (using .cursor/rules/*.mdc format)
+.cursor/
+.cursor**
+
+# Electron app
+src/app/node_modules/
+src/app/dist/
+src/app/dist-app/
+src/app/.webpack/
+# WiX Toolset build artifacts
+*.msi
+*.wixpdb
 # Custom ignores
 cache*/
 mac-gguf-models/

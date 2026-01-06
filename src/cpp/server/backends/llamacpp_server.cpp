@@ -1,6 +1,8 @@
 #include "lemon/backends/llamacpp_server.h"
 #include "lemon/utils/http_client.h"
 #include "lemon/utils/process_manager.h"
+#include "lemon/utils/path_utils.h"
+#include "lemon/utils/json_utils.h"
 #include "lemon/error_types.h"
 #include "lemon/system_info.h"
 #include <iostream>
@@ -12,6 +14,7 @@
 #include <chrono>
 #include <algorithm>
 #include <cstdlib>
+#include <set>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -26,90 +29,170 @@ using namespace lemon::utils;
 namespace lemon {
 namespace backends {
 
-// llama.cpp version constants
-static const std::string LLAMA_VERSION_VULKAN = "b6510";
-static const std::string LLAMA_VERSION_ROCM = "b1066";
-static const std::string LLAMA_VERSION_METAL = "b6510";
-
 // Embedding model batch configuration set to 8192 as default
 static const int EMBEDDING_CTX_SIZE = 8192;
 static const int EMBEDDING_BATCH_SIZE = 8192;
 static const int EMBEDDING_UBATCH_SIZE = 8192;
 
-LlamaCppServer::LlamaCppServer(const std::string& backend, const std::string& log_level)
-    : WrappedServer("llama-server", log_level), backend_(backend) {
+// Helper to load backend versions from configuration file
+static std::string get_llamacpp_version(const std::string& backend) {
+    std::string config_path = utils::get_resource_path("resources/backend_versions.json");
+    
+    try {
+        json config = utils::JsonUtils::load_from_file(config_path);
+        
+        if (!config.contains("llamacpp") || !config["llamacpp"].is_object()) {
+            throw std::runtime_error("backend_versions.json is missing 'llamacpp' section");
+        }
+        
+        const auto& llamacpp_config = config["llamacpp"];
+        
+        if (!llamacpp_config.contains(backend) || !llamacpp_config[backend].is_string()) {
+            throw std::runtime_error("backend_versions.json is missing version for backend: " + backend);
+        }
+        
+        std::string version = llamacpp_config[backend].get<std::string>();
+        std::cout << "[LlamaCpp] Using " << backend << " version from config: " << version << std::endl;
+        return version;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "\n" << std::string(70, '=') << std::endl;
+        std::cerr << "ERROR: Failed to load llama.cpp version from configuration" << std::endl;
+        std::cerr << std::string(70, '=') << std::endl;
+        std::cerr << "\nConfig file: " << config_path << std::endl;
+        std::cerr << "Backend: " << backend << std::endl;
+        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "\nThe backend_versions.json file is required and must contain valid" << std::endl;
+        std::cerr << "version information for all llama.cpp backends." << std::endl;
+        std::cerr << std::string(70, '=') << std::endl << std::endl;
+        throw;
+    }
+}
+
+// Helper to add a flag-only argument (e.g., --jinja, --embeddings)
+static void push_arg(std::vector<std::string>& args, 
+                    std::set<std::string>& reserved,
+                    const std::string& key) {
+    args.push_back(key);
+    reserved.insert(key);
+}
+
+// Helper to add a flag-value pair (e.g., --port 8000, -m model.gguf)
+static void push_arg(std::vector<std::string>& args,
+                    std::set<std::string>& reserved,
+                    const std::string& key,
+                    const std::string& value) {
+    args.push_back(key);
+    args.push_back(value);
+    reserved.insert(key);
+}
+
+// Helper to tokenize custom args string into vector
+static std::vector<std::string> parse_custom_args(const std::string& custom_args_str) {
+    std::vector<std::string> result;
+    if (custom_args_str.empty()) {
+        return result;
+    }
+    
+    std::string current_arg;
+    bool in_quotes = false;
+    char quote_char = '\0';
+    
+    for (char c : custom_args_str) {
+        if (!in_quotes && (c == '"' || c == '\'')) {
+            in_quotes = true;
+            quote_char = c;
+        } else if (in_quotes && c == quote_char) {
+            in_quotes = false;
+            quote_char = '\0';
+        } else if (!in_quotes && c == ' ') {
+            if (!current_arg.empty()) {
+                result.push_back(current_arg);
+                current_arg.clear();
+            }
+        } else {
+            current_arg += c;
+        }
+    }
+    
+    if (!current_arg.empty()) {
+        result.push_back(current_arg);
+    }
+    
+    return result;
+}
+
+// Helper to validate custom arguments don't conflict with reserved flags
+static std::string validate_custom_args(const std::string& custom_args_str,
+                                       const std::set<std::string>& reserved_flags) {
+    std::vector<std::string> custom_args = parse_custom_args(custom_args_str);
+    
+    for (const auto& arg : custom_args) {
+        // Extract flag name (handle --flag=value format)
+        std::string flag = arg;
+        size_t eq_pos = flag.find('=');
+        if (eq_pos != std::string::npos) {
+            flag = flag.substr(0, eq_pos);
+        }
+        
+        // Check if it's a flag and if it's reserved
+        if (!flag.empty() && flag[0] == '-') {
+            if (reserved_flags.find(flag) != reserved_flags.end()) {
+                // Build error message with all reserved flags
+                std::string reserved_list;
+                for (const auto& rf : reserved_flags) {
+                    if (!reserved_list.empty()) reserved_list += ", ";
+                    reserved_list += rf;
+                }
+                
+                return "Argument '" + flag + "' is managed by Lemonade and cannot be overridden.\n"
+                       "Reserved arguments: " + reserved_list;
+            }
+        }
+    }
+    
+    return "";  // Valid
+}
+
+LlamaCppServer::LlamaCppServer(const std::string& backend, const std::string& log_level,
+                               const std::string& custom_args, ModelManager* model_manager)
+    : WrappedServer("llama-server", log_level, model_manager), backend_(backend), custom_args_(custom_args) {
 }
 
 LlamaCppServer::~LlamaCppServer() {
     unload();
 }
 
-// Helper to identify ROCm architecture from GPU name
-static std::string identify_rocm_arch_from_name(const std::string& device_name) {
-    std::string device_lower = device_name;
-    std::transform(device_lower.begin(), device_lower.end(), device_lower.begin(), ::tolower);
-    
-    if (device_lower.find("radeon") == std::string::npos) {
-        return "";
-    }
-    
-    // STX Halo iGPUs (gfx1151 architecture)
-    // Radeon 8050S Graphics / Radeon 8060S Graphics
-    if (device_lower.find("8050s") != std::string::npos || 
-        device_lower.find("8060s") != std::string::npos) {
-        return "gfx1151";
-    }
-    
-    // RDNA4 GPUs (gfx120X architecture)
-    // AMD Radeon AI PRO R9700, AMD Radeon RX 9070 XT, AMD Radeon RX 9070 GRE,
-    // AMD Radeon RX 9070, AMD Radeon RX 9060 XT
-    if (device_lower.find("r9700") != std::string::npos ||
-        device_lower.find("9060") != std::string::npos ||
-        device_lower.find("9070") != std::string::npos) {
-        return "gfx120X";
-    }
-    
-    // RDNA3 GPUs (gfx110X architecture)
-    // AMD Radeon PRO V710, AMD Radeon PRO W7900 Dual Slot, AMD Radeon PRO W7900,
-    // AMD Radeon PRO W7800 48GB, AMD Radeon PRO W7800, AMD Radeon PRO W7700,
-    // AMD Radeon RX 7900 XTX, AMD Radeon RX 7900 XT, AMD Radeon RX 7900 GRE,
-    // AMD Radeon RX 7800 XT, AMD Radeon RX 7700 XT
-    if (device_lower.find("7700") != std::string::npos ||
-        device_lower.find("7800") != std::string::npos ||
-        device_lower.find("7900") != std::string::npos ||
-        device_lower.find("v710") != std::string::npos) {
-        return "gfx110X";
-    }
-    
-    return "";
-}
-
 // Helper to identify ROCm architecture from system
 static std::string identify_rocm_arch() {
-    auto system_info = lemon::create_system_info();
-    
-    // Check iGPU
-    auto igpu = system_info->get_amd_igpu_device();
-    if (igpu.available && !igpu.name.empty()) {
-        std::string arch = identify_rocm_arch_from_name(igpu.name);
-        if (!arch.empty()) {
-            return arch;
-        }
-    }
-    
-    // Check dGPUs
-    auto dgpus = system_info->get_amd_dgpu_devices();
-    for (const auto& gpu : dgpus) {
-        if (gpu.available && !gpu.name.empty()) {
-            std::string arch = identify_rocm_arch_from_name(gpu.name);
+    // Try to detect GPU architecture, default to gfx110X on any failure
+    try {
+        auto system_info = lemon::create_system_info();
+        
+        // Check iGPU first
+        auto igpu = system_info->get_amd_igpu_device();
+        if (igpu.available && !igpu.name.empty()) {
+            std::string arch = identify_rocm_arch_from_name(igpu.name);
             if (!arch.empty()) {
                 return arch;
             }
         }
+        
+        // Check dGPUs
+        auto dgpus = system_info->get_amd_dgpu_devices();
+        for (const auto& gpu : dgpus) {
+            if (gpu.available && !gpu.name.empty()) {
+                std::string arch = identify_rocm_arch_from_name(gpu.name);
+                if (!arch.empty()) {
+                    return arch;
+                }
+            }
+        }
+    } catch (...) {
+        // Detection failed - use default
     }
     
-    // Default to gfx110X if no specific arch detected
-    return "gfx110X";
+    return "gfx110X";  // Default architecture
 }
 
 // Helper to get the directory where llama binaries should be installed
@@ -151,30 +234,6 @@ static std::string get_install_directory(const std::string& backend) {
     return (fs::path(get_llama_base_dir()) / "llama" / backend).string();
 }
 
-// Helper to get HuggingFace cache directory
-// Policy: Use HF_HOME or default to ~/.cache/huggingface/hub (standard HF behavior)
-static std::string get_hf_cache_dir() {
-    // Check HF_HOME first
-    const char* hf_home = std::getenv("HF_HOME");
-    if (hf_home) {
-        return std::string(hf_home) + "/hub";
-    }
-    
-    // Default to ~/.cache/huggingface/hub
-#ifdef _WIN32
-    const char* userprofile = std::getenv("USERPROFILE");
-    if (userprofile) {
-        return std::string(userprofile) + "\\.cache\\huggingface\\hub";
-    }
-    return "C:\\.cache\\huggingface\\hub";
-#else
-    const char* home = std::getenv("HOME");
-    if (home) {
-        return std::string(home) + "/.cache/huggingface/hub";
-    }
-    return "/tmp/.cache/huggingface/hub";
-#endif
-}
 
 // Helper to extract ZIP files (Windows/Linux built-in tools)
 static bool extract_zip(const std::string& zip_path, const std::string& dest_dir) {
@@ -202,39 +261,45 @@ static bool extract_zip(const std::string& zip_path, const std::string& dest_dir
 }
 
 void LlamaCppServer::install(const std::string& backend) {
-    std::string install_dir = get_install_directory(backend_.empty() ? backend : backend_);
-    std::string version_file = (fs::path(install_dir) / "version.txt").string();
-    std::string backend_file = (fs::path(install_dir) / "backend.txt").string();
-    
-    // Get expected version
-    std::string expected_version;
-    if (backend_ == "rocm") {
-        expected_version = LLAMA_VERSION_ROCM;
-    } else if (backend_ == "metal") {
-        expected_version = LLAMA_VERSION_METAL;
-    } else {
-        expected_version = LLAMA_VERSION_VULKAN;
-    }
-    
-    // Check if already installed with correct version
-    std::string exe_path = find_executable_in_install_dir(install_dir);
+    std::string install_dir;
+    std::string version_file;
+    std::string backend_file;
+
+    std::string exe_path = find_external_llama_server(backend_.empty() ? backend : backend_);
     bool needs_install = exe_path.empty();
+
+    // Get expected version from config file (or fallback to defaults)
+    std::string expected_version = get_llamacpp_version(backend_.empty() ? backend : backend_);
     
-    if (!needs_install && fs::exists(version_file) && fs::exists(backend_file)) {
-        std::ifstream vf(version_file);
-        std::ifstream bf(backend_file);
-        std::string installed_version, installed_backend;
-        std::getline(vf, installed_version);
-        std::getline(bf, installed_backend);
+    if (needs_install) {
+        install_dir = get_install_directory(backend_.empty() ? backend : backend_);
+        version_file = (fs::path(install_dir) / "version.txt").string();
+        backend_file = (fs::path(install_dir) / "backend.txt").string();
+    
+        // Check if already installed with correct version
+        exe_path = find_executable_in_install_dir(install_dir);
+        needs_install = exe_path.empty();
         
-        if (installed_version != expected_version || installed_backend != backend_) {
-            std::cout << "[LlamaCpp] Upgrading from " << installed_version 
-                     << " to " << expected_version << std::endl;
-            needs_install = true;
-            fs::remove_all(install_dir);
+        if (!needs_install && fs::exists(version_file) && fs::exists(backend_file)) {
+            std::string installed_version, installed_backend;
+            
+            // Read version info in a separate scope to ensure files are closed
+            {
+                std::ifstream vf(version_file);
+                std::ifstream bf(backend_file);
+                std::getline(vf, installed_version);
+                std::getline(bf, installed_backend);
+            }  // Files are closed here when ifstream objects go out of scope
+            
+            if (installed_version != expected_version || installed_backend != backend_) {
+                std::cout << "[LlamaCpp] Upgrading from " << installed_version 
+                        << " to " << expected_version << std::endl;
+                needs_install = true;
+                fs::remove_all(install_dir);
+            }
         }
     }
-    
+
     if (needs_install) {
         std::cout << "[LlamaCpp] Installing llama-server (backend: " << backend_ 
                  << ", version: " << expected_version << ")" << std::endl;
@@ -267,6 +332,18 @@ void LlamaCppServer::install(const std::string& backend) {
 #else
             throw std::runtime_error("Metal llamacpp only supported on macOS");
 #endif
+
+        } else if (backend_ == "cpu") {
+            // CPU-only builds from ggml-org/llama.cpp
+            repo = "ggml-org/llama.cpp";
+
+#ifdef _WIN32
+            filename = "llama-" + expected_version + "-bin-win-cpu-x64.zip";
+#elif defined(__linux__)
+            filename = "llama-" + expected_version + "-bin-ubuntu-x64.zip";
+#else
+            throw std::runtime_error("CPU llamacpp not supported on this platform");
+#endif
             
         } else {  // vulkan
             // Vulkan support from ggml-org/llama.cpp
@@ -284,25 +361,27 @@ void LlamaCppServer::install(const std::string& backend) {
                          expected_version + "/" + filename;
         
         // Download ZIP to HuggingFace cache directory (follows HF conventions)
-        fs::path cache_dir = get_hf_cache_dir();
+        fs::path cache_dir = model_manager_ ? model_manager_->get_hf_cache_dir() : "";
+        if (cache_dir.empty()) {
+            throw std::runtime_error("ModelManager not available for cache directory lookup");
+        }
         fs::create_directories(cache_dir);
         std::string zip_path = (cache_dir / filename).string();
         
         std::cout << "[LlamaCpp] Downloading from: " << url << std::endl;
         std::cout << "[LlamaCpp] Downloading to: " << zip_path << std::endl;
         
-        // Download the file with throttled progress updates (once per second)
-        bool download_success = utils::HttpClient::download_file(
+        auto result = utils::HttpClient::download_file(
             url, 
             zip_path, 
             utils::create_throttled_progress_callback()
         );
         
-        if (!download_success) {
-            throw std::runtime_error("Failed to download llama-server from: " + url);
+        if (!result.success) {
+            throw std::runtime_error("Failed to download llama-server: " + result.error_message);
         }
         
-        std::cout << std::endl << "[LlamaCpp] Download complete!" << std::endl;
+        std::cout << "[LlamaCpp] Download complete!" << std::endl;
         
         // Verify the downloaded file exists and is valid
         if (!fs::exists(zip_path)) {
@@ -375,11 +454,36 @@ std::string LlamaCppServer::download_model(const std::string& checkpoint,
 void LlamaCppServer::load(const std::string& model_name,
                          const ModelInfo& model_info,
                          int ctx_size,
-                         bool do_not_upgrade) {
+                         bool do_not_upgrade,
+                         const std::string& llamacpp_backend,
+                         const std::string& llamacpp_args) {
     
     std::cout << "[LlamaCpp] Loading model: " << model_name << std::endl;
+
     
-    // Install llama-server if needed
+    // Check environment variables for backend configuration
+    bool use_gpu = true;  // default
+    const char* env_backend = std::getenv("LEMONADE_LLAMACPP_BACKEND");
+
+
+    if (env_backend && std::string(env_backend) == "cpu" || backend_ == "cpu") {
+        use_gpu = false;
+        backend_ = "cpu";
+    }
+
+    // Llamacpp Backend logging
+    std::cout << "[LlamaCpp] Using backend: " << backend_ << "\n"
+            << "[LlamaCpp] Use GPU: " << (use_gpu ? "true" : "false")
+            << std::endl;    
+    std::cout << "[LlamaCpp] Per-model settings: backend=" << llamacpp_backend 
+              << ", ctx_size=" << ctx_size 
+              << ", args=" << (llamacpp_args.empty() ? "(none)" : llamacpp_args) << std::endl;
+    
+    // Update backend and custom args with per-model settings
+    backend_ = llamacpp_backend;
+    custom_args_ = llamacpp_args;
+    
+    // Install llama-server if needed (use per-model backend)
     install(backend_);
     
     // Use pre-resolved GGUF path
@@ -393,29 +497,44 @@ void LlamaCppServer::load(const std::string& model_name,
     // Get mmproj path for vision models
     std::string mmproj_path;
     if (!model_info.mmproj.empty()) {
-        // Parse checkpoint to get repo_id (without variant)
-        std::string repo_id = model_info.checkpoint;
-        size_t colon_pos = model_info.checkpoint.find(':');
-        if (colon_pos != std::string::npos) {
-            repo_id = model_info.checkpoint.substr(0, colon_pos);
+        fs::path search_path;
+        
+        // For discovered models (from extra_models_dir), search in the model's directory
+        if (model_info.source == "extra_models_dir") {
+            // checkpoint is the directory path for discovered models
+            search_path = fs::path(model_info.checkpoint);
+            // If checkpoint is the GGUF file itself (standalone file), use its parent directory
+            if (!fs::is_directory(search_path)) {
+                search_path = search_path.parent_path();
+            }
+        } else {
+            // For HuggingFace models, use the HF cache directory
+            std::string repo_id = model_info.checkpoint;
+            size_t colon_pos = model_info.checkpoint.find(':');
+            if (colon_pos != std::string::npos) {
+                repo_id = model_info.checkpoint.substr(0, colon_pos);
+            }
+            
+            // Convert org/model to models--org--model
+            std::string cache_dir_name = "models--";
+            for (char c : repo_id) {
+                cache_dir_name += (c == '/') ? "--" : std::string(1, c);
+            }
+            
+            std::string hf_cache = model_manager_ ? model_manager_->get_hf_cache_dir() : "";
+            if (hf_cache.empty()) {
+                throw std::runtime_error("ModelManager not available for cache directory lookup");
+            }
+            search_path = fs::path(hf_cache) / cache_dir_name;
         }
         
-        // Convert org/model to models--org--model
-        std::string cache_dir_name = "models--";
-        for (char c : repo_id) {
-            cache_dir_name += (c == '/') ? "--" : std::string(1, c);
-        }
-        
-        std::string hf_cache = get_hf_cache_dir();
-        fs::path model_cache_path = fs::path(hf_cache) / cache_dir_name;
-        
-        // Search for mmproj file in the model cache
+        // Search for mmproj file
         std::cout << "[LlamaCpp] Searching for mmproj '" << model_info.mmproj 
-                  << "' in: " << model_cache_path << std::endl;
+                  << "' in: " << search_path << std::endl;
         
-        if (fs::exists(model_cache_path)) {
+        if (fs::exists(search_path)) {
             try {
-                for (const auto& entry : fs::recursive_directory_iterator(model_cache_path)) {
+                for (const auto& entry : fs::recursive_directory_iterator(search_path)) {
                     if (entry.is_regular_file()) {
                         std::string filename = entry.path().filename().string();
                         if (filename == model_info.mmproj) {
@@ -429,7 +548,7 @@ void LlamaCppServer::load(const std::string& model_name,
                 std::cerr << "[LlamaCpp] Error during mmproj search: " << e.what() << std::endl;
             }
         } else {
-            std::cout << "[LlamaCpp] Model cache path does not exist: " << model_cache_path << std::endl;
+            std::cout << "[LlamaCpp] Search path does not exist: " << search_path << std::endl;
         }
         
         if (mmproj_path.empty()) {
@@ -444,9 +563,9 @@ void LlamaCppServer::load(const std::string& model_name,
     // Get executable path
     std::string executable = get_llama_server_path();
     
-    // Check for embeddings and reranking support based on labels
-    bool supports_embeddings = std::find(model_info.labels.begin(), model_info.labels.end(), "embeddings") != model_info.labels.end();
-    bool supports_reranking = std::find(model_info.labels.begin(), model_info.labels.end(), "reranking") != model_info.labels.end();
+    // Check for embeddings and reranking support based on model type
+    bool supports_embeddings = (model_info.type == ModelType::EMBEDDING);
+    bool supports_reranking = (model_info.type == ModelType::RERANKING);
     
     // For embedding models, use a larger context size to support longer individual
     // strings. Embedding requests can include multiple strings in a batch, and each
@@ -455,59 +574,72 @@ void LlamaCppServer::load(const std::string& model_name,
         ctx_size = EMBEDDING_CTX_SIZE;
     }
     
-    // Build command arguments to match Python implementation EXACTLY
-    std::vector<std::string> args = {
-        "-m", gguf_path,
-        "--ctx-size", std::to_string(ctx_size),
-        "--port", std::to_string(port_),
-        "--jinja"  // Enable tool use
-    };
+    // Build command arguments while tracking reserved flags
+    std::vector<std::string> args;
+    std::set<std::string> reserved_flags;
+    
+    push_arg(args, reserved_flags, "-m", gguf_path);
+    push_arg(args, reserved_flags, "--ctx-size", std::to_string(ctx_size));
+    push_arg(args, reserved_flags, "--port", std::to_string(port_));
+    push_arg(args, reserved_flags, "--jinja");
+
+    std::cout << "[LlamaCpp] Using backend: " << backend_ << "\n"
+            << "[LlamaCpp] Use GPU: " << (use_gpu ? "true" : "false") << std::endl;
     
     // Add mmproj file if present (for vision models)
     if (!mmproj_path.empty()) {
-        args.push_back("--mmproj");
-        args.push_back(mmproj_path);
-        // Note: Python implementation adds --no-mmproj-offload for CPU mode
-        // C++ currently only supports GPU mode; CPU fallback would need to be implemented
+        push_arg(args, reserved_flags, "--mmproj", mmproj_path);
+        if (!use_gpu) {
+            std::cout << "[LlamaCpp] Skipping mmproj argument since GPU mode is not enabled" << std::endl;
+            push_arg(args, reserved_flags, "--no-mmproj-offload");
+        }
     }
     
     // Enable context shift for vulkan/rocm (not supported on Metal)
     if (backend_ == "vulkan" || backend_ == "rocm") {
-        args.push_back("--context-shift");
-        args.push_back("--keep");
-        args.push_back("16");
+        push_arg(args, reserved_flags, "--context-shift");
+        push_arg(args, reserved_flags, "--keep", "16");
     } else {
         // For Metal, just use keep without context-shift
-        args.push_back("--keep");
-        args.push_back("16");
+        push_arg(args, reserved_flags, "--keep", "16");
     }
     
     // Use legacy reasoning formatting
-    args.push_back("--reasoning-format");
-    args.push_back("auto");
+    push_arg(args, reserved_flags, "--reasoning-format", "auto");
     
     // Add embeddings support if the model supports it
     if (supports_embeddings) {
         std::cout << "[LlamaCpp] Model supports embeddings, adding --embeddings flag" << std::endl;
-        // For embedding models, set batch sizes to handle multiple documents in a single request
-        // batch-size: logical batch size (total tokens across all sequences)
-        // ubatch-size: physical batch size (tokens processed in a single forward pass)
-        args.push_back("--embeddings");
-        args.push_back("--batch-size");
-        args.push_back(std::to_string(EMBEDDING_BATCH_SIZE));
-        args.push_back("--ubatch-size");
-        args.push_back(std::to_string(EMBEDDING_UBATCH_SIZE));
+        push_arg(args, reserved_flags, "--embeddings");
     }
     
     // Add reranking support if the model supports it
     if (supports_reranking) {
         std::cout << "[LlamaCpp] Model supports reranking, adding --reranking flag" << std::endl;
-        args.push_back("--reranking");
+        push_arg(args, reserved_flags, "--reranking");
     }
     
     // Configure GPU layers
-    args.push_back("-ngl");
-    args.push_back("99");  // 99 for GPU, 0 for CPU-only
+    if (use_gpu) {
+        push_arg(args, reserved_flags, "-ngl", "99");  // 99 for GPU, 0 for CPU-only
+    } else {
+        std::cout << "[LlamaCpp] ngl set to 0" << std::endl;
+        push_arg(args, reserved_flags, "-ngl", "0");   // 0
+    }
+    
+    // Validate and append custom arguments
+    if (!custom_args_.empty()) {
+        std::string validation_error = validate_custom_args(custom_args_, reserved_flags);
+        if (!validation_error.empty()) {
+            throw std::invalid_argument(
+                "Invalid custom llama-server arguments:\n" + validation_error
+            );
+        }
+        
+        std::cout << "[LlamaCpp] Adding custom arguments: " << custom_args_ << std::endl;
+        std::vector<std::string> custom_args_vec = parse_custom_args(custom_args_);
+        args.insert(args.end(), custom_args_vec.begin(), custom_args_vec.end());
+    }
     
     std::cout << "[LlamaCpp] Starting llama-server..." << std::endl;
     
@@ -527,6 +659,16 @@ void LlamaCppServer::load(const std::string& model_name,
         
         env_vars.push_back({"LD_LIBRARY_PATH", lib_path});
         std::cout << "[LlamaCpp] Setting LD_LIBRARY_PATH=" << lib_path << std::endl;
+    }
+#else
+    // For ROCm on Windows with gfx1151, set OCL_SET_SVMSIZE
+    // This is a patch to enable loading larger models
+    if (backend_ == "rocm") {
+        std::string arch = identify_rocm_arch();
+        if (arch == "gfx1151") {
+            env_vars.push_back({"OCL_SET_SVM_SIZE", "262144"});
+            std::cout << "[LlamaCpp] Setting OCL_SET_SVM_SIZE=262144 for gfx1151 (enables loading larger models)" << std::endl;
+        }
     }
 #endif
     
@@ -580,33 +722,6 @@ json LlamaCppServer::responses(const json& request) {
     );
 }
 
-void LlamaCppServer::parse_telemetry(const std::string& line) {
-    // Parse prompt evaluation
-    std::regex prompt_regex(R"(prompt eval time\s*=\s*([\d.]+)\s*ms\s*/\s*(\d+)\s*tokens.*?([\d.]+)\s*tokens per second)");
-    std::smatch match;
-    
-    if (std::regex_search(line, match, prompt_regex)) {
-        float prompt_time_ms = std::stof(match[1]);
-        int input_tokens = std::stoi(match[2]);
-        
-        telemetry_.input_tokens = input_tokens;
-        telemetry_.time_to_first_token = prompt_time_ms / 1000.0;
-        return;
-    }
-    
-    // Parse generation evaluation
-    std::regex eval_regex(R"(eval time\s*=\s*([\d.]+)\s*ms\s*/\s*(\d+)\s*tokens.*?([\d.]+)\s*tokens per second)");
-    
-    if (std::regex_search(line, match, eval_regex)) {
-        float eval_time_ms = std::stof(match[1]);
-        int output_tokens = std::stoi(match[2]);
-        float tokens_per_second = std::stof(match[3]);
-        
-        telemetry_.output_tokens = output_tokens;
-        telemetry_.tokens_per_second = tokens_per_second;
-    }
-}
-
 std::string LlamaCppServer::find_executable_in_install_dir(const std::string& install_dir) {
     // Try multiple possible locations where llama-server might be extracted
     std::vector<std::string> possible_paths;
@@ -637,9 +752,29 @@ std::string LlamaCppServer::find_executable_in_install_dir(const std::string& in
     return "";
 }
 
+std::string LlamaCppServer::find_external_llama_server(const std::string& backend) {
+    std::string upper_backend = backend;
+    std::transform(upper_backend.begin(), upper_backend.end(), upper_backend.begin(), ::toupper);
+    std::string env = "LEMONADE_LLAMACPP_" + upper_backend + "_BIN";
+    const char* llama_bin_env = std::getenv(env.c_str());
+    if (!llama_bin_env) {
+        return "";
+    }
+
+    std::string llama_bin = std::string(llama_bin_env);
+    
+    return fs::exists(llama_bin) ? llama_bin : "";
+}
+
 std::string LlamaCppServer::get_llama_server_path() {
+    std::string exe_path = find_external_llama_server(backend_);
+
+    if (!exe_path.empty()) {
+        return exe_path;
+    }
+
     std::string install_dir = get_install_directory(backend_);
-    std::string exe_path = find_executable_in_install_dir(install_dir);
+    exe_path = find_executable_in_install_dir(install_dir);
     
     if (!exe_path.empty()) {
         return exe_path;

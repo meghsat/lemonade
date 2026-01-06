@@ -9,7 +9,7 @@ namespace lemon {
 
 class RyzenAIServer : public WrappedServer {
 public:
-    RyzenAIServer(const std::string& model_name, int port, bool debug);
+    RyzenAIServer(const std::string& model_name, bool debug, ModelManager* model_manager = nullptr);
     ~RyzenAIServer() override;
     
     // Installation and availability
@@ -18,7 +18,6 @@ public:
     
     // WrappedServer interface
     void install(const std::string& backend = "") override;
-    void parse_telemetry(const std::string& line) override;
     
     // Model operations - Note: RyzenAI-Server loads model at startup
     std::string download_model(const std::string& checkpoint,
@@ -28,7 +27,9 @@ public:
     void load(const std::string& model_name,
              const ModelInfo& model_info,
              int ctx_size,
-             bool do_not_upgrade = false) override;
+             bool do_not_upgrade = false,
+             const std::string& llamacpp_backend = "vulkan",
+             const std::string& llamacpp_args = "") override;
     
     // RyzenAI-specific: set execution mode before loading
     void set_execution_mode(const std::string& mode) { execution_mode_ = mode; }

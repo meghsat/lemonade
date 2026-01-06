@@ -2,16 +2,25 @@
 
 #include <CLI/CLI.hpp>
 #include <string>
+#include <vector>
 
 namespace lemon {
 
 struct ServerConfig {
     int port = 8000;
-    std::string host = "0.0.0.0";
+    std::string host = "localhost";
     std::string log_level = "info";
-    bool tray = false;  // Tray is handled by lemonade-server-beta, not lemonade-router
+    bool tray = false;  // Tray is handled by lemonade-server, not lemonade-router
     std::string llamacpp_backend = "vulkan";
     int ctx_size = 4096;
+    std::string llamacpp_args = "";
+    std::string extra_models_dir = "";  // Secondary directory for GGUF model discovery
+    
+    // Multi-model support: Max loaded models by type
+    int max_llm_models = 1;
+    int max_embedding_models = 1;
+    int max_reranking_models = 1;
+    int max_audio_models = 1;
 };
 
 class CLIParser {
@@ -40,6 +49,7 @@ private:
     bool show_version_ = false;
     bool should_continue_ = true;
     int exit_code_ = 0;
+    std::vector<int> max_models_vec_;  // Vector to capture --max-loaded-models values
 };
 
 } // namespace lemon

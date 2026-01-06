@@ -5,13 +5,16 @@
 #include <httplib.h>
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
 #include <thread>
 #include <chrono>
 #include <csignal>
+#include <cctype>
 #include <vector>
+#include <set>
 
 #ifdef _WIN32
 #include <winsock2.h>  // Must come before windows.h
@@ -188,13 +191,26 @@ static bool is_process_alive_not_zombie(pid_t pid) {
 TrayApp::TrayApp(int argc, char* argv[])
     : current_version_(LEMON_VERSION_STRING)
     , should_exit_(false)
+#ifdef _WIN32
+    , electron_app_process_(nullptr)
+    , electron_job_object_(nullptr)
+#else
+    , electron_app_pid_(0)
+#endif
 {
+    // Load defaults from environment variables before parsing command-line arguments
+    load_env_defaults();
     parse_arguments(argc, argv);
     
     if (config_.show_help) {
-        // Show serve options only if command is "serve" or "run"
-        bool show_serve_options = (config_.command == "serve" || config_.command == "run");
-        print_usage(show_serve_options);
+        // Show command-specific help
+        if (config_.command == "pull") {
+            print_pull_help();
+        } else {
+            // Show serve options only if command is "serve" or "run"
+            bool show_serve_options = (config_.command == "serve" || config_.command == "run");
+            print_usage(show_serve_options);
+        }
         exit(0);
     }
     
@@ -302,14 +318,40 @@ int TrayApp::run() {
     } else if (config_.command == "serve" || config_.command == "run") {
         // Check for single instance - only for 'serve' and 'run' commands
         // Other commands (status, list, pull, delete, stop) can run alongside a server
-        if (lemon::SingleInstance::IsAnotherInstanceRunning("ServerBeta")) {
+        if (lemon::SingleInstance::IsAnotherInstanceRunning("Server")) {
+            // If 'run' command and server is already running, connect to it and execute the run command
+            if (config_.command == "run") {
+                std::cout << "Lemonade Server is already running. Connecting to it..." << std::endl;
+                
+                // Get the running server's info
+                auto [pid, running_port] = get_server_info();
+                if (running_port == 0) {
+                    std::cerr << "Error: Could not connect to running server" << std::endl;
+                    return 1;
+                }
+                
+                // Create server manager to communicate with running server
+                server_manager_ = std::make_unique<ServerManager>();
+                server_manager_->set_port(running_port);
+                config_.port = running_port;  // Update config to match running server
+                
+                // Use localhost to connect (works regardless of what the server is bound to)
+                if (config_.host.empty() || config_.host == "0.0.0.0") {
+                    config_.host = "localhost";
+                }
+                
+                // Execute the run command (load model and open browser)
+                return execute_run_command();
+            }
+            
+            // For 'serve' command, don't allow duplicate servers
 #ifdef _WIN32
             show_simple_notification("Server Already Running", "Lemonade Server is already running");
 #endif
-            std::cerr << "Error: Another instance of lemonade-server-beta serve/run is already running.\n"
+            std::cerr << "Error: Another instance of lemonade-server serve is already running.\n"
                       << "Only one persistent server can run at a time.\n\n"
-                      << "To check server status: lemonade-server-beta status\n"
-                      << "To stop the server: lemonade-server-beta stop\n" << std::endl;
+                      << "To check server status: lemonade-server status\n"
+                      << "To stop the server: lemonade-server stop\n" << std::endl;
             return 1;
         }
         // Continue to server initialization below
@@ -484,6 +526,37 @@ int TrayApp::run() {
     return 0;
 }
 
+void TrayApp::load_env_defaults() {
+    // Helper to get environment variable with fallback
+    auto getenv_or_default = [](const char* name, const std::string& default_val) -> std::string {
+        const char* val = std::getenv(name);
+        return val ? std::string(val) : default_val;
+    };
+    
+    // Helper to get integer environment variable with fallback
+    auto getenv_int_or_default = [](const char* name, int default_val) -> int {
+        const char* val = std::getenv(name);
+        if (val) {
+            try {
+                return std::stoi(val);
+            } catch (...) {
+                // Invalid integer, use default
+                return default_val;
+            }
+        }
+        return default_val;
+    };
+    
+    // Load environment variables into config (can be overridden by command-line args)
+    config_.port = getenv_int_or_default("LEMONADE_PORT", config_.port);
+    config_.host = getenv_or_default("LEMONADE_HOST", config_.host);
+    config_.log_level = getenv_or_default("LEMONADE_LOG_LEVEL", config_.log_level);
+    config_.llamacpp_backend = getenv_or_default("LEMONADE_LLAMACPP", config_.llamacpp_backend);
+    config_.ctx_size = getenv_int_or_default("LEMONADE_CTX_SIZE", config_.ctx_size);
+    config_.llamacpp_args = getenv_or_default("LEMONADE_LLAMACPP_ARGS", config_.llamacpp_args);
+    config_.extra_models_dir = getenv_or_default("LEMONADE_EXTRA_MODELS_DIR", config_.extra_models_dir);
+}
+
 void TrayApp::parse_arguments(int argc, char* argv[]) {
     // Check if there's a command (non-flag argument)
     if (argc > 1 && argv[1][0] != '-') {
@@ -502,10 +575,59 @@ void TrayApp::parse_arguments(int argc, char* argv[]) {
                 config_.log_level = argv[++i];
             } else if (arg == "--port" && i + 1 < argc) {
                 config_.port = std::stoi(argv[++i]);
+            } else if (arg == "--host" && i + 1 < argc) {
+                config_.host = argv[++i];
             } else if (arg == "--ctx-size" && i + 1 < argc) {
                 config_.ctx_size = std::stoi(argv[++i]);
             } else if (arg == "--llamacpp" && i + 1 < argc) {
                 config_.llamacpp_backend = argv[++i];
+            } else if (arg == "--llamacpp-args" && i + 1 < argc) {
+                config_.llamacpp_args = argv[++i];
+            } else if (arg == "--extra-models-dir" && i + 1 < argc) {
+                config_.extra_models_dir = argv[++i];
+            } else if (arg == "--max-loaded-models" && i + 1 < argc) {
+                // Parse 1 or 3 values for max loaded models (2 or 4+ is not allowed)
+                // All values must be positive integers (no floats, no negatives, no zero)
+                std::vector<int> max_models;
+                
+                // Helper lambda to validate a string is a positive integer
+                auto is_positive_integer = [](const std::string& s) -> bool {
+                    if (s.empty()) return false;
+                    for (char c : s) {
+                        if (!std::isdigit(static_cast<unsigned char>(c))) return false;
+                    }
+                    return true;
+                };
+                
+                // Parse all consecutive numeric values
+                while (i + 1 < argc && argv[i + 1][0] != '-') {
+                    std::string val_str = argv[++i];
+                    if (!is_positive_integer(val_str)) {
+                        std::cerr << "Error: --max-loaded-models values must be positive integers (got '" << val_str << "')" << std::endl;
+                        exit(1);
+                    }
+                    int val = std::stoi(val_str);
+                    if (val <= 0) {
+                        std::cerr << "Error: --max-loaded-models values must be non-zero (got " << val << ")" << std::endl;
+                        exit(1);
+                    }
+                    max_models.push_back(val);
+                }
+                
+                // Validate: must have exactly 1, 3, or 4 values
+                if (max_models.size() != 1 && max_models.size() != 3 && max_models.size() != 4) {
+                    std::cerr << "Error: --max-loaded-models requires 1 value (LLMS), 3 values (LLMS EMBEDDINGS RERANKINGS), or 4 values (LLMS EMBEDDINGS RERANKINGS AUDIO), got " << max_models.size() << std::endl;
+                    exit(1);
+                }
+
+                config_.max_llm_models = max_models[0];
+                if (max_models.size() >= 3) {
+                    config_.max_embedding_models = max_models[1];
+                    config_.max_reranking_models = max_models[2];
+                }
+                if (max_models.size() == 4) {
+                    config_.max_audio_models = max_models[3];
+                }
             } else if (arg == "--no-tray") {
                 config_.no_tray = true;
             } else {
@@ -539,24 +661,28 @@ void TrayApp::parse_arguments(int argc, char* argv[]) {
 }
 
 void TrayApp::print_usage(bool show_serve_options) {
-    std::cout << "lemonade-server-beta - Lemonade Server Beta\n\n";
-    std::cout << "Usage: lemonade-server-beta <command> [options]\n\n";
+    std::cout << "lemonade-server - Lemonade Server\n\n";
+    std::cout << "Usage: lemonade-server <command> [options]\n\n";
     std::cout << "Commands:\n";
-    std::cout << "  serve                    Start the server (default if no command specified)\n";
+    std::cout << "  serve                    Start the server\n";
+    std::cout << "  run <model>              Run a model\n";
     std::cout << "  list                     List available models\n";
     std::cout << "  pull <model>             Download a model\n";
     std::cout << "  delete <model>           Delete a model\n";
-    std::cout << "  run <model>              Run a model (starts server if needed)\n";
     std::cout << "  status                   Check server status\n";
     std::cout << "  stop                     Stop the server\n\n";
     
     // Only show serve options if requested (for serve/run --help)
     if (show_serve_options) {
-        std::cout << "Serve Options:\n";
+        std::cout << "Serve/Run Options:\n";
         std::cout << "  --port PORT              Server port (default: 8000)\n";
-        std::cout << "  --host HOST              Server host (default: localhost)\n";
+        std::cout << "  --host HOST              Server host (default: 127.0.0.1)\n";
         std::cout << "  --ctx-size SIZE          Context size (default: 4096)\n";
-        std::cout << "  --llamacpp BACKEND       LlamaCpp backend: vulkan, rocm, metal (default: vulkan)\n";
+        std::cout << "  --llamacpp BACKEND       LlamaCpp backend: vulkan, rocm, metal, cpu (default: vulkan)\n";
+        std::cout << "  --llamacpp-args ARGS     Custom arguments for llama-server\n";
+        std::cout << "  --extra-models-dir PATH  Experimental feature: secondary directory to scan for LLM GGUF model files\n";
+        std::cout << "  --max-loaded-models N [E] [R] [A]\n";
+        std::cout << "                           Max loaded models: LLMS [EMBEDDINGS] [RERANKINGS] [AUDIO] (default: 1 1 1 1)\n";
         std::cout << "  --log-file PATH          Log file path\n";
         std::cout << "  --log-level LEVEL        Log level: info, debug, trace (default: info)\n";
 #if defined(__linux__) && !defined(__ANDROID__)
@@ -572,7 +698,34 @@ void TrayApp::print_usage(bool show_serve_options) {
 }
 
 void TrayApp::print_version() {
-    std::cout << "lemonade-server-beta version " << current_version_ << std::endl;
+    std::cout << "lemonade-server version " << current_version_ << std::endl;
+}
+
+void TrayApp::print_pull_help() {
+    std::cout << "lemonade-server pull - Download and install a model\n\n";
+    std::cout << "Usage:\n";
+    std::cout << "  lemonade-server pull <model_name> [options]\n\n";
+    std::cout << "Description:\n";
+    std::cout << "  Downloads a model from the Lemonade Server registry or Hugging Face.\n";
+    std::cout << "  For registered models, only the model name is required.\n";
+    std::cout << "  For custom models, use the registration options below.\n\n";
+    std::cout << "Registration Options (for custom models):\n";
+    std::cout << "  --checkpoint CHECKPOINT  Hugging Face checkpoint (format: org/model:variant)\n";
+    std::cout << "  --recipe RECIPE          Inference recipe to use\n";
+    std::cout << "                           Options: llamacpp, flm, oga-cpu, oga-hybrid, oga-npu\n\n";
+    std::cout << "  --reasoning              Mark model as a reasoning model (e.g., DeepSeek-R1)\n";
+    std::cout << "                           Adds 'reasoning' label to model metadata.\n\n";
+    std::cout << "  --vision                 Mark model as a vision model (multimodal)\n";
+    std::cout << "                           Adds 'vision' label to model metadata.\n\n";
+    std::cout << "  --embedding              Mark model as an embedding model\n";
+    std::cout << "                           Adds 'embeddings' label to model metadata.\n";
+    std::cout << "                           For use with /api/v1/embeddings endpoint.\n\n";
+    std::cout << "  --reranking              Mark model as a reranking model\n";
+    std::cout << "                           Adds 'reranking' label to model metadata.\n";
+    std::cout << "                           For use with /api/v1/reranking endpoint.\n\n";
+    std::cout << "  --mmproj FILENAME        Multimodal projector file for vision models\n";
+    std::cout << "                           Required for GGUF vision models.\n";
+    std::cout << "                           Example: mmproj-model-f16.gguf\n\n";
 }
 
 bool TrayApp::find_server_binary() {
@@ -643,25 +796,31 @@ bool TrayApp::is_server_running_on_port(int port) {
     }
 }
 
-// Helper: Wait for server to be ready
-bool TrayApp::wait_for_server_ready(int port, int timeout_seconds) {
-    auto server_mgr = std::make_unique<ServerManager>();
-    for (int i = 0; i < timeout_seconds * 10; ++i) {
-        try {
-            auto health = server_mgr->get_health();
-            return true;
-        } catch (...) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
-    return false;
-}
-
 // Helper: Get server info (returns {pid, port} or {0, 0} if not found)
 std::pair<int, int> TrayApp::get_server_info() {
     // Query OS for listening TCP connections and find lemonade-router.exe
 #ifdef _WIN32
     // Windows: Use GetExtendedTcpTable to find listening connections
+    // Check both IPv4 and IPv6 since server may bind to either
+    
+    // Helper lambda to check if a PID is lemonade-router.exe
+    auto is_lemonade_router = [](DWORD pid) -> bool {
+        HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (hProcess) {
+            WCHAR processName[MAX_PATH];
+            DWORD size = MAX_PATH;
+            if (QueryFullProcessImageNameW(hProcess, 0, processName, &size)) {
+                std::wstring fullPath(processName);
+                std::wstring exeName = fullPath.substr(fullPath.find_last_of(L"\\/") + 1);
+                CloseHandle(hProcess);
+                return (exeName == L"lemonade-router.exe");
+            }
+            CloseHandle(hProcess);
+        }
+        return false;
+    };
+    
+    // Try IPv4 first
     DWORD size = 0;
     GetExtendedTcpTable(nullptr, &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
     
@@ -673,21 +832,26 @@ std::pair<int, int> TrayApp::get_server_info() {
             DWORD pid = pTcpTable->table[i].dwOwningPid;
             int port = ntohs((u_short)pTcpTable->table[i].dwLocalPort);
             
-            // Check if this PID is lemonade-router.exe
-            HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-            if (hProcess) {
-                WCHAR processName[MAX_PATH];
-                DWORD size = MAX_PATH;
-                if (QueryFullProcessImageNameW(hProcess, 0, processName, &size)) {
-                    std::wstring fullPath(processName);
-                    std::wstring exeName = fullPath.substr(fullPath.find_last_of(L"\\/") + 1);
-                    
-                    if (exeName == L"lemonade-router.exe") {
-                        CloseHandle(hProcess);
-                        return {static_cast<int>(pid), port};
-                    }
-                }
-                CloseHandle(hProcess);
+            if (is_lemonade_router(pid)) {
+                return {static_cast<int>(pid), port};
+            }
+        }
+    }
+    
+    // Try IPv6 if not found in IPv4
+    size = 0;
+    GetExtendedTcpTable(nullptr, &size, FALSE, AF_INET6, TCP_TABLE_OWNER_PID_LISTENER, 0);
+    
+    buffer.resize(size);
+    PMIB_TCP6TABLE_OWNER_PID pTcp6Table = reinterpret_cast<PMIB_TCP6TABLE_OWNER_PID>(buffer.data());
+    
+    if (GetExtendedTcpTable(pTcp6Table, &size, FALSE, AF_INET6, TCP_TABLE_OWNER_PID_LISTENER, 0) == NO_ERROR) {
+        for (DWORD i = 0; i < pTcp6Table->dwNumEntries; i++) {
+            DWORD pid = pTcp6Table->table[i].dwOwningPid;
+            int port = ntohs((u_short)pTcp6Table->table[i].dwLocalPort);
+            
+            if (is_lemonade_router(pid)) {
+                return {static_cast<int>(pid), port};
             }
         }
     }
@@ -727,10 +891,17 @@ bool TrayApp::start_ephemeral_server(int port) {
         config_.log_file.empty() ? "" : config_.log_file,
         config_.log_level,  // Pass log level to ServerManager
         config_.llamacpp_backend,  // Pass llamacpp backend to ServerManager
-        false,  // show_console
-        true    // is_ephemeral (suppress startup message)
+        false,  // show_console - SSE streaming provides progress via client
+        true,   // is_ephemeral (suppress startup message)
+        config_.llamacpp_args,  // Pass custom llamacpp args
+        config_.host,  // Pass host to ServerManager
+        config_.max_llm_models,
+        config_.max_embedding_models,
+        config_.max_reranking_models,
+        config_.max_audio_models,
+        config_.extra_models_dir  // Pass extra models directory
     );
-    
+
     if (!success) {
         std::cerr << "Failed to start ephemeral server" << std::endl;
         return false;
@@ -810,7 +981,7 @@ int TrayApp::execute_list_command() {
 int TrayApp::execute_pull_command() {
     if (config_.command_args.empty()) {
         std::cerr << "Error: model name required" << std::endl;
-        std::cerr << "Usage: lemonade-server-beta pull <model_name> [--checkpoint CHECKPOINT] [--recipe RECIPE] [--reasoning] [--vision] [--mmproj MMPROJ]" << std::endl;
+        std::cerr << "Usage: lemonade-server pull <model_name> [--checkpoint CHECKPOINT] [--recipe RECIPE] [--reasoning] [--vision] [--embedding] [--reranking] [--mmproj MMPROJ]" << std::endl;
         return 1;
     }
     
@@ -829,15 +1000,10 @@ int TrayApp::execute_pull_command() {
         }
     }
     
-    // Pull model via API with optional parameters
+    // Pull model via API with SSE streaming for progress
     try {
-        if (!server_manager_) {
-            server_manager_ = std::make_unique<ServerManager>();
-        }
-        server_manager_->set_port(port);  // Use the detected or configured port
-        
         // Build request body with all optional parameters
-        nlohmann::json request_body = {{"model", model_name}};
+        nlohmann::json request_body = {{"model", model_name}, {"stream", true}};
         
         // Parse optional arguments from config_.command_args (starting at index 1)
         for (size_t i = 1; i < config_.command_args.size(); ++i) {
@@ -851,24 +1017,129 @@ int TrayApp::execute_pull_command() {
                 request_body["reasoning"] = true;
             } else if (arg == "--vision") {
                 request_body["vision"] = true;
+            } else if (arg == "--embedding") {
+                request_body["embedding"] = true;
+            } else if (arg == "--reranking") {
+                request_body["reranking"] = true;
             } else if (arg == "--mmproj" && i + 1 < config_.command_args.size()) {
                 request_body["mmproj"] = config_.command_args[++i];
             }
         }
         
-        // Use 2 hour timeout for pull - large models can take a very long time
-        std::string response = server_manager_->make_http_request(
-            "/api/v1/pull", 
-            "POST", 
-            request_body.dump(),
-            7200  // 2 hours
-        );
+        // Use SSE streaming to receive progress events
+        // Use the same host the server is bound to (0.0.0.0 is special - use localhost instead)
+        std::string connect_host = (config_.host == "0.0.0.0") ? "localhost" : config_.host;
         
-        auto response_json = nlohmann::json::parse(response);
-        if (response_json.value("status", "") == "success") {
+        httplib::Client cli(connect_host, port);
+        cli.set_connection_timeout(30, 0);
+        cli.set_read_timeout(86400, 0);  // 24 hour read timeout for large downloads
+        
+        std::string last_file;
+        int last_percent = -1;
+        bool success = false;
+        std::string error_message;
+        std::string buffer;  // Buffer for partial SSE messages
+        
+        httplib::Headers headers;
+        auto res = cli.Post("/api/v1/pull", headers, request_body.dump(), "application/json",
+            [&](const char* data, size_t len) {
+                buffer.append(data, len);
+                
+                // Process complete SSE messages (end with \n\n)
+                size_t pos;
+                while ((pos = buffer.find("\n\n")) != std::string::npos) {
+                    std::string message = buffer.substr(0, pos);
+                    buffer.erase(0, pos + 2);
+                    
+                    // Parse SSE event
+                    std::string event_type;
+                    std::string event_data;
+                    
+                    std::istringstream stream(message);
+                    std::string line;
+                    while (std::getline(stream, line)) {
+                        if (line.substr(0, 6) == "event:") {
+                            event_type = line.substr(7);
+                            // Trim whitespace
+                            while (!event_type.empty() && event_type[0] == ' ') {
+                                event_type.erase(0, 1);
+                            }
+                        } else if (line.substr(0, 5) == "data:") {
+                            event_data = line.substr(6);
+                            // Trim whitespace
+                            while (!event_data.empty() && event_data[0] == ' ') {
+                                event_data.erase(0, 1);
+                            }
+                        }
+                    }
+                    
+                    if (!event_data.empty()) {
+                        try {
+                            auto json_data = nlohmann::json::parse(event_data);
+                            
+                            if (event_type == "progress") {
+                                std::string file = json_data.value("file", "");
+                                int file_index = json_data.value("file_index", 0);
+                                int total_files = json_data.value("total_files", 0);
+                                // Use uint64_t explicitly to avoid JSON type inference issues with large numbers
+                                uint64_t bytes_downloaded = json_data.value("bytes_downloaded", (uint64_t)0);
+                                uint64_t bytes_total = json_data.value("bytes_total", (uint64_t)0);
+                                int percent = json_data.value("percent", 0);
+                                
+                                // Only print when file changes or percent changes significantly
+                                if (file != last_file) {
+                                    if (!last_file.empty()) {
+                                        std::cout << std::endl;  // New line after previous file
+                                    }
+                                    std::cout << "[" << file_index << "/" << total_files << "] " << file;
+                                    if (bytes_total > 0) {
+                                        std::cout << " (" << std::fixed << std::setprecision(1) 
+                                                  << (bytes_total / (1024.0 * 1024.0)) << " MB)";
+                                    }
+                                    std::cout << std::endl;
+                                    last_file = file;
+                                    last_percent = -1;
+                                }
+                                
+                                // Update progress bar
+                                if (bytes_total > 0 && percent != last_percent) {
+                                    std::cout << "\r  Progress: " << percent << "% (" 
+                                              << std::fixed << std::setprecision(1)
+                                              << (bytes_downloaded / (1024.0 * 1024.0)) << "/"
+                                              << (bytes_total / (1024.0 * 1024.0)) << " MB)" << std::flush;
+                                    last_percent = percent;
+                                }
+                            } else if (event_type == "complete") {
+                                std::cout << std::endl;
+                                success = true;
+                            } else if (event_type == "error") {
+                                error_message = json_data.value("error", "Unknown error");
+                            }
+                        } catch (const std::exception&) {
+                            // Ignore JSON parse errors in SSE events
+                        }
+                    }
+                }
+                
+                return true;  // Continue receiving
+            });
+        
+        // Check for errors - but ignore connection close if we got a success event
+        if (!res && !success) {
+            throw std::runtime_error("HTTP request failed: " + httplib::to_string(res.error()));
+        }
+        
+        if (!error_message.empty()) {
+            throw std::runtime_error(error_message);
+        }
+        
+        if (success) {
             std::cout << "Model pulled successfully: " << model_name << std::endl;
+        } else if (!res) {
+            // Connection closed without success - this is an error
+            throw std::runtime_error("Connection closed unexpectedly");
         } else {
-            std::cerr << "Failed to pull model" << std::endl;
+            std::cerr << "Pull completed without success confirmation" << std::endl;
             if (!server_was_running) stop_server();
             return 1;
         }
@@ -892,7 +1163,7 @@ int TrayApp::execute_pull_command() {
 int TrayApp::execute_delete_command() {
     if (config_.command_args.empty()) {
         std::cerr << "Error: model name required" << std::endl;
-        std::cerr << "Usage: lemonade-server-beta delete <model_name>" << std::endl;
+        std::cerr << "Usage: lemonade-server delete <model_name>" << std::endl;
         return 1;
     }
     
@@ -953,7 +1224,7 @@ int TrayApp::execute_delete_command() {
 int TrayApp::execute_run_command() {
     if (config_.command_args.empty()) {
         std::cerr << "Error: model name required" << std::endl;
-        std::cerr << "Usage: lemonade-server-beta run <model_name>" << std::endl;
+        std::cerr << "Usage: lemonade-server run <model_name>" << std::endl;
         return 1;
     }
     
@@ -961,28 +1232,21 @@ int TrayApp::execute_run_command() {
     std::cout << "Running model: " << model_name << std::endl;
     
     // The run command will:
-    // 1. Start server (handled by main run() after this returns)
-    // 2. Wait for server to be ready
-    // 3. Load the model
-    // 4. Open browser
-    // 5. Show tray (handled by main run() after this returns)
+    // 1. Start server (already done in main run() before this function is called)
+    // 2. Load the model
+    // 3. Open browser
+    // 4. Show tray (handled by main run() after this returns)
     
-    // Wait for server to be ready
-    std::cout << "Waiting for server to be ready..." << std::endl;
-    if (!wait_for_server_ready(config_.port, 30)) {
-        std::cerr << "Server did not become ready in time" << std::endl;
-        return 1;
-    }
+    // Note: Server is already started and ready - start_server() does health checks internally
     
     // Load the model
     std::cout << "Loading model " << model_name << "..." << std::endl;
     if (server_manager_->load_model(model_name)) {
         std::cout << "Model loaded successfully!" << std::endl;
         
-        // Open browser to chat interface
-        std::string url = "http://localhost:" + std::to_string(config_.port) + "/?model=" + model_name + "#llm-chat";
-        std::cout << "Opening browser: " << url << std::endl;
-        open_url(url);
+        // Launch the Electron app
+        std::cout << "Launching Lemonade app..." << std::endl;
+        launch_electron_app();
     } else {
         std::cerr << "Failed to load model" << std::endl;
         return 1;
@@ -1040,12 +1304,12 @@ int TrayApp::execute_stop_command() {
                 if (pe32.th32ProcessID == router_pid) {
                     // Found router, check its parent
                     DWORD parent_pid = pe32.th32ParentProcessID;
-                    // Search for parent to see if it's lemonade-server-beta
+                    // Search for parent to see if it's lemonade-server
                     if (Process32FirstW(snapshot, &pe32)) {
                         do {
                             if (pe32.th32ProcessID == parent_pid) {
                                 std::wstring parent_name(pe32.szExeFile);
-                                if (parent_name == L"lemonade-server-beta.exe") {
+                                if (parent_name == L"lemonade-server.exe") {
                                     tray_pid = parent_pid;
                                     std::cout << "Found parent tray app (PID: " << tray_pid << ")" << std::endl;
                                 }
@@ -1207,7 +1471,7 @@ int TrayApp::execute_stop_command() {
         char buffer[128];
         if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
             int parent_pid = atoi(buffer);
-            // Check if parent is lemonade-server-beta
+            // Check if parent is lemonade-server
             std::string name_cmd = "ps -o comm= -p " + std::to_string(parent_pid);
             FILE* name_pipe = popen(name_cmd.c_str(), "r");
             if (name_pipe) {
@@ -1217,7 +1481,7 @@ int TrayApp::execute_stop_command() {
                     // Remove newline
                     parent_name.erase(parent_name.find_last_not_of("\n\r") + 1);
                     // Note: ps -o comm= is limited to 15 chars on Linux (/proc/PID/comm truncation)
-                    // "lemonade-server-beta" (21 chars) gets truncated to "lemonade-server" (15 chars)
+                    // "lemonade-server" is exactly 15 chars, so no truncation occurs
                     if (parent_name.find("lemonade-server") != std::string::npos) {
                         tray_pid = parent_pid;
                         std::cout << "Found parent tray app (PID: " << tray_pid << ")" << std::endl;
@@ -1291,7 +1555,7 @@ int TrayApp::execute_stop_command() {
         if (router_gone && tray_gone && all_children_gone) {
             // Additional check: verify the lock file can be acquired
             // This is a belt-and-suspenders check to ensure the lock is truly released
-            std::string lock_file = "/tmp/lemonade_ServerBeta.lock";
+            std::string lock_file = "/tmp/lemonade_Server.lock";
             int fd = open(lock_file.c_str(), O_RDWR | O_CREAT, 0666);
             if (fd != -1) {
                 if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
@@ -1372,9 +1636,16 @@ bool TrayApp::start_server() {
         config_.log_level,  // Pass log level to ServerManager
         config_.llamacpp_backend,  // Pass llamacpp backend to ServerManager
         true,               // Always show console output for serve command
-        false               // is_ephemeral = false (persistent server, show startup message with URL)
+        false,              // is_ephemeral = false (persistent server, show startup message with URL)
+        config_.llamacpp_args,  // Pass custom llamacpp args
+        config_.host,        // Pass host to ServerManager
+        config_.max_llm_models,
+        config_.max_embedding_models,
+        config_.max_reranking_models,
+        config_.max_audio_models,
+        config_.extra_models_dir  // Pass extra models directory
     );
-    
+
     // Start log tail thread to show logs in console
     if (success) {
         stop_tail_thread_ = false;
@@ -1406,27 +1677,81 @@ void TrayApp::build_menu() {
 Menu TrayApp::create_menu() {
     Menu menu;
     
+    // Open app - at the very top (only if Electron app is available on full installer)
+    if (electron_app_path_.empty()) {
+        // Try to find the Electron app if we haven't already
+        const_cast<TrayApp*>(this)->find_electron_app();
+    }
+    if (!electron_app_path_.empty()) {
+        menu.add_item(MenuItem::Action("Open app", [this]() { launch_electron_app(); }));
+        menu.add_separator();
+    }
+    
     // Get loaded model once and cache it to avoid redundant health checks
     std::string loaded = is_loading_model_ ? "" : get_loaded_model();
+    // Get all loaded models to display at top and for checkmarks
+    std::vector<LoadedModelInfo> loaded_models = is_loading_model_ ? std::vector<LoadedModelInfo>() : get_all_loaded_models();
     
-    // Status display
+    // Build a set of loaded model names for quick lookup
+    std::set<std::string> loaded_model_names;
+    for (const auto& m : loaded_models) {
+        loaded_model_names.insert(m.model_name);
+    }
+    
+    // Status display - show all loaded models at the top
     if (is_loading_model_) {
         std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(loading_mutex_));
         menu.add_item(MenuItem::Action("Loading: " + loading_model_name_ + "...", nullptr, false));
     } else {
-        if (!loaded.empty()) {
-            menu.add_item(MenuItem::Action("Loaded: " + loaded, nullptr, false));
-            menu.add_item(MenuItem::Action("Unload LLM", [this]() { on_unload_model(); }));
+        if (!loaded_models.empty()) {
+            // Show each loaded model with its type
+            for (const auto& model : loaded_models) {
+                std::string display_text = "Loaded: " + model.model_name;
+                if (!model.type.empty() && model.type != "llm") {
+                    display_text += " (" + model.type + ")";
+                }
+                menu.add_item(MenuItem::Action(display_text, nullptr, false));
+            }
         } else {
             menu.add_item(MenuItem::Action("No models loaded", nullptr, false));
         }
     }
     
+    // Unload Model submenu
+    auto unload_submenu = std::make_shared<Menu>();
+    if (loaded_models.empty()) {
+        unload_submenu->add_item(MenuItem::Action(
+            "No models loaded",
+            nullptr,
+            false
+        ));
+    } else {
+        for (const auto& model : loaded_models) {
+            // Display model name with type if not LLM
+            std::string display_text = model.model_name;
+            if (!model.type.empty() && model.type != "llm") {
+                display_text += " (" + model.type + ")";
+            }
+            unload_submenu->add_item(MenuItem::Action(
+                display_text,
+                [this, model_name = model.model_name]() { on_unload_specific_model(model_name); }
+            ));
+        }
+        
+        // Add "Unload all" option if multiple models are loaded
+        if (loaded_models.size() > 1) {
+            unload_submenu->add_separator();
+            unload_submenu->add_item(MenuItem::Action(
+                "Unload all",
+                [this]() { on_unload_model(); }
+            ));
+        }
+    }
+    menu.add_item(MenuItem::Submenu("Unload Model", unload_submenu));
+    
     // Load Model submenu
     auto load_submenu = std::make_shared<Menu>();
     auto models = get_downloaded_models();
-    // Reuse cached value instead of calling get_loaded_model() again
-    std::string current_loaded = loaded;
     if (models.empty()) {
         load_submenu->add_item(MenuItem::Action(
             "No models available: Use the Model Manager",
@@ -1435,7 +1760,8 @@ Menu TrayApp::create_menu() {
         ));
     } else {
         for (const auto& model : models) {
-            bool is_loaded = (model.id == current_loaded);
+            // Check if this model is in the loaded models set
+            bool is_loaded = loaded_model_names.count(model.id) > 0;
             load_submenu->add_item(MenuItem::Checkable(
                 model.id,
                 [this, model]() { on_load_model(model.id); },
@@ -1468,7 +1794,7 @@ Menu TrayApp::create_menu() {
         bool is_current = (size == config_.ctx_size);
         ctx_submenu->add_item(MenuItem::Checkable(
             "Context size " + label,
-            [this, size]() { on_change_context_size(size); },
+            [this, size = size]() { on_change_context_size(size); },
             is_current
         ));
     }
@@ -1478,10 +1804,6 @@ Menu TrayApp::create_menu() {
     
     // Main menu items
     menu.add_item(MenuItem::Action("Documentation", [this]() { on_open_documentation(); }));
-    menu.add_item(MenuItem::Action("LLM Chat", [this]() { on_open_llm_chat(); }));
-    menu.add_item(MenuItem::Action("Model Manager", [this]() { on_open_model_manager(); }));
-    
-    // Logs menu item (simplified - always debug logs now)
     menu.add_item(MenuItem::Action("Show Logs", [this]() { on_show_logs(); }));
     
     menu.add_separator();
@@ -1550,11 +1872,36 @@ void TrayApp::on_unload_model() {
         return;
     }
     
-    std::cout << "Unloading model" << std::endl;
+    std::cout << "Unloading all models" << std::endl;
     if (server_manager_->unload_model()) {
         loaded_model_.clear();
         build_menu();
     }
+}
+
+void TrayApp::on_unload_specific_model(const std::string& model_name) {
+    // Copy to avoid reference invalidation when menu is rebuilt
+    std::string model_name_copy = model_name;
+    
+    // Don't allow unload while a model is loading
+    if (is_loading_model_) {
+        show_notification("Model Loading", "Please wait for the current model to finish loading.");
+        return;
+    }
+    
+    std::cout << "Unloading model: '" << model_name_copy << "'" << std::endl;
+    std::cout.flush();
+    
+    // Launch background thread to perform the unload
+    std::thread([this, model_name_copy]() {
+        std::cout << "Background thread: Unloading model: '" << model_name_copy << "'" << std::endl;
+        std::cout.flush();
+        
+        server_manager_->unload_model(model_name_copy);
+        
+        // Update menu to show new status
+        build_menu();
+    }).detach();
 }
 
 void TrayApp::on_change_port(int new_port) {
@@ -1665,14 +2012,6 @@ void TrayApp::on_open_documentation() {
     open_url("https://lemonade-server.ai/docs/");
 }
 
-void TrayApp::on_open_llm_chat() {
-    open_url("http://localhost:" + std::to_string(config_.port) + "/#llm-chat");
-}
-
-void TrayApp::on_open_model_manager() {
-    open_url("http://localhost:" + std::to_string(config_.port) + "/#model-management");
-}
-
 void TrayApp::on_upgrade() {
     // TODO: Implement upgrade functionality
     std::cout << "Upgrade functionality not yet implemented" << std::endl;
@@ -1690,7 +2029,11 @@ void TrayApp::shutdown() {
     
     should_exit_ = true;
     
-    std::cout << "Shutting down server..." << std::endl;
+    // Only print shutdown message for persistent server commands (serve/run)
+    // Don't print for ephemeral commands (list/pull/delete/status/stop)
+    if (config_.command == "serve" || config_.command == "run") {
+        std::cout << "Shutting down server..." << std::endl;
+    }
     
     // Only print debug message if we actually have something to shutdown
     if (server_manager_ || tray_) {
@@ -1708,6 +2051,44 @@ void TrayApp::shutdown() {
     if (log_viewer_pid_ > 0) {
         kill(log_viewer_pid_, SIGTERM);
         log_viewer_pid_ = 0;
+    }
+#endif
+    
+    // Close Electron app if open
+#ifdef _WIN32
+    if (electron_app_process_) {
+        // The job object will automatically terminate the process when we close it
+        // But we can optionally terminate it gracefully first
+        CloseHandle(electron_app_process_);
+        electron_app_process_ = nullptr;
+    }
+    if (electron_job_object_) {
+        // Closing the job object will terminate all processes in it
+        CloseHandle(electron_job_object_);
+        electron_job_object_ = nullptr;
+    }
+#else
+    // macOS/Linux: Terminate the Electron app if it's running
+    if (electron_app_pid_ > 0) {
+        if (is_process_alive_not_zombie(electron_app_pid_)) {
+            std::cout << "Terminating Electron app (PID: " << electron_app_pid_ << ")..." << std::endl;
+            kill(electron_app_pid_, SIGTERM);
+            
+            // Wait briefly for graceful shutdown
+            for (int i = 0; i < 10; i++) {
+                if (!is_process_alive_not_zombie(electron_app_pid_)) {
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            
+            // Force kill if still alive
+            if (is_process_alive_not_zombie(electron_app_pid_)) {
+                std::cout << "Force killing Electron app..." << std::endl;
+                kill(electron_app_pid_, SIGKILL);
+            }
+        }
+        electron_app_pid_ = 0;
     }
 #endif
     
@@ -1734,6 +2115,233 @@ void TrayApp::open_url(const std::string& url) {
 #endif
 }
 
+bool TrayApp::find_electron_app() {
+    // Get directory of this executable (lemonade-tray.exe)
+    fs::path exe_dir;
+    
+#ifdef _WIN32
+    wchar_t exe_path[MAX_PATH];
+    GetModuleFileNameW(NULL, exe_path, MAX_PATH);
+    exe_dir = fs::path(exe_path).parent_path();
+#else
+    char exe_path[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+    if (len != -1) {
+        exe_path[len] = '\0';
+        exe_dir = fs::path(exe_path).parent_path();
+    } else {
+        return false;
+    }
+#endif
+    
+    // The Electron app has exactly two possible locations:
+    // 1. Production (WIX installer): ../app/ relative to bin/ directory
+    // 2. Development: same directory (copied by CopyElectronApp.cmake)
+    // 3. Linux production: /usr/local/share/lemonade-server/app/lemonade
+    
+#ifdef _WIN32
+    constexpr const char* exe_name = "Lemonade.exe";
+#elif defined(__APPLE__)
+    constexpr const char* exe_name = "Lemonade.app";
+#else
+    constexpr const char* exe_name = "lemonade";
+#endif
+    
+#if defined(__linux__)
+    // On Linux, check the production installation path first
+    // If the executable is in /usr/local/bin, the app is in /usr/local/share/lemonade-server/app/
+    if (exe_dir == "/usr/local/bin") {
+        fs::path linux_production_path = fs::path("/usr/local/share/lemonade-server/app") / exe_name;
+        if (fs::exists(linux_production_path)) {
+            electron_app_path_ = fs::canonical(linux_production_path).string();
+            std::cout << "Found Electron app at: " << electron_app_path_ << std::endl;
+            return true;
+        }
+    }
+#endif
+    
+    // Check production path first (most common case)
+    fs::path production_path = exe_dir / ".." / "app" / exe_name;
+    if (fs::exists(production_path)) {
+        electron_app_path_ = fs::canonical(production_path).string();
+        std::cout << "Found Electron app at: " << electron_app_path_ << std::endl;
+        return true;
+    }
+    
+    // Check development path (same directory as tray executable)
+    fs::path dev_path = exe_dir / exe_name;
+    if (fs::exists(dev_path)) {
+        electron_app_path_ = fs::canonical(dev_path).string();
+        std::cout << "Found Electron app at: " << electron_app_path_ << std::endl;
+        return true;
+    }
+    
+    std::cerr << "Warning: Could not find Electron app" << std::endl;
+    std::cerr << "  Checked: " << production_path.string() << std::endl;
+    std::cerr << "  Checked: " << dev_path.string() << std::endl;
+    return false;
+}
+
+void TrayApp::launch_electron_app() {
+    // Try to find the app if we haven't already
+    if (electron_app_path_.empty()) {
+        if (!find_electron_app()) {
+            std::cerr << "Error: Cannot launch Electron app - not found" << std::endl;
+            return;
+        }
+    }
+    
+#ifdef _WIN32
+    // Single-instance enforcement: Only allow one Electron app to be open at a time
+    // Reuse child process tracking to determine if the app is already running
+    if (electron_app_process_ != nullptr) {
+        // Check if the process is still alive
+        DWORD exit_code = 0;
+        if (GetExitCodeProcess(electron_app_process_, &exit_code) && exit_code == STILL_ACTIVE) {
+            std::cout << "Electron app is already running" << std::endl;
+            show_notification("App Already Running", "The Lemonade app is already open");
+            return;
+        } else {
+            // Process has exited, clean up the handle
+            CloseHandle(electron_app_process_);
+            electron_app_process_ = nullptr;
+        }
+    }
+#endif
+    
+    // Launch the Electron app
+#ifdef _WIN32
+    // Windows: Create a job object to ensure the Electron app closes when tray closes
+    if (!electron_job_object_) {
+        electron_job_object_ = CreateJobObjectA(NULL, NULL);
+        if (electron_job_object_) {
+            // Configure job to terminate all processes when the last handle is closed
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info = {};
+            job_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            
+            if (!SetInformationJobObject(
+                electron_job_object_,
+                JobObjectExtendedLimitInformation,
+                &job_info,
+                sizeof(job_info))) {
+                std::cerr << "Warning: Failed to configure job object: " << GetLastError() << std::endl;
+                CloseHandle(electron_job_object_);
+                electron_job_object_ = nullptr;
+            } else {
+                std::cout << "Created job object for Electron app process management" << std::endl;
+            }
+        } else {
+            std::cerr << "Warning: Failed to create job object: " << GetLastError() << std::endl;
+        }
+    }
+    
+    // Launch the .exe
+    STARTUPINFOA si = {};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi = {};
+    
+    // Create the process
+    if (CreateProcessA(
+        electron_app_path_.c_str(),  // Application name
+        NULL,                         // Command line
+        NULL,                         // Process security attributes
+        NULL,                         // Thread security attributes
+        FALSE,                        // Don't inherit handles
+        CREATE_SUSPENDED,             // Create suspended so we can add to job before it runs
+        NULL,                         // Environment
+        NULL,                         // Current directory
+        &si,                          // Startup info
+        &pi))                         // Process info
+    {
+        // Add the process to the job object if we have one
+        if (electron_job_object_) {
+            if (AssignProcessToJobObject(electron_job_object_, pi.hProcess)) {
+                std::cout << "Added Electron app to job object (will close with tray)" << std::endl;
+            } else {
+                std::cerr << "Warning: Failed to add process to job object: " << GetLastError() << std::endl;
+            }
+        }
+        
+        // Resume the process now that it's in the job object
+        ResumeThread(pi.hThread);
+        
+        // Store the process handle (don't close it - we need it for cleanup)
+        electron_app_process_ = pi.hProcess;
+        CloseHandle(pi.hThread);  // We don't need the thread handle
+        
+        std::cout << "Launched Electron app" << std::endl;
+    } else {
+        std::cerr << "Failed to launch Electron app: " << GetLastError() << std::endl;
+    }
+#elif defined(__APPLE__)
+    // Single-instance enforcement: Check if the Electron app is already running
+    if (electron_app_pid_ > 0) {
+        // Check if the process is still alive
+        if (kill(electron_app_pid_, 0) == 0) {
+            std::cout << "Electron app is already running (PID: " << electron_app_pid_ << ")" << std::endl;
+            show_notification("App Already Running", "The Lemonade app is already open");
+            return;
+        } else {
+            // Process has exited, reset the PID
+            electron_app_pid_ = 0;
+        }
+    }
+    
+    // macOS: Use 'open' command to launch the .app
+    // Note: 'open' doesn't give us the PID directly, so we'll need to find it
+    std::string cmd = "open \"" + electron_app_path_ + "\"";
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        std::cout << "Launched Electron app" << std::endl;
+        
+        // Try to find the PID of the Electron app we just launched
+        // Look for process named "Lemonade" (the app name, not the .app bundle name)
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));  // Give it time to start
+        FILE* pipe = popen("pgrep -n Lemonade", "r");  // -n = newest matching process
+        if (pipe) {
+            char buffer[128];
+            if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+                electron_app_pid_ = atoi(buffer);
+                std::cout << "Tracking Electron app (PID: " << electron_app_pid_ << ")" << std::endl;
+            }
+            pclose(pipe);
+        }
+    } else {
+        std::cerr << "Failed to launch Electron app" << std::endl;
+    }
+#else
+    // Single-instance enforcement: Check if the Electron app is already running
+    if (electron_app_pid_ > 0) {
+        // Check if the process is still alive (and not a zombie)
+        if (is_process_alive_not_zombie(electron_app_pid_)) {
+            std::cout << "Electron app is already running (PID: " << electron_app_pid_ << ")" << std::endl;
+            show_notification("App Already Running", "The Lemonade app is already open");
+            return;
+        } else {
+            // Process has exited, reset the PID
+            electron_app_pid_ = 0;
+        }
+    }
+    
+    // Linux: Launch the binary directly using fork/exec for proper PID tracking
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Child process: execute the Electron app
+        execl(electron_app_path_.c_str(), electron_app_path_.c_str(), nullptr);
+        // If execl returns, it failed
+        std::cerr << "Failed to execute Electron app: " << strerror(errno) << std::endl;
+        _exit(1);
+    } else if (pid > 0) {
+        // Parent process: store the PID
+        electron_app_pid_ = pid;
+        std::cout << "Launched Electron app (PID: " << electron_app_pid_ << ")" << std::endl;
+    } else {
+        // Fork failed
+        std::cerr << "Failed to launch Electron app: " << strerror(errno) << std::endl;
+    }
+#endif
+}
+
 void TrayApp::show_notification(const std::string& title, const std::string& message) {
     if (tray_) {
         tray_->show_notification(title, message);
@@ -1756,6 +2364,35 @@ std::string TrayApp::get_loaded_model() {
     }
     
     return "";  // No model loaded
+}
+
+std::vector<LoadedModelInfo> TrayApp::get_all_loaded_models() {
+    std::vector<LoadedModelInfo> loaded_models;
+    
+    try {
+        auto health = server_manager_->get_health();
+        
+        // Check for all_models_loaded array
+        if (health.contains("all_models_loaded") && health["all_models_loaded"].is_array()) {
+            for (const auto& model : health["all_models_loaded"]) {
+                LoadedModelInfo info;
+                info.model_name = model.value("model_name", "");
+                info.checkpoint = model.value("checkpoint", "");
+                info.last_use = model.value("last_use", 0.0);
+                info.type = model.value("type", "llm");
+                info.device = model.value("device", "");
+                info.backend_url = model.value("backend_url", "");
+                
+                if (!info.model_name.empty()) {
+                    loaded_models.push_back(info);
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to get loaded models: " << e.what() << std::endl;
+    }
+    
+    return loaded_models;
 }
 
 std::vector<ModelInfo> TrayApp::get_downloaded_models() {
@@ -1882,6 +2519,3 @@ void TrayApp::tail_log_to_console() {
 }
 
 } // namespace lemon_tray
-
-
-

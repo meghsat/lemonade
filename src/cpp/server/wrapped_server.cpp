@@ -68,7 +68,7 @@ bool WrappedServer::is_process_running() const {
 #endif
 }
 
-json WrappedServer::forward_request(const std::string& endpoint, const json& request) {
+json WrappedServer::forward_request(const std::string& endpoint, const json& request, long timeout_seconds) {
     if (!is_process_running()) {
         return ErrorResponse::from_exception(ModelNotLoadedException(server_name_));
     }
@@ -77,7 +77,7 @@ json WrappedServer::forward_request(const std::string& endpoint, const json& req
     std::map<std::string, std::string> headers = {{"Content-Type", "application/json"}};
     
     try {
-        auto response = utils::HttpClient::post(url, request.dump(), headers);
+        auto response = utils::HttpClient::post(url, request.dump(), headers, timeout_seconds);
         
         if (response.status_code == 200) {
             return json::parse(response.body);
@@ -117,8 +117,19 @@ void WrappedServer::forward_streaming_request(const std::string& endpoint,
     std::string url = get_base_url() + endpoint;
     
     try {
-        // Use StreamingProxy to forward the SSE stream
-        StreamingProxy::forward_sse_stream(url, request_body, sink, nullptr);
+        // Use StreamingProxy to forward the SSE stream with telemetry callback
+        // Use INFERENCE_TIMEOUT_SECONDS (0 = infinite) as chat completions can take a long time
+        StreamingProxy::forward_sse_stream(url, request_body, sink, 
+            [this](const StreamingProxy::TelemetryData& telemetry) {
+                // Save telemetry to member variable
+                telemetry_.input_tokens = telemetry.input_tokens;
+                telemetry_.output_tokens = telemetry.output_tokens;
+                telemetry_.time_to_first_token = telemetry.time_to_first_token;
+                telemetry_.tokens_per_second = telemetry.tokens_per_second;
+                // Note: decode_token_times is not available from streaming proxy
+            },
+            INFERENCE_TIMEOUT_SECONDS
+        );
     } catch (const std::exception& e) {
         // Log the error but don't crash the server
         std::cerr << "[WrappedServer ERROR] Streaming request failed: " << e.what() << std::endl;
