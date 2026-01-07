@@ -177,3 +177,4 @@ prompt_files/
 .claude/settings.local.json
 nul
 logs/*
+*.json

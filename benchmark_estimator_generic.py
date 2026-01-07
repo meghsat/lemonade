@@ -1,3 +1,5 @@
+#python benchmark_estimator_generic.py   --model_dir ggml-org/gpt-oss-20b-GGUF:gpt-oss-20b-mxfp4.gguf   --prompts_folder /workspace/phi35/prompt_files   --output_file mlperf_ggml_gptoss-20b.json
+#python benchmark_estimator_generic.py NVIDIA unsloth/Llama-3.1-8B-Instruct-GGUF:Llama-3.1-8B-Instruct-Q4_0.gguf /home/user/Downloads/prompt_files/ cache_llama_tg phi 3 3
 import os
 import re
 import subprocess
@@ -8,11 +10,12 @@ import csv
 import statistics
 import math
 
-if len(sys.argv) < 8 or len(sys.argv) > 9:
+if len(sys.argv) < 8 or len(sys.argv) > 10:
     print(
-        "Usage: python script.py <vendor> <model [ hf_checkpoint | directory ]> <prompt_dir_path> <cache_base_path> <prompt_prefix [ mlperf | textgen ]> <iterations> <warmups> [backend]"
+        "Usage: python script.py <vendor> <model [ hf_checkpoint | directory ]> <prompt_dir_path> <cache_base_path> <prompt_prefix [ mlperf | textgen ]> <iterations> <warmups> [backend] [llamacpp_backend]"
     )
     print("  backend (optional): llamacpp (default), oga, or openvino")
+    print("  llamacpp_backend (optional, NVIDIA only): cuda (default) or vulkan")
     sys.exit(1)
 
 VENDOR = sys.argv[1]
@@ -22,7 +25,8 @@ CACHE_BASE = sys.argv[4]
 FILE_PREFIX = sys.argv[5]
 ITERATIONS = sys.argv[6]
 WARMUPS = sys.argv[7]
-BACKEND = sys.argv[8].lower() if len(sys.argv) == 9 else "llamacpp"
+BACKEND = sys.argv[8].lower() if len(sys.argv) >= 9 else "llamacpp"
+LLAMACPP_BACKEND = sys.argv[9].lower() if len(sys.argv) == 10 else "cuda"  # Default to CUDA for NVIDIA
 
 # Generate unique cache directory using timestamp
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -249,6 +253,7 @@ def main():
                     prompt_content = f.read().strip()
 
                 print(f"Running lemonade with prompt file: {fname}")
+                print(f"Using llamacpp backend: {LLAMACPP_BACKEND}")
 
                 # Use llamacpp-bench with prompt content (requires --cli flag for text prompts)
                 cmd = [
@@ -262,6 +267,8 @@ def main():
                     "llamacpp-load",
                     "--device",
                     "igpu",
+                    "--backend",
+                    LLAMACPP_BACKEND,  # Add backend selection (cuda or vulkan)
                     "llamacpp-bench",
                     "--cli",  # Required for text prompts!
                     "--iterations",

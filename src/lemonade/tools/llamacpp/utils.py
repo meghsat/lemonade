@@ -19,6 +19,7 @@ import re
 LLAMA_VERSION_VULKAN = "b6510"
 LLAMA_VERSION_ROCM = "b1066"
 LLAMA_VERSION_METAL = "b6940"
+LLAMA_VERSION_CUDA = "b7438"
 
 
 def identify_rocm_arch_from_name(device_name: str) -> str | None:
@@ -121,6 +122,133 @@ def identify_hip_id() -> str:
     return device_selected[0]
 
 
+def check_cuda_available() -> bool:
+    """
+    Check if CUDA toolkit is available on the system
+    """
+    try:
+        result = subprocess.run(
+            ["nvcc", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def get_cuda_compute_capability() -> str:
+    """
+    Get CUDA compute capability from nvidia-smi or detect from GPU
+    Returns compute capability like "90" for sm_90, "100" for sm_100, etc.
+    """
+    try:
+        # Try to get compute capability from nvidia-smi
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # Convert "8.9" to "89", "10.0" to "100"
+            cap = result.stdout.strip().replace(".", "")
+            return cap
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Default to native architecture (let CMake auto-detect)
+    # For Blackwell (GB10), this should auto-detect sm_100 or sm_120
+    return "native"
+
+
+def build_llamacpp_from_source(backend: str, build_dir: str) -> None:
+    """
+    Build llama.cpp from source with the specified backend
+
+    Args:
+        backend: Backend to build for (currently only 'cuda' supported)
+        build_dir: Directory to build in
+    """
+    if backend != "cuda":
+        raise ValueError(f"Building from source only supported for CUDA backend, got: {backend}")
+
+    # Check if CUDA is available
+    if not check_cuda_available():
+        raise RuntimeError(
+            "CUDA toolkit not found. Please install CUDA toolkit from NVIDIA "
+            "(https://developer.nvidia.com/cuda-downloads)"
+        )
+
+    printing.log_info("Building llama.cpp from source with CUDA support...")
+
+    # Create build directory
+    os.makedirs(build_dir, exist_ok=True)
+
+    # Clone llama.cpp repository
+    repo_dir = os.path.join(build_dir, "llama.cpp-src")
+    version = LLAMA_VERSION_CUDA
+
+    if not os.path.exists(repo_dir):
+        printing.log_info(f"Cloning llama.cpp repository (version {version})...")
+        subprocess.run(
+            ["git", "clone", "--depth", "1", "--branch", version,
+             "https://github.com/ggml-org/llama.cpp.git", repo_dir],
+            check=True,
+            capture_output=True
+        )
+
+    # Get compute capability
+    compute_cap = get_cuda_compute_capability()
+    printing.log_info(f"Detected CUDA compute capability: {compute_cap}")
+
+    # Configure CMake
+    cmake_build_dir = os.path.join(repo_dir, "build")
+    cmake_args = [
+        "cmake", "-B", cmake_build_dir,
+        "-DGGML_CUDA=ON",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DBUILD_SHARED_LIBS=ON",
+        "-DLLAMA_CURL=OFF",
+    ]
+
+    # Add compute capability if not native
+    if compute_cap != "native":
+        cmake_args.append(f"-DCMAKE_CUDA_ARCHITECTURES={compute_cap}")
+
+    printing.log_info("Configuring CMake build...")
+    subprocess.run(cmake_args, cwd=repo_dir, check=True)
+
+    # Build
+    printing.log_info("Building llama.cpp (this may take several minutes)...")
+    subprocess.run(
+        ["cmake", "--build", cmake_build_dir, "--config", "Release", "-j"],
+        cwd=repo_dir,
+        check=True
+    )
+
+    # Copy binaries to the expected location
+    # build_dir is already /path/to/backend/llama_server, so just add build/bin
+    bin_source = os.path.join(cmake_build_dir, "bin")
+    bin_dest = os.path.join(build_dir, "build", "bin")
+    os.makedirs(bin_dest, exist_ok=True)
+
+    printing.log_info(f"Copying binaries from {bin_source} to {bin_dest}...")
+
+    # Copy all files from bin_source to bin_dest
+    for item in os.listdir(bin_source):
+        src = os.path.join(bin_source, item)
+        dst = os.path.join(bin_dest, item)
+        if os.path.isfile(src):
+            shutil.copy2(src, dst)
+            # Make executables executable
+            if not item.endswith(".so") and not item.endswith(".dll"):
+                os.chmod(dst, 0o755)
+
+    printing.log_success(f"Successfully built llama.cpp with CUDA support at {bin_dest}")
+
+
 def get_llama_version(backend: str) -> str:
     """
     Select the appropriate llama.cpp version based on the backend
@@ -131,9 +259,11 @@ def get_llama_version(backend: str) -> str:
         return LLAMA_VERSION_VULKAN
     elif backend == "metal":
         return LLAMA_VERSION_METAL
+    elif backend == "cuda":
+        return LLAMA_VERSION_CUDA
     else:
         raise ValueError(
-            f"Unsupported backend: {backend}. Supported: vulkan, rocm, metal"
+            f"Unsupported backend: {backend}. Supported: vulkan, rocm, metal, cuda"
         )
 
 
@@ -207,16 +337,16 @@ def get_llama_installed_version(backend: str):
 def get_default_backend() -> str:
     """
     Get the default llamacpp backend based on the current platform.
-    Uses Metal for Apple Silicon Macs, Vulkan for everything else.
+    Uses Metal for Apple Silicon Macs, CUDA for NVIDIA GPUs if available, Vulkan otherwise.
 
     Returns:
-        str: The default backend name ('metal', 'vulkan', or 'rocm')
+        str: The default backend name ('metal', 'cuda', 'vulkan', or 'rocm')
     """
     # Allow environment variable override
     env_backend = os.environ.get("LEMONADE_LLAMACPP_BACKEND")
     if env_backend:
         # Validate the backend choice
-        valid_backends = ["vulkan", "rocm", "metal"]
+        valid_backends = ["vulkan", "rocm", "metal", "cuda"]
         env_backend_lower = env_backend.lower()
         if env_backend_lower not in valid_backends:
             logging.warning(
@@ -226,9 +356,24 @@ def get_default_backend() -> str:
         else:
             return env_backend_lower
 
-    # Platform-specific defaults: use metal for Apple Silicon, vulkan for everything else
+    # Platform-specific defaults
+    # 1. Use metal for Apple Silicon
     if platform.system() == "Darwin" and platform.machine().lower() in ["arm64", "aarch64"]:
         return "metal"
+
+    # 2. Check for NVIDIA GPU and CUDA support
+    system_info = get_system_info()
+    nvidia_gpus = system_info.get_nvidia_dgpu_devices()
+    if nvidia_gpus and len(nvidia_gpus) > 0:
+        # Check if any NVIDIA GPU is available
+        for gpu in nvidia_gpus:
+            if gpu.get("available", False):
+                # Check if CUDA toolkit is installed
+                if check_cuda_available():
+                    return "cuda"
+                break
+
+    # 3. Default to vulkan
     return "vulkan"
 
 
@@ -283,8 +428,28 @@ def get_binary_url_and_filename(backend: str, target_arch: str = None):
             raise NotImplementedError(
                 f"Platform {system} not supported for Metal llamacpp. Metal is only supported on macOS"
             )
+
+    elif backend == "cuda":
+        repo = "ggml-org/llama.cpp"
+        version = LLAMA_VERSION_CUDA
+        machine = platform.machine().lower()
+
+        # Only x64 Windows has pre-built CUDA binaries
+        # ARM64 Linux (Jetson) needs to build from source
+        if system == "windows" and machine in ["x86_64", "amd64"]:
+            # Default to CUDA 12.4 for broader compatibility
+            filename = f"llama-{version}-bin-win-cuda-12.4-x64.zip"
+        elif system == "linux" and machine in ["arm64", "aarch64"]:
+            # ARM64 Linux (Jetson) - build from source
+            return None, None
+        else:
+            raise NotImplementedError(
+                f"Platform {system} on {machine} not supported for CUDA llamacpp. "
+                f"Supported: Windows x64 (pre-built), Linux (build from source)"
+            )
+
     else:
-        supported_backends = ["vulkan", "rocm", "metal"]
+        supported_backends = ["vulkan", "rocm", "metal", "cuda"]
         raise NotImplementedError(
             f"Unsupported backend: {backend}. Supported backends: {supported_backends}"
         )
@@ -386,46 +551,57 @@ def install_llamacpp(backend):
                     f"for supported configurations. {hint}"
                 )
 
-        # Direct download for Vulkan/ROCm
+        # Check if we need to build from source or download pre-built binaries
         llama_archive_url, filename = get_binary_url_and_filename(backend, target_arch)
-        llama_archive_path = os.path.join(llama_server_exe_dir, filename)
-        logging.info(f"Downloading llama.cpp server from {llama_archive_url}")
 
-        with requests.get(llama_archive_url, stream=True) as r:
-            r.raise_for_status()
-            with open(llama_archive_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
-
-        logging.info(f"Extracting {filename} to {llama_server_exe_dir}")
-        if filename.endswith(".zip"):
-            with zipfile.ZipFile(llama_archive_path, "r") as zip_ref:
-                zip_ref.extractall(llama_server_exe_dir)
-
-            # On Unix-like systems (macOS/Linux), make executables executable
-            if platform.system().lower() in ["darwin", "linux"]:
-                import stat
-
-                # Find and make executable files executable
-                for root, _, files in os.walk(llama_server_exe_dir):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        # Make files in bin/ directories executable
-                        if "bin" in root.split(os.sep) or file in [
-                            "llama-server",
-                            "llama-simple",
-                        ]:
-                            try:
-                                current_permissions = os.stat(file_path).st_mode
-                                os.chmod(file_path, current_permissions | stat.S_IEXEC)
-                                logging.debug(f"Made {file_path} executable")
-                            except Exception as e:
-                                raise RuntimeError(
-                                    f"Failed to make {file_path} executable. This will prevent "
-                                    f"llama-server from starting. Error: {e}"
-                                )
+        # If URL is None, we need to build from source (CUDA on ARM64/Linux)
+        if llama_archive_url is None:
+            printing.log_info(f"No pre-built binaries available for {backend} on this platform. Building from source...")
+            build_llamacpp_from_source(backend, llama_server_exe_dir)
         else:
-            raise NotImplementedError(f"Unsupported archive format: {filename}")
+            # Direct download for Vulkan/ROCm/CUDA (when pre-built binaries exist)
+            llama_archive_path = os.path.join(llama_server_exe_dir, filename)
+            logging.info(f"Downloading llama.cpp server from {llama_archive_url}")
+
+            with requests.get(llama_archive_url, stream=True) as r:
+                r.raise_for_status()
+                with open(llama_archive_path, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+
+            logging.info(f"Extracting {filename} to {llama_server_exe_dir}")
+            if filename.endswith(".zip"):
+                with zipfile.ZipFile(llama_archive_path, "r") as zip_ref:
+                    zip_ref.extractall(llama_server_exe_dir)
+
+                # On Unix-like systems (macOS/Linux), make executables executable
+                if platform.system().lower() in ["darwin", "linux"]:
+                    import stat
+
+                    # Find and make executable files executable
+                    for root, _, files in os.walk(llama_server_exe_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            # Make files in bin/ directories executable
+                            if "bin" in root.split(os.sep) or file in [
+                                "llama-server",
+                                "llama-simple",
+                            ]:
+                                try:
+                                    current_permissions = os.stat(file_path).st_mode
+                                    os.chmod(file_path, current_permissions | stat.S_IEXEC)
+                                    logging.debug(f"Made {file_path} executable")
+                                except Exception as e:
+                                    raise RuntimeError(
+                                        f"Failed to make {file_path} executable. This will prevent "
+                                        f"llama-server from starting. Error: {e}"
+                                    )
+            else:
+                raise NotImplementedError(f"Unsupported archive format: {filename}")
+
+            # Delete the archive file after extraction
+            if os.path.exists(llama_archive_path):
+                os.remove(llama_archive_path)
 
         # Identify and set HIP ID
         if backend == "rocm":
@@ -460,9 +636,6 @@ def install_llamacpp(backend):
             vf.write(version)
         with open(backend_txt_path, "w", encoding="utf-8") as bf:
             bf.write(backend)
-
-        # Delete the archive file
-        os.remove(llama_archive_path)
 
 
 def parse_checkpoint(checkpoint: str) -> tuple[str, str | None]:
@@ -921,7 +1094,6 @@ class LlamaCppAdapter(ModelAdapter):
             str(top_p),
             "--top-k",
             str(top_k),
-            "-e",  # process escape sequences
             "--no-conversation",  # disable conversation mode
             "--reasoning-format",  # leaves thoughts unparsed in message content
             "none",

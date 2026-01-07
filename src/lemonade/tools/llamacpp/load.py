@@ -69,7 +69,7 @@ class LoadLlamaCpp(FirstTool):
         default_backend = get_default_backend()
         parser.add_argument(
             "--backend",
-            choices=["vulkan", "rocm", "metal"],
+            choices=["vulkan", "rocm", "metal", "cuda"],
             default=default_backend,
             help=f"Backend to use for llama.cpp (default: {default_backend})",
         )
