@@ -8,26 +8,56 @@ import csv
 import statistics
 import math
 
-if len(sys.argv) < 8 or len(sys.argv) > 9:
+if len(sys.argv) < 7 or len(sys.argv) > 8:
     print(
-        "Usage: python script.py <vendor> <model [ hf_checkpoint | directory ]> <prompt_dir_path> <cache_base_path> <prompt_prefix [ mlperf | textgen ]> <iterations> <warmups> [backend]"
+        "Usage: python script.py <vendor> <model [ hf_checkpoint | directory ]> <prompt_dir_path> <prompt_prefix [ mlperf | textgen | phi | llama3 ]> <iterations> <warmups> [backend]"
     )
-    print("  backend (optional): llamacpp (default), oga, or openvino")
+    print("  backend (optional): llamacpp (default), vllm, trtllm, mlx, openvino, oga")
+    print("  Hardware-specific backends:")
+    print("    - trtllm: NVIDIA only")
+    print("    - mlx: APPLE only")
+    print("    - openvino: INTEL only")
+    print("    - oga: AMD only")
     sys.exit(1)
 
-VENDOR = sys.argv[1]
+VENDOR = sys.argv[1].upper()
 MODEL_PATH = sys.argv[2]
 PROMPTS_PATH = sys.argv[3]
-CACHE_BASE = sys.argv[4]
-FILE_PREFIX = sys.argv[5]
-ITERATIONS = sys.argv[6]
-WARMUPS = sys.argv[7]
-BACKEND = sys.argv[8].lower() if len(sys.argv) == 9 else "llamacpp"
+FILE_PREFIX = sys.argv[4]
+ITERATIONS = sys.argv[5]
+WARMUPS = sys.argv[6]
+BACKEND = sys.argv[7].lower() if len(sys.argv) == 8 else "llamacpp"
 
-# Generate unique cache directory using timestamp
+# Validate backend compatibility with vendor
+BACKEND_VENDOR_MAP = {
+    "trtllm": "NVIDIA",
+    "mlx": "APPLE",
+    "openvino": "INTEL",
+    "oga": "AMD",
+}
+
+if BACKEND in BACKEND_VENDOR_MAP:
+    required_vendor = BACKEND_VENDOR_MAP[BACKEND]
+    if VENDOR != required_vendor:
+        print(
+            f"Error: Backend '{BACKEND}' is only supported on {required_vendor} hardware."
+        )
+        print(f"Current vendor: {VENDOR}")
+        sys.exit(1)
+
+# Extract model name from path
+if os.path.isdir(MODEL_PATH):
+    model_name = os.path.basename(MODEL_PATH.rstrip(os.sep))
+else:
+    # Extract model name from HF checkpoint (e.g., "org/model-name" -> "model-name")
+    model_name = MODEL_PATH.split("/")[-1]
+
+# Generate unique cache directory with naming scheme: vendor_modelname_backend_promptprefix_timestamp
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-CACHE_PATH = os.path.join(CACHE_BASE, f"run_{timestamp}")
+cache_folder_name = f"{VENDOR}_{model_name}_{BACKEND}_{FILE_PREFIX}_{timestamp}"
+CACHE_PATH = os.path.abspath(cache_folder_name)
 os.makedirs(CACHE_PATH, exist_ok=True)
+print(f"Cache directory: {CACHE_PATH}")
 
 FILENAME_PATTERN = re.compile(rf"^{FILE_PREFIX}_p(\d+)(?:_in\d+)?_out(\d+)\.txt$")
 
@@ -105,125 +135,6 @@ def get_model_from_path(hf_path: str) -> str:
     return model_path
 
 
-def is_nvidia_arm64():
-    is_arm64 = platform.machine().lower() in ["aarch64", "arm64"]
-
-    # Check for nvidia-smi availability
-    has_nvidia = False
-    try:
-        result = subprocess.run(["nvidia-smi"], capture_output=True, timeout=5)
-        has_nvidia = result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-
-    return is_arm64 and has_nvidia
-
-
-def process_csv_with_scores(csv_path, model_path):
-    """
-    Read the benchmark CSV, calculate averages and scores, and add new columns.
-
-    Args:
-        csv_path: Path to the benchmark_results.csv file
-        model_path: Path to the model (used to determine c1 and c2 values)
-    """
-    if not os.path.exists(csv_path):
-        print(f"Warning: CSV file not found at {csv_path}")
-        return
-
-    # Determine c1 and c2 based on model name
-    model_name_lower = model_path.lower()
-    if "phi" in model_name_lower:
-        c1 = 1250
-        c2 = 20.49
-        model_type = "Phi"
-    elif "llama" in model_name_lower:
-        c1 = 1300
-        c2 = 31.25
-        model_type = "Llama"
-    else:
-        # Default values if model type not recognized
-        c1 = 1250
-        c2 = 20.49
-        model_type = "Unknown"
-
-    print(f"\nProcessing CSV with model type: {model_type} (C1={c1}, C2={c2})")
-
-    # Read the CSV
-    rows = []
-    with open(csv_path, "r", newline="") as csvfile:
-        reader = csv.DictReader(csvfile)
-        fieldnames = reader.fieldnames
-        for row in reader:
-            rows.append(row)
-
-    if not rows:
-        print("Warning: CSV file is empty")
-        return
-
-    # Calculate averages across all prompts
-    ttft_values = []
-    tps_values = []
-
-    for row in rows:
-        try:
-            ttft = float(row.get("Seconds To First Token", 0))
-            tps = float(row.get("Token Generation Tokens Per Second", 0))
-            if ttft > 0:
-                ttft_values.append(ttft)
-            if tps > 0:
-                tps_values.append(tps)
-        except (ValueError, TypeError):
-            continue
-
-    if not ttft_values or not tps_values:
-        print("Warning: No valid TTFT or TPS values found in CSV")
-        return
-
-    average_ttft = statistics.mean(ttft_values)
-    average_tps = statistics.mean(tps_values)
-
-    print(f"  Average TTFT: {average_ttft:.3f} seconds")
-    print(f"  Average TPS: {average_tps:.3f} tokens/second")
-
-    ttft_score = c1 / average_ttft if average_ttft > 0 else 0
-    ots_score = c2 * average_tps
-    overall_score = (
-        math.sqrt(ttft_score * ots_score) if ttft_score > 0 and ots_score > 0 else 0
-    )
-
-    print(f"  TTFT Score: {ttft_score:.3f}")
-    print(f"  OTS Score: {ots_score:.3f}")
-    print(f"  Overall Score: {overall_score:.3f}")
-
-    new_fieldnames = list(fieldnames) + [
-        "C1",
-        "C2",
-        "Average TTFT",
-        "Average TPS",
-        "TTFT Score",
-        "OTS Score",
-        "Overall Score",
-    ]
-
-    for row in rows:
-        row["C1"] = c1
-        row["C2"] = c2
-        row["Average TTFT"] = f"{average_ttft:.3f}"
-        row["Average TPS"] = f"{average_tps:.3f}"
-        row["TTFT Score"] = f"{ttft_score:.3f}"
-        row["OTS Score"] = f"{ots_score:.3f}"
-        row["Overall Score"] = f"{overall_score:.3f}"
-
-    # Write back to CSV
-    with open(csv_path, "w", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=new_fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-    print(f"✓ Updated CSV with averages and scores: {csv_path}")
-
-
 def main():
     tasks = []
 
@@ -243,38 +154,60 @@ def main():
         full_path = os.path.join(PROMPTS_PATH, fname)
 
         try:
-            if is_nvidia_arm64():
-                # Read prompt file content
-                with open(full_path, "r", encoding="utf-8") as f:
-                    prompt_content = f.read().strip()
-
+            if VENDOR == "NVIDIA":
                 print(f"Running lemonade with prompt file: {fname}")
 
-                # Use llamacpp-bench with prompt content (requires --cli flag for text prompts)
-                cmd = [
-                    "lemonade",
-                    "-d",
-                    CACHE_PATH,
-                    "-i",
-                    model_path,
-                    "--power-nvidia",
-                    "--memory",
-                    "llamacpp-load",
-                    "--device",
-                    "igpu",
-                    "llamacpp-bench",
-                    "--cli",  # Required for text prompts!
-                    "--iterations",
-                    str(ITERATIONS),
-                    "--warmup-iterations",
-                    str(WARMUPS),
-                    "--prompts",
-                    full_path,
-                    "--output-tokens",
-                    str(out_value),
-                    "--prompt-label",
-                    fname,
-                ]
+                if BACKEND == "trtllm":
+                    cmd = [
+                        "lemonade",
+                        "-d",
+                        CACHE_PATH,
+                        "-i",
+                        model_path,
+                        "--power-nvidia",
+                        "--memory",
+                        "trtllm-load",
+                        "--device",
+                        "cuda",
+                        "trtllm-bench",
+                        "--iterations",
+                        str(ITERATIONS),
+                        "--warmup-iterations",
+                        str(WARMUPS),
+                        "--prompts",
+                        full_path,
+                        "--output-tokens",
+                        str(out_value),
+                        "--prompt-label",
+                        fname,
+                    ]
+                #  elif BACKEND == "vllm":
+
+                else:  # default llamacpp
+                    cmd = [
+                        "lemonade",
+                        "-d",
+                        CACHE_PATH,
+                        "-i",
+                        model_path,
+                        "--power-nvidia",
+                        "--memory",
+                        "llamacpp-load",
+                        "--device",
+                        "igpu",
+                        "llamacpp-bench",
+                        "--cli",  # Required for text prompts!
+                        "--iterations",
+                        str(ITERATIONS),
+                        "--warmup-iterations",
+                        str(WARMUPS),
+                        "--prompts",
+                        full_path,
+                        "--output-tokens",
+                        str(out_value),
+                        "--prompt-label",
+                        fname,
+                    ]
 
             elif VENDOR == "AMD":
                 print(
@@ -282,13 +215,28 @@ def main():
                 )
                 if BACKEND == "oga":
                     cmd = [
-                        "lemonade", "-d", CACHE_PATH,
-                        "-i", model_path, "--power-agt",
-                        "oga-load", "--device", "hybrid", "--dtype", "int4",
-                        "oga-bench", "--prompts", full_path,
-                        "--iterations", str(ITERATIONS), "--warmup-iterations", str(WARMUPS),
-                        "--output-tokens", str(out_value)
+                        "lemonade",
+                        "-d",
+                        CACHE_PATH,
+                        "-i",
+                        model_path,
+                        "--power-agt",
+                        "oga-load",
+                        "--device",
+                        "hybrid",
+                        "--dtype",
+                        "int4",
+                        "oga-bench",
+                        "--prompts",
+                        full_path,
+                        "--iterations",
+                        str(ITERATIONS),
+                        "--warmup-iterations",
+                        str(WARMUPS),
+                        "--output-tokens",
+                        str(out_value),
                     ]
+                #   elif BACKEND == "vllm":
                 else:  # default llamacpp
                     cmd = [
                         "lemonade",
@@ -342,6 +290,8 @@ def main():
                         "--prompts",
                         full_path,
                     ]
+                # elif BACKEND == "vllm":
+
                 else:  # default llamacpp
                     cmd = [
                         "lemonade",
@@ -372,29 +322,56 @@ def main():
                 print(
                     f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
                 )
-                cmd = [
-                    "lemonade",
-                    "-d",
-                    CACHE_PATH,
-                    "-i",
-                    model_path,
-                    "--power-apple",
-                    "llamacpp-load",
-                    "--device",
-                    "igpu",
-                    "llamacpp-bench",
-                    "--cli",
-                    "--iterations",
-                    str(ITERATIONS),
-                    "--warmup-iterations",
-                    str(WARMUPS),
-                    "--prompts",
-                    full_path,
-                    "--output-tokens",
-                    str(out_value),
-                    "--prompt-label",
-                    fname,
-                ]
+                if BACKEND == "mlx":
+                    cmd = [
+                        "lemonade",
+                        "-d",
+                        CACHE_PATH,
+                        "-i",
+                        model_path,
+                        "--power-apple",
+                        "--memory",
+                        "mlx-load",
+                        "--device",
+                        "gpu",
+                        "mlx-bench",
+                        "--iterations",
+                        str(ITERATIONS),
+                        "--warmup-iterations",
+                        str(WARMUPS),
+                        "--prompts",
+                        full_path,
+                        "--output-tokens",
+                        str(out_value),
+                        "--prompt-label",
+                        fname,
+                    ]
+                #  elif BACKEND == "vllm":
+
+                else:  # default llamacpp
+                    cmd = [
+                        "lemonade",
+                        "-d",
+                        CACHE_PATH,
+                        "-i",
+                        model_path,
+                        "--power-apple",
+                        "llamacpp-load",
+                        "--device",
+                        "igpu",
+                        "llamacpp-bench",
+                        "--cli",
+                        "--iterations",
+                        str(ITERATIONS),
+                        "--warmup-iterations",
+                        str(WARMUPS),
+                        "--prompts",
+                        full_path,
+                        "--output-tokens",
+                        str(out_value),
+                        "--prompt-label",
+                        fname,
+                    ]
 
             print(f"Running: {' '.join(cmd)}")
             subprocess.run(cmd, check=True)
@@ -412,8 +389,6 @@ def main():
         print(f"  Total prompts processed: {len(tasks)}")
         print(f"  Successful: {len(tasks) - len(failed_tasks)}")
         print(f"  Failed: {len(failed_tasks)}")
-
-        process_csv_with_scores(csv_path, model_path)
 
     # Only generate report if at least one run succeeded
     if len(failed_tasks) < len(tasks):

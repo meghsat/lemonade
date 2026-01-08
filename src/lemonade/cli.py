@@ -72,6 +72,8 @@ from lemonade.tools.oga.load import OgaLoad
 from lemonade.tools.oga.bench import OgaBench
 from lemonade.tools.llamacpp.bench import LlamaCppBench
 from lemonade.tools.llamacpp.load import LoadLlamaCpp
+from lemonade.tools.trtllm.load import LoadTensorRTLLM
+from lemonade.tools.trtllm.bench import TensorRTLLMBench
 
 import lemonade.cache as cache
 from lemonade.tools.mmlu import AccuracyMMLU
@@ -89,6 +91,8 @@ def main():
         HuggingfaceLoad,
         LoadLlamaCpp,
         LlamaCppBench,
+        LoadTensorRTLLM,
+        TensorRTLLMBench,
         AccuracyMMLU,
         AccuracyHumaneval,
         AccuracyPerplexity,
