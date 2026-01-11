@@ -106,22 +106,22 @@ async def benchmark_single_query_async(
         if not first_token_received:
             ttft = t2 - t1
             first_token_received = True
-            print(f"TTFT: {ttft*1000:.2f} ms")
+            print(f"TTFT: {ttft*1000:.2f} ms", flush=True)
 
         token_latency = t2 - t1
         token_times.append(token_latency)
 
         if output.outputs:
-            new_text = output.outputs[0].text
-            new_tokens = new_text[len(generated_text) :]
-            print(new_tokens, end="", flush=True)
-            generated_text = new_text
+            generated_text = output.outputs[0].text
             output_token_count = len(output.outputs[0].token_ids)
 
         t1 = t2
 
     query_end = time.perf_counter()
     query_latency = query_end - query_start
+
+    # Print completion
+    print(" [Done]", flush=True)
 
     if output_token_count > 1 and query_latency > ttft:
         tokens_per_sec = (output_token_count - 1) / (query_latency - ttft)
@@ -139,14 +139,9 @@ async def benchmark_single_query_async(
         "prompt": prompt,
     }
 
-    print(f"\n{'='*80}")
-    print(f"Prompt: {prompt[:100]}...")
-    print(f"Generated: {generated_text[:100]}...")
-    print(f"TTFT: {ttft*1000:.2f} ms")
-    print(f"Query Latency: {query_latency*1000:.2f} ms")
+    print(f"\nQuery Latency: {query_latency*1000:.2f} ms")
     print(f"Output Tokens: {output_token_count}")
-    print(f"Tokens/sec (decode): {tokens_per_sec:.2f}")
-    print(f"{'='*80}\n")
+    print(f"Tokens/sec (decode): {tokens_per_sec:.2f}\n")
 
     return metrics
 
@@ -240,7 +235,7 @@ def setup_llm(
 
     kv_cache_config = KvCacheConfig(
         enable_block_reuse=True,
-        free_gpu_memory_fraction=None,
+       # free_gpu_memory_fraction=0.9,
         dtype="auto",
     )
 
@@ -371,6 +366,19 @@ async def run_benchmark(
             llm, prompt_text, sampling_params, num_iterations, num_warmup, metadata
         )
         results.append(metrics)
+
+        print("Cleaning up GPU memory...")
+        del llm
+        gc.collect()
+        await asyncio.sleep(0.5)
+
+        # Reload model for next prompt (if not the last prompt)
+        if idx < len(prompts):
+            print("Reloading model for next prompt...")
+            model_load_start = time.perf_counter()
+            llm = setup_llm(model_path, max_seq_len, max_num_tokens, trust_remote_code)
+            model_load_time_next = time.perf_counter() - model_load_start
+            print(f"Model reloaded in {model_load_time_next:.2f} seconds\n")
 
     # Calculate aggregate metrics
     aggregate_metrics = calculate_aggregate_metrics(results)

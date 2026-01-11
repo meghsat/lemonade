@@ -12,7 +12,7 @@ import lemonade.common.printing as printing
 
 
 # Default Docker image for TensorRT-LLM
-DEFAULT_TRTLLM_IMAGE = "nvcr.io/nvidia/tensorrt-llm/release:spark-single-gpu-dev"
+DEFAULT_TRTLLM_IMAGE = "nvcr.io/nvidia/tensorrt-llm/release:1.2.0rc6"
 DEFAULT_CONTAINER_NAME_PREFIX = "lemonade_trtllm"
 
 
@@ -29,9 +29,21 @@ class DockerManager:
         """Check if Docker is installed and running"""
         try:
             result = subprocess.run(
-                ["docker", "version"], capture_output=True, timeout=5
+                ["docker", "version"], capture_output=True, text=True, timeout=5
             )
-            return result.returncode == 0
+            if result.returncode == 0:
+                return True
+
+            # Check for permission denied error
+            if "permission denied" in result.stderr.lower():
+                printing.log_error("Docker permission denied. Run: sudo usermod -aG docker $USER && newgrp docker")
+                return False
+
+            printing.log_error(f"Docker check failed: {result.stderr}")
+            return False
+        except FileNotFoundError:
+            printing.log_error("Docker is not installed")
+            return False
         except Exception as e:
             printing.log_error(f"Docker check failed: {e}")
             return False
@@ -79,6 +91,45 @@ class DockerManager:
             printing.log_warning(f"Failed to check container status: {e}")
             return False
 
+    def check_image_exists(self) -> bool:
+        """Check if Docker image exists locally"""
+        try:
+            result = subprocess.run(
+                ["docker", "images", "-q", self.image],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return bool(result.stdout.strip())
+        except Exception as e:
+            printing.log_warning(f"Failed to check image existence: {e}")
+            return False
+
+    def pull_image(self) -> bool:
+        """Pull Docker image from registry"""
+        try:
+            printing.log_info(f"Pulling Docker image: {self.image}")
+            printing.log_info("This is a large image (~15GB) and may take 20-60 minutes depending on your internet speed...")
+            printing.log_info("Note: Progress output is shown in real-time below")
+
+            # Run without capture_output to show real-time progress
+            result = subprocess.run(
+                ["docker", "pull", self.image],
+                timeout=3600,  # 60 minutes for 15GB images
+            )
+            if result.returncode == 0:
+                printing.log_success(f"Successfully pulled image: {self.image}")
+                return True
+            else:
+                printing.log_error(f"Failed to pull image (exit code: {result.returncode})")
+                return False
+        except subprocess.TimeoutExpired:
+            printing.log_error("Docker image pull timed out after 60 minutes")
+            return False
+        except Exception as e:
+            printing.log_error(f"Error pulling image: {e}")
+            return False
+
     def start_existing_container(self) -> bool:
         """Start an existing stopped container"""
         try:
@@ -101,7 +152,7 @@ class DockerManager:
             printing.log_error(f"Error starting container: {e}")
             return False
 
-    def create_and_run_container(self, volume_mapping: str = None) -> bool:
+    def create_and_run_container(self, volume_mapping: str = None, volume_mappings: list = None) -> bool:
         """Create and run a new Docker container"""
         try:
             cmd = [
@@ -114,7 +165,11 @@ class DockerManager:
                 self.container_name,
             ]
 
-            if volume_mapping:
+            # Support both single volume_mapping (legacy) and multiple volume_mappings
+            if volume_mappings:
+                for mapping in volume_mappings:
+                    cmd.extend(["-v", mapping])
+            elif volume_mapping:
                 cmd.extend(["-v", volume_mapping])
 
             cmd.append(self.image)
@@ -122,7 +177,7 @@ class DockerManager:
             cmd.append("infinity")  # Keep container running
 
             printing.log_info(f"Creating new container: {self.container_name}")
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
 
             if result.returncode == 0:
                 printing.log_success(
@@ -133,16 +188,20 @@ class DockerManager:
                 printing.log_error(f"Failed to create container: {result.stderr}")
                 return False
 
+        except subprocess.TimeoutExpired:
+            printing.log_error("Container creation timed out after 120 seconds")
+            return False
         except Exception as e:
             printing.log_error(f"Error creating container: {e}")
             return False
 
-    def ensure_container_running(self, volume_mapping: str = None) -> bool:
+    def ensure_container_running(self, volume_mapping: str = None, volume_mappings: list = None) -> bool:
         """
         Ensure container is running. Create if doesn't exist, start if stopped.
 
         Args:
-            volume_mapping: Volume mapping in format "host_path:container_path"
+            volume_mapping: Single volume mapping in format "host_path:container_path" (legacy)
+            volume_mappings: List of volume mappings (preferred)
 
         Returns:
             True if container is running, False otherwise
@@ -155,13 +214,19 @@ class DockerManager:
             printing.log_info(f"Container {self.container_name} is already running")
             return True
 
+        # Check if image exists locally, pull if not
+        if not self.check_image_exists():
+            printing.log_info(f"Docker image {self.image} not found locally")
+            if not self.pull_image():
+                return False
+
         if self.check_container_exists():
             return self.start_existing_container()
         else:
-            return self.create_and_run_container(volume_mapping)
+            return self.create_and_run_container(volume_mapping=volume_mapping, volume_mappings=volume_mappings)
 
     def exec_command(
-        self, command: list, workdir: str = None
+        self, command: list, workdir: str = None, stream_output: bool = False
     ) -> subprocess.CompletedProcess:
         """
         Execute a command inside the container
@@ -169,11 +234,16 @@ class DockerManager:
         Args:
             command: Command to execute as a list
             workdir: Working directory inside container
+            stream_output: If True, stream stdout/stderr to terminal in real-time
 
         Returns:
             CompletedProcess object
         """
         cmd = ["docker", "exec"]
+
+        # Set environment variables for TensorRT-LLM
+        # Add LD_LIBRARY_PATH to ensure TensorRT libraries are found
+        cmd.extend(["-e", "LD_LIBRARY_PATH=/usr/local/tensorrt/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"])
 
         if workdir:
             cmd.extend(["-w", workdir])
@@ -181,7 +251,11 @@ class DockerManager:
         cmd.append(self.container_name)
         cmd.extend(command)
 
-        return subprocess.run(cmd, capture_output=True, text=True)
+        if stream_output:
+            # Stream output to terminal in real-time
+            return subprocess.run(cmd, text=True)
+        else:
+            return subprocess.run(cmd, capture_output=True, text=True)
 
     def stop_container(self):
         try:

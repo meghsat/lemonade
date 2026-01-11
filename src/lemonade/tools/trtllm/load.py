@@ -118,19 +118,26 @@ class LoadTensorRTLLM(FirstTool):
         )
 
         # Prepare volume mapping - map current directory and model directory if local
-        cwd = os.getcwd()
-        volume_mappings = [f"{cwd}:/workspace/lemonade"]
+        cwd = os.path.abspath(os.path.expanduser(os.getcwd()))
+
+        # Mount Hugging Face cache directory so models persist between container restarts
+        hf_cache_dir = os.path.abspath(os.path.expanduser("~/.cache/huggingface"))
+        os.makedirs(hf_cache_dir, exist_ok=True)
+        printing.log_info(f"Mounting Hugging Face cache: {hf_cache_dir}")
+
+        volume_mappings = [
+            f"{cwd}:/workspace/lemonade",
+            f"{hf_cache_dir}:/root/.cache/huggingface"  # Persist model downloads
+        ]
 
         # If model is a local directory, also mount it
         if os.path.isdir(input):
             model_dir = os.path.dirname(model_path) or model_path
             volume_mappings.append(f"{model_dir}:/workspace/model")
 
-        primary_volume = volume_mappings[0]
-
-        # Ensure container is running
+        # Ensure container is running with all volume mappings
         printing.log_info("Setting up Docker container for TensorRT-LLM...")
-        if not docker_manager.ensure_container_running(volume_mapping=primary_volume):
+        if not docker_manager.ensure_container_running(volume_mappings=volume_mappings):
             raise RuntimeError("Failed to start Docker container for TensorRT-LLM")
 
         # Store Docker manager in state for use by bench tool

@@ -10,7 +10,7 @@ import math
 
 if len(sys.argv) < 7 or len(sys.argv) > 8:
     print(
-        "Usage: python script.py <vendor> <model [ hf_checkpoint | directory ]> <prompt_dir_path> <prompt_prefix [ mlperf | textgen | phi | llama3 ]> <iterations> <warmups> [backend]"
+        "Usage: python benchmark_estimator_generic.py <vendor> <model [ hf_checkpoint | directory ]> <prompt_dir_path> <prompt_prefix [ mlperf | textgen | phi | llama3 ]> <iterations> <warmups> [backend]"
     )
     print("  backend (optional): llamacpp (default), vllm, trtllm, mlx, openvino, oga")
     print("  Hardware-specific backends:")
@@ -150,266 +150,286 @@ def main():
 
     model_path = get_model_from_path(MODEL_PATH)
 
-    for part_num, out_value, fname in tasks:
-        full_path = os.path.join(PROMPTS_PATH, fname)
+    # For NVIDIA trtllm backend, run all prompts in a single container
+    if VENDOR == "NVIDIA" and BACKEND == "trtllm":
+        print(f"Running lemonade with all {len(tasks)} prompt files in a single container")
+
+        # Build command with all prompts and labels
+        cmd = [
+            "lemonade",
+            "-d",
+            CACHE_PATH,
+            "-i",
+            model_path,
+            "--power-nvidia",
+            "--memory",
+            "trtllm-load",
+            "--device",
+            "cuda",
+            "trtllm-bench",
+            "--iterations",
+            str(ITERATIONS),
+            "--warmup-iterations",
+            str(WARMUPS),
+        ]
+
+        # Add all prompt files as a single --prompts argument with multiple values
+        cmd.append("--prompts")
+        for part_num, out_value, fname in tasks:
+            full_path = os.path.join(PROMPTS_PATH, fname)
+            cmd.append(full_path)
+
+        # Add output tokens (using the first task's value, assuming all are similar)
+        cmd.extend(["--output-tokens", str(tasks[0][1])])
+
+        # Add all prompt labels
+        for part_num, out_value, fname in tasks:
+            cmd.extend(["--prompt-label", fname])
+
+        print(f"Running: {' '.join(cmd)}")
 
         try:
-            if VENDOR == "NVIDIA":
-                print(f"Running lemonade with prompt file: {fname}")
-
-                if BACKEND == "trtllm":
-                    cmd = [
-                        "lemonade",
-                        "-d",
-                        CACHE_PATH,
-                        "-i",
-                        model_path,
-                        "--power-nvidia",
-                        "--memory",
-                        "trtllm-load",
-                        "--device",
-                        "cuda",
-                        "trtllm-bench",
-                        "--iterations",
-                        str(ITERATIONS),
-                        "--warmup-iterations",
-                        str(WARMUPS),
-                        "--prompts",
-                        full_path,
-                        "--output-tokens",
-                        str(out_value),
-                        "--prompt-label",
-                        fname,
-                    ]
-                #  elif BACKEND == "vllm":
-
-                else:  # default llamacpp
-                    cmd = [
-                        "lemonade",
-                        "-d",
-                        CACHE_PATH,
-                        "-i",
-                        model_path,
-                        "--power-nvidia",
-                        "--memory",
-                        "llamacpp-load",
-                        "--device",
-                        "igpu",
-                        "llamacpp-bench",
-                        "--cli",  # Required for text prompts!
-                        "--iterations",
-                        str(ITERATIONS),
-                        "--warmup-iterations",
-                        str(WARMUPS),
-                        "--prompts",
-                        full_path,
-                        "--output-tokens",
-                        str(out_value),
-                        "--prompt-label",
-                        fname,
-                    ]
-
-            elif VENDOR == "AMD":
-                print(
-                    f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
-                )
-                if BACKEND == "oga":
-                    cmd = [
-                        "lemonade",
-                        "-d",
-                        CACHE_PATH,
-                        "-i",
-                        model_path,
-                        "--power-agt",
-                        "oga-load",
-                        "--device",
-                        "hybrid",
-                        "--dtype",
-                        "int4",
-                        "oga-bench",
-                        "--prompts",
-                        full_path,
-                        "--iterations",
-                        str(ITERATIONS),
-                        "--warmup-iterations",
-                        str(WARMUPS),
-                        "--output-tokens",
-                        str(out_value),
-                    ]
-                #   elif BACKEND == "vllm":
-                else:  # default llamacpp
-                    cmd = [
-                        "lemonade",
-                        "-d",
-                        CACHE_PATH,
-                        "-i",
-                        model_path,
-                        "--power-agt",
-                        "--memory",
-                        "llamacpp-load",
-                        "--device",
-                        "igpu",
-                        "llamacpp-bench",
-                        "--cli",
-                        "--prompts",
-                        full_path,
-                        "--iterations",
-                        str(ITERATIONS),
-                        "--warmup-iterations",
-                        str(WARMUPS),
-                        "--output-tokens",
-                        str(out_value),
-                        "--prompt-label",
-                        fname,
-                    ]
-            elif VENDOR == "INTEL":
-                print(
-                    f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
-                )
-                if BACKEND == "openvino":
-                    cmd = [
-                        "lemonade",
-                        "-d",
-                        CACHE_PATH,
-                        "-i",
-                        model_path,
-                        "openvino-load",
-                        "--device",
-                        "NPU",
-                        "-bp",
-                        full_path,
-                        "-r",
-                        str(out_value),
-                        "openvino-bench",
-                        "--iterations",
-                        str(ITERATIONS),
-                        "--warmup-iterations",
-                        str(WARMUPS),
-                        "--output-tokens",
-                        str(out_value),
-                        "--prompts",
-                        full_path,
-                    ]
-                # elif BACKEND == "vllm":
-
-                else:  # default llamacpp
-                    cmd = [
-                        "lemonade",
-                        "-d",
-                        CACHE_PATH,
-                        "-i",
-                        model_path,
-                        "--power-hwinfo",
-                        "--memory",
-                        "llamacpp-load",
-                        "--device",
-                        "igpu",
-                        "llamacpp-bench",
-                        "--cli",
-                        "--prompts",
-                        full_path,
-                        "--iterations",
-                        str(ITERATIONS),
-                        "--warmup-iterations",
-                        str(WARMUPS),
-                        "--output-tokens",
-                        str(out_value),
-                        "--prompt-label",
-                        fname,
-                    ]
-
-            elif VENDOR == "APPLE":
-                print(
-                    f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
-                )
-                if BACKEND == "mlx":
-                    cmd = [
-                        "lemonade",
-                        "-d",
-                        CACHE_PATH,
-                        "-i",
-                        model_path,
-                        "--power-apple",
-                        "--memory",
-                        "mlx-load",
-                        "--device",
-                        "gpu",
-                        "mlx-bench",
-                        "--iterations",
-                        str(ITERATIONS),
-                        "--warmup-iterations",
-                        str(WARMUPS),
-                        "--prompts",
-                        full_path,
-                        "--output-tokens",
-                        str(out_value),
-                        "--prompt-label",
-                        fname,
-                    ]
-                #  elif BACKEND == "vllm":
-
-                else:  # default llamacpp
-                    cmd = [
-                        "lemonade",
-                        "-d",
-                        CACHE_PATH,
-                        "-i",
-                        model_path,
-                        "--power-apple",
-                        "llamacpp-load",
-                        "--device",
-                        "igpu",
-                        "llamacpp-bench",
-                        "--cli",
-                        "--iterations",
-                        str(ITERATIONS),
-                        "--warmup-iterations",
-                        str(WARMUPS),
-                        "--prompts",
-                        full_path,
-                        "--output-tokens",
-                        str(out_value),
-                        "--prompt-label",
-                        fname,
-                    ]
-
-            print(f"Running: {' '.join(cmd)}")
             subprocess.run(cmd, check=True)
-
-            print(f"✓ Completed {fname}")
-
+            print(f"All {len(tasks)} prompts completed successfully")
         except subprocess.CalledProcessError as e:
-            print(f"Failed on {fname} (part {part_num}): {e}")
-            failed_tasks.append(fname)
-            continue
-
-    csv_path = os.path.join(CACHE_PATH, "benchmark_results.csv")
-    if os.path.exists(csv_path):
-        print(f"\nCSV results saved to: {csv_path}")
-        print(f"  Total prompts processed: {len(tasks)}")
-        print(f"  Successful: {len(tasks) - len(failed_tasks)}")
-        print(f"  Failed: {len(failed_tasks)}")
-
-    # Only generate report if at least one run succeeded
-    if len(failed_tasks) < len(tasks):
-        print(f"\nGenerating report from cache: {CACHE_PATH}")
-        try:
-            subprocess.run(
-                [
-                    "lemonade",
-                    "report",
-                    "-i",
-                    CACHE_PATH,
-                    "--no-save",
-                    "--perf",
-                    "--lean",
-                ],
-                check=True,
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"Report generation failed: {e}")
+            print(f"Error running batch benchmark: {e}")
+            failed_tasks = tasks  # Mark all as failed if batch fails
     else:
-        print("Skipping report: all tasks failed.")
+        # For other backends, run prompts individually
+        for part_num, out_value, fname in tasks:
+            full_path = os.path.join(PROMPTS_PATH, fname)
+
+            try:
+                if VENDOR == "NVIDIA":
+                    print(f"Running lemonade with prompt file: {fname}")
+                    # NVIDIA llamacpp backend (trtllm is handled in batch mode above)
+                    cmd = [
+                        "lemonade",
+                        "-d",
+                        CACHE_PATH,
+                        "-i",
+                        model_path,
+                        "--power-nvidia",
+                        "--memory",
+                        "llamacpp-load",
+                        "--device",
+                        "igpu",
+                        "llamacpp-bench",
+                        "--cli",
+                        "--iterations",
+                        str(ITERATIONS),
+                        "--warmup-iterations",
+                        str(WARMUPS),
+                        "--prompts",
+                        full_path,
+                        "--output-tokens",
+                        str(out_value),
+                        "--prompt-label",
+                        fname,
+                    ]
+
+                elif VENDOR == "AMD":
+                    print(
+                        f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
+                    )
+                    if BACKEND == "oga":
+                        cmd = [
+                            "lemonade",
+                            "-d",
+                            CACHE_PATH,
+                            "-i",
+                            model_path,
+                            "--power-agt",
+                            "oga-load",
+                            "--device",
+                            "hybrid",
+                            "--dtype",
+                            "int4",
+                            "oga-bench",
+                            "--prompts",
+                            full_path,
+                            "--iterations",
+                            str(ITERATIONS),
+                            "--warmup-iterations",
+                            str(WARMUPS),
+                            "--output-tokens",
+                            str(out_value),
+                        ]
+                    #   elif BACKEND == "vllm":
+                    else:  # default llamacpp
+                        cmd = [
+                            "lemonade",
+                            "-d",
+                            CACHE_PATH,
+                            "-i",
+                            model_path,
+                            "--power-agt",
+                            "--memory",
+                            "llamacpp-load",
+                            "--device",
+                            "igpu",
+                            "llamacpp-bench",
+                            "--cli",
+                            "--prompts",
+                            full_path,
+                            "--iterations",
+                            str(ITERATIONS),
+                            "--warmup-iterations",
+                            str(WARMUPS),
+                            "--output-tokens",
+                            str(out_value),
+                            "--prompt-label",
+                            fname,
+                        ]
+
+                elif VENDOR == "INTEL":
+                    print(
+                        f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
+                    )
+                    if BACKEND == "openvino":
+                        cmd = [
+                            "lemonade",
+                            "-d",
+                            CACHE_PATH,
+                            "-i",
+                            model_path,
+                            "openvino-load",
+                            "--device",
+                            "NPU",
+                            "-bp",
+                            full_path,
+                            "-r",
+                            str(out_value),
+                            "openvino-bench",
+                            "--iterations",
+                            str(ITERATIONS),
+                            "--warmup-iterations",
+                            str(WARMUPS),
+                            "--output-tokens",
+                            str(out_value),
+                            "--prompts",
+                            full_path,
+                        ]
+                    # elif BACKEND == "vllm":
+
+                    else:  # default llamacpp
+                        cmd = [
+                            "lemonade",
+                            "-d",
+                            CACHE_PATH,
+                            "-i",
+                            model_path,
+                            "--power-hwinfo",
+                            "--memory",
+                            "llamacpp-load",
+                            "--device",
+                            "igpu",
+                            "llamacpp-bench",
+                            "--cli",
+                            "--prompts",
+                            full_path,
+                            "--iterations",
+                            str(ITERATIONS),
+                            "--warmup-iterations",
+                            str(WARMUPS),
+                            "--output-tokens",
+                            str(out_value),
+                            "--prompt-label",
+                            fname,
+                        ]
+
+                elif VENDOR == "APPLE":
+                    print(
+                        f"Running: lemonade -i {MODEL_PATH} -d {CACHE_PATH} ... with {full_path}"
+                    )
+                    if BACKEND == "mlx":
+                        cmd = [
+                            "lemonade",
+                            "-d",
+                            CACHE_PATH,
+                            "-i",
+                            model_path,
+                            "--power-apple",
+                            "--memory",
+                            "mlx-load",
+                            "--device",
+                            "gpu",
+                            "mlx-bench",
+                            "--iterations",
+                            str(ITERATIONS),
+                            "--warmup-iterations",
+                            str(WARMUPS),
+                            "--prompts",
+                            full_path,
+                            "--output-tokens",
+                            str(out_value),
+                            "--prompt-label",
+                            fname,
+                        ]
+                    #  elif BACKEND == "vllm":
+
+                    else:  # default llamacpp
+                        cmd = [
+                            "lemonade",
+                            "-d",
+                            CACHE_PATH,
+                            "-i",
+                            model_path,
+                            "--power-apple",
+                            "llamacpp-load",
+                            "--device",
+                            "igpu",
+                            "llamacpp-bench",
+                            "--cli",
+                            "--iterations",
+                            str(ITERATIONS),
+                            "--warmup-iterations",
+                            str(WARMUPS),
+                            "--prompts",
+                            full_path,
+                            "--output-tokens",
+                            str(out_value),
+                            "--prompt-label",
+                            fname,
+                        ]
+
+                print(f"Running: {' '.join(cmd)}")
+                subprocess.run(cmd, check=True)
+
+                print(f"✓ Completed {fname}")
+
+            except subprocess.CalledProcessError as e:
+                print(f"Failed on {fname} (part {part_num}): {e}")
+                failed_tasks.append(fname)
+                continue
+
+    # csv_path = os.path.join(CACHE_PATH, "benchmark_results.csv")
+    # if os.path.exists(csv_path):
+    #     print(f"\nCSV results saved to: {csv_path}")
+    #     print(f"  Total prompts processed: {len(tasks)}")
+    #     print(f"  Successful: {len(tasks) - len(failed_tasks)}")
+    #     print(f"  Failed: {len(failed_tasks)}")
+
+    # # Only generate report if at least one run succeeded
+    # if len(failed_tasks) < len(tasks):
+    #     print(f"\nGenerating report from cache: {CACHE_PATH}")
+    #     try:
+    #         subprocess.run(
+    #             [
+    #                 "lemonade",
+    #                 "report",
+    #                 "-i",
+    #                 CACHE_PATH,
+    #                 "--no-save",
+    #                 "--perf",
+    #                 "--lean",
+    #             ],
+    #             check=True,
+    #         )
+    #     except subprocess.CalledProcessError as e:
+    #         print(f"Report generation failed: {e}")
+    # else:
+    #     print("Skipping report: all tasks failed.")
 
     if failed_tasks:
         print("\nSummary of failed tasks:")

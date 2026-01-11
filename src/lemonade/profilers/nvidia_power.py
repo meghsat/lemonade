@@ -238,7 +238,7 @@ class NVIDIAPowerProfiler(Profiler):
                 x = np.insert(x, 0, t0)
                 x = np.insert(x, len(x), tf)
                 y = np.interp(x, x_time, y_power)
-                energy = np.trapz(y, x)
+                energy = np.trapezoid(y, x)
                 avg_power = energy / (tf - t0) if (tf - t0) > 0 else 0
                 stage = {
                     "name": name,

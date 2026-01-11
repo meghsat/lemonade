@@ -101,8 +101,8 @@ class TensorRTLLMBench(Bench):
         prompt_labels = getattr(parsed_args, 'prompt_label', None)
         parsed_args = super().parse(state, args, known_only)
 
-        # Restore prompt_labels and add new args
-        parsed_args.prompt_labels = prompt_labels if prompt_labels else None
+        # Restore prompt_label (keep singular for consistency with llamacpp)
+        parsed_args.prompt_label = prompt_labels if prompt_labels else None
         parsed_args.max_seq_len = getattr(parsed_args, 'max_seq_len', 4096)
         parsed_args.max_num_tokens = getattr(parsed_args, 'max_num_tokens', 8192)
         parsed_args.trust_remote_code = getattr(parsed_args, 'trust_remote_code', False)
@@ -117,10 +117,11 @@ class TensorRTLLMBench(Bench):
         warmup_iterations: int = default_warmup_runs,
         output_tokens: int = default_output_tokens,
         gpu_cooldown: int = 5,
-        prompt_labels: List[str] = None,
+        prompt_label: List[str] = None,
         max_seq_len: int = 4096,
         max_num_tokens: int = 8192,
         trust_remote_code: bool = False,
+        **kwargs,
     ) -> State:
         """
         Run TensorRT-LLM benchmark inside Docker container
@@ -141,14 +142,14 @@ class TensorRTLLMBench(Bench):
             raise ValueError("Docker manager not found in state")
 
         # Store benchmark-specific parameters in instance for use by run_prompt()
-        self.prompt_labels = prompt_labels
+        self.prompt_labels = prompt_label
         self.max_seq_len = max_seq_len
         self.max_num_tokens = max_num_tokens
         self.trust_remote_code = trust_remote_code
         self.docker_manager = docker_manager
 
         # Create output directory for results in the cache
-        self.results_dir = os.path.join(state.cache_dir, "trtllm_results")
+        self.results_dir = os.path.join(os.path.expanduser(state.cache_dir), "trtllm_results")
         os.makedirs(self.results_dir, exist_ok=True)
 
         # Copy benchmark_core.py to container once at the start
@@ -188,7 +189,7 @@ class TensorRTLLMBench(Bench):
         Run benchmark for a single prompt inside Docker container.
 
         This method is called by the parent Bench.run() for each prompt.
-        It executes the benchmark inside the container and processes results.
+        Each execution reloads the model to avoid cache effects.
         """
 
         # Determine prompt label for this iteration
@@ -209,6 +210,13 @@ class TensorRTLLMBench(Bench):
         # Create output file for this prompt
         output_file = os.path.join(self.results_dir, f"benchmark_results_{prompt_index}.json")
 
+        # Compute container path relative to the mounted workspace
+        # The cwd is mounted at /workspace/lemonade, so we need to get the relative path
+        # from cwd to the results file
+        cwd = os.path.abspath(os.getcwd())
+        rel_path = os.path.relpath(output_file, cwd)
+        container_output_file = os.path.join("/workspace/lemonade", rel_path).replace("\\", "/")
+
         # Create a Python script to run the benchmark with this prompt
         benchmark_script = self._create_benchmark_script(
             prompts_data,
@@ -219,7 +227,7 @@ class TensorRTLLMBench(Bench):
             self.max_seq_len,
             self.max_num_tokens,
             self.trust_remote_code,
-            f"/workspace/lemonade/trtllm_results/benchmark_results_{prompt_index}.json"
+            container_output_file
         )
 
         # Write script to a temp file and copy to container
@@ -234,23 +242,26 @@ class TensorRTLLMBench(Bench):
             container_script_path
         )
 
-        # Execute benchmark inside container
+        # Execute benchmark inside container with live output streaming
         printing.log_info(f"Executing benchmark for prompt {prompt_index + 1} in container...")
+        printing.log_info("=" * 80)
+        printing.log_info("Live output from Docker container:")
+        printing.log_info("=" * 80)
         report_progress_fn(0.1)
 
         result = self.docker_manager.exec_command(
             ["python", container_script_path],
-            workdir="/workspace/lemonade"
+            workdir="/workspace/lemonade",
+            stream_output=True  # Enable real-time output streaming
         )
 
+        printing.log_info("=" * 80)
         if result.returncode != 0:
-            printing.log_error(f"Benchmark failed: {result.stderr}")
-            printing.log_info(f"Stdout: {result.stdout}")
-            raise RuntimeError(f"TensorRT-LLM benchmark failed: {result.stderr}")
+            printing.log_error(f"Benchmark failed with exit code: {result.returncode}")
+            raise RuntimeError(f"TensorRT-LLM benchmark failed with exit code: {result.returncode}")
 
         report_progress_fn(0.9)
         printing.log_success(f"Benchmark for prompt {prompt_index + 1} completed successfully")
-        printing.log_info(f"Benchmark output:\n{result.stdout}")
 
         # Load results from JSON file
         if os.path.exists(output_file):
@@ -258,7 +269,13 @@ class TensorRTLLMBench(Bench):
                 results = json.load(f)
 
             # Process results for this single prompt
-            self._process_single_prompt_results(state, results, prompt_label)
+            per_query_results = results.get('per_query_results', [])
+            if per_query_results:
+                # Get the first (and only) query result
+                query_result = per_query_results[0]
+                self._process_single_query_result(state, query_result, prompt_label)
+            else:
+                printing.log_warning(f"No query results found for prompt: {prompt_label}")
         else:
             printing.log_warning(f"Results file not found: {output_file}")
 
@@ -313,50 +330,42 @@ from trtllm_benchmark_core import run_benchmark
 # Prompts data
 prompts = {prompts_json}
 
-# Run the benchmark
-results = asyncio.run(run_benchmark(
-    model_path="{model_path}",
-    prompts=prompts,
-    num_iterations={num_iterations},
-    num_warmup={num_warmup},
-    max_tokens={max_tokens},
-    max_seq_len={max_seq_len},
-    max_num_tokens={max_num_tokens},
-    trust_remote_code={str(trust_remote_code)},
-    output_file="{output_file}"
-))
+if __name__ == '__main__':
+    # Run the benchmark
+    results = asyncio.run(run_benchmark(
+        model_path="{model_path}",
+        prompts=prompts,
+        num_iterations={num_iterations},
+        num_warmup={num_warmup},
+        max_tokens={max_tokens},
+        max_seq_len={max_seq_len},
+        max_num_tokens={max_num_tokens},
+        trust_remote_code={str(trust_remote_code)},
+        output_file="{output_file}"
+    ))
 
-print("Benchmark completed successfully!")
-print(f"Results saved to: {output_file}")
+    print("Benchmark completed successfully!")
+    print(f"Results saved to: {output_file}")
 '''
         return script
 
-    def _process_single_prompt_results(
+    def _process_single_query_result(
         self,
         state: State,
-        results: Dict[str, Any],
+        query_result: Dict[str, Any],
         prompt_label: str
     ):
         """
-        Process benchmark results for a single prompt and append to measurement lists.
+        Process benchmark results for a single query and append to measurement lists.
 
         This method extracts metrics from the benchmark results and appends them to the
         per-prompt measurement lists that are inherited from the Bench base class.
 
         Args:
             state: Lemonade state object
-            results: Benchmark results from JSON file for this single prompt
+            query_result: Single query result dictionary
             prompt_label: Label for this prompt
         """
-        # Extract per-query results (should be just one query in the results)
-        per_query_results = results.get('per_query_results', [])
-
-        if not per_query_results:
-            printing.log_warning(f"No query results found for prompt: {prompt_label}")
-            return
-
-        # Get the first (and only) query result
-        query_result = per_query_results[0]
 
         # Time to first token
         ttft = query_result.get('averaged_ttft', 0)
@@ -414,6 +423,142 @@ print(f"Results saved to: {output_file}")
             f"Prompt '{prompt_label}': TTFT={ttft*1000:.2f}ms, "
             f"TPS={tps:.2f}, Input={input_tokens}, Output={query_result.get('output_tokens', 0)}"
         )
+
+    def display_prompt_results(self, state, prompt, prompt_index):
+        """Display results for a single prompt immediately after benchmarking"""
+        import sys
+
+        # Get the real terminal stdout (not redirected by Logger)
+        # The Logger redirects sys.stdout, but saves the original as self.terminal
+        output = sys.stdout
+        if hasattr(sys.stdout, 'terminal'):
+            output = sys.stdout.terminal
+
+        # Get prompt label
+        if len(self.prompt_labels) > prompt_index:
+            prompt_label = self.prompt_labels[prompt_index]
+        else:
+            prompt_label = f"prompt_{prompt_index + 1}"
+
+        # Get actual token count from benchmark results
+        actual_token_count = self.input_ids_len_list[prompt_index] if len(self.input_ids_len_list) > prompt_index else 0
+
+        # Print newline and separator directly to terminal
+        output.write(f"\n{'='*80}\n")
+        output.write(f"Results for Prompt: {prompt_label} ({actual_token_count} tokens) (Prompt {prompt_index + 1})\n")
+        output.write(f"{'='*80}\n")
+        output.flush()
+
+        # Get the current prompt's results (last item in each list)
+        idx = prompt_index
+
+        results = {
+            "Prompt Tokens": self.input_ids_len_list[idx],
+            "Response Tokens": self.tokens_out_len_list[idx],
+            "Seconds To First Token": f"{self.mean_time_to_first_token_list[idx]:.3f}",
+            "Token Generation Tokens Per Second": f"{self.token_generation_tokens_per_second_list[idx]:.3f}",
+            "Prefill Tokens Per Second": f"{self.prefill_tokens_per_second_list[idx]:.3f}",
+        }
+
+        # Add std dev metrics if available
+        if len(self.std_dev_time_to_first_token_list) > idx and self.std_dev_time_to_first_token_list[idx] is not None:
+            results["Std Dev Seconds To First Token"] = f"{self.std_dev_time_to_first_token_list[idx]:.3f}"
+
+        if len(self.std_dev_token_generation_tokens_per_second_list) > idx and self.std_dev_token_generation_tokens_per_second_list[idx] is not None:
+            results["Std Dev Tokens Per Second"] = f"{self.std_dev_token_generation_tokens_per_second_list[idx]:.3f}"
+
+        if len(self.std_dev_prefill_tokens_per_second_list) > idx and self.std_dev_prefill_tokens_per_second_list[idx] is not None:
+            results["Std Dev Prefill Tokens Per Second"] = f"{self.std_dev_prefill_tokens_per_second_list[idx]:.3f}"
+
+        if self.save_max_memory_used and len(self.max_memory_used_gb_list) > idx:
+            if self.max_memory_used_gb_list[idx] is not None:
+                results["Memory Usage (GB)"] = f"{self.max_memory_used_gb_list[idx]:.3f}"
+
+        # Display power metrics from per-prompt lists
+        if len(self.peak_gpu_power_list) > idx and self.peak_gpu_power_list[idx] != 0:
+            results["Peak GPU Power"] = self.peak_gpu_power_list[idx]
+            results["Avg GPU Power"] = self.avg_gpu_power_list[idx]
+
+            # Add temperature if available
+            if len(self.peak_gpu_temp_list) > idx and self.peak_gpu_temp_list[idx] != 0:
+                results["Peak GPU Temp"] = self.peak_gpu_temp_list[idx]
+                results["Avg GPU Temp"] = self.avg_gpu_temp_list[idx]
+
+            # Add plot path if available
+            if len(self.power_plot_list) > idx:
+                results["Power Usage Plot"] = self.power_plot_list[idx]
+
+        # Display query latency
+        if len(self.query_latency_list) > idx:
+            results["Query Latency (s)"] = f"{self.query_latency_list[idx]:.3f}"
+
+        for key, value in results.items():
+            output.write(f"  {key}: {value}\n")
+
+        output.write(f"{'='*80}\n\n")
+        output.flush()
+
+        # CSV export: Append results to CSV file
+        self._append_to_csv(state, prompt_label, results)
+
+    def _append_to_csv(self, state, prompt_label, results):
+        """Append benchmark results to a CSV file in the cache directory"""
+        import csv
+        import os
+
+        csv_filename = "benchmark_results.csv"
+        csv_path = os.path.join(state.cache_dir, csv_filename)
+
+        csv_row = {"Prompt File": prompt_label}
+
+        for key, value in results.items():
+            if isinstance(value, str) and key != "Power Usage Plot":
+                try:
+                    csv_row[key] = float(value)
+                except ValueError:
+                    csv_row[key] = value
+            else:
+                csv_row[key] = value
+
+        file_exists = os.path.exists(csv_path)
+
+        fieldnames = ["Prompt File"] + [k for k in results.keys()]
+
+        try:
+            with open(csv_path, 'a', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+                if not file_exists:
+                    writer.writeheader()
+
+                writer.writerow(csv_row)
+
+            if not file_exists:
+                printing.log_info(f"Created CSV file: {csv_path}")
+            else:
+                printing.log_info(f"Appended results to: {csv_path}")
+
+        except Exception as e:
+            printing.log_warning(f"Failed to write to CSV: {e}")
+
+    def _store_power_metrics(self, state):
+        """Store per-prompt power metrics from filesystem into lists"""
+        from lemonade.profilers.nvidia_power import Keys as NvidiaKeys
+        import lemonade.common.filesystem as fs
+
+        # Load stats from the YAML file (not from state.stats attribute)
+        stats_obj = fs.Stats(state.cache_dir, state.build_name)
+        stats = stats_obj.stats  # This loads from lemonade_stats.yaml
+
+        if stats:
+            # Check for Nvidia power metrics
+            if NvidiaKeys.PEAK_GPU_POWER in stats:
+                self.peak_gpu_power_list[-1] = stats[NvidiaKeys.PEAK_GPU_POWER]
+                self.avg_gpu_power_list[-1] = stats[NvidiaKeys.AVG_GPU_POWER]
+                self.peak_gpu_temp_list[-1] = stats[NvidiaKeys.PEAK_GPU_TEMP]
+                self.avg_gpu_temp_list[-1] = stats[NvidiaKeys.AVG_GPU_TEMP]
+                if NvidiaKeys.POWER_USAGE_PLOT in stats:
+                    self.power_plot_list.append(stats[NvidiaKeys.POWER_USAGE_PLOT])
 
 
 # Copyright (c) 2025 AMD
