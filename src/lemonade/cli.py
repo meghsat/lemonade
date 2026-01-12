@@ -74,6 +74,8 @@ from lemonade.tools.llamacpp.bench import LlamaCppBench
 from lemonade.tools.llamacpp.load import LoadLlamaCpp
 from lemonade.tools.trtllm.load import LoadTensorRTLLM
 from lemonade.tools.trtllm.bench import TensorRTLLMBench
+from lemonade.tools.mlx.load import LoadMLX
+from lemonade.tools.mlx.bench import MLXBench
 
 import lemonade.cache as cache
 from lemonade.tools.mmlu import AccuracyMMLU
@@ -93,6 +95,8 @@ def main():
         LlamaCppBench,
         LoadTensorRTLLM,
         TensorRTLLMBench,
+        LoadMLX,
+        MLXBench,
         AccuracyMMLU,
         AccuracyHumaneval,
         AccuracyPerplexity,

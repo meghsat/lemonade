@@ -92,27 +92,17 @@ class LoadTensorRTLLM(FirstTool):
         trust_remote_code: bool = False,
     ) -> State:
 
-        # Validate NVIDIA GPU is available
-        if not check_nvidia_gpu():
-            raise RuntimeError(
-                "NVIDIA GPU not detected. TensorRT-LLM requires an NVIDIA GPU with nvidia-smi available."
-            )
-
-        # Set checkpoint
         checkpoint = input
         state.checkpoint = checkpoint
         state.save_stat(Keys.CHECKPOINT, checkpoint)
 
-        # Determine if input is a directory or HF checkpoint
         if os.path.isdir(input):
             model_path = os.path.abspath(input)
             printing.log_info(f"Using local model directory: {model_path}")
         else:
-            # Hugging Face checkpoint
             model_path = input
             printing.log_info(f"Using Hugging Face checkpoint: {model_path}")
 
-        # Initialize Docker manager
         docker_manager = DockerManager(
             image=docker_image, container_name=container_name
         )

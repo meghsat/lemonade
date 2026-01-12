@@ -1,6 +1,5 @@
 """
 This module contains the actual benchmark execution code that runs inside the Docker container.
-It can be executed as a standalone script or imported as a module.
 """
 
 import argparse
@@ -153,6 +152,10 @@ async def run_prompt_iterations(
     num_iterations: int,
     num_warmup: int,
     prompt_metadata: dict = None,
+    model_path: str = None,
+    max_seq_len: int = 4096,
+    max_num_tokens: int = 8192,
+    trust_remote_code: bool = False,
 ):
     """Run multiple iterations of a prompt with model reloading between iterations"""
 
@@ -161,6 +164,8 @@ async def run_prompt_iterations(
     for iteration in range(num_iterations):
         print(f"\n--- Iteration {iteration + 1}/{num_iterations} ---")
 
+        print(f"Reloading model to clear cache...")
+        llm = setup_llm(model_path, max_seq_len, max_num_tokens, trust_remote_code)
         # Run warmup for this iteration
         warmup_metrics = await run_warmup(llm, prompt_text, sampling_params, num_warmup)
 
@@ -170,7 +175,8 @@ async def run_prompt_iterations(
         # Add warmup metrics to the iteration results
         metrics["warmup_metrics"] = warmup_metrics
         iteration_results.append(metrics)
-
+        del llm
+        gc.collect()
         # Small delay between iterations
         await asyncio.sleep(0.5)
 
@@ -363,7 +369,16 @@ async def run_benchmark(
         }
 
         metrics = await run_prompt_iterations(
-            llm, prompt_text, sampling_params, num_iterations, num_warmup, metadata
+            llm,
+            prompt_text,
+            sampling_params,
+            num_iterations,
+            num_warmup,
+            metadata,
+            model_path,
+            max_seq_len,
+            max_num_tokens,
+            trust_remote_code,
         )
         results.append(metrics)
 

@@ -1,9 +1,3 @@
-"""
-TensorRT-LLM benchmarking tool
-
-This tool runs benchmarks on TensorRT-LLM models inside a Docker container.
-It integrates with lemonade's profiler system for power monitoring.
-"""
 
 import argparse
 import json
@@ -27,26 +21,19 @@ import lemonade.common.printing as printing
 
 
 class TensorRTLLMBench(Bench):
-    """
-    Benchmark a TensorRT-LLM model running in a Docker container
-    """
-
     unique_name = "trtllm-bench"
 
     def __init__(self, monitor_message="Benchmarking TensorRT-LLM"):
         super().__init__(monitor_message)
 
-        # Per-prompt power metrics lists (these will be populated by nvidia_power profiler)
         self.peak_gpu_power_list = []
         self.avg_gpu_power_list = []
         self.peak_gpu_temp_list = []
         self.avg_gpu_temp_list = []
         self.power_plot_list = []
 
-        # Per-prompt label tracking
         self.prompt_labels = []
 
-        # Benchmark-specific metrics
         self.query_latency_list = []
 
     @staticmethod
@@ -64,7 +51,6 @@ class TensorRTLLMBench(Bench):
             action="append",
             default=None,
             help="Optional label for each prompt (e.g., filename) to display in results and plots. "
-            "Can be specified multiple times, one per prompt.",
         )
 
         parser.add_argument(
@@ -130,13 +116,11 @@ class TensorRTLLMBench(Bench):
         which will call run_prompt() for each prompt.
         """
 
-        # Validate we have a TensorRT-LLM model loaded
         if not isinstance(state.model, TensorRTLLMAdapter):
             raise ValueError(
                 "TensorRT-LLM model not loaded. Please run trtllm-load first."
             )
 
-        # Get Docker manager from state
         docker_manager: DockerManager = state.docker_manager
         if not docker_manager:
             raise ValueError("Docker manager not found in state")
@@ -148,7 +132,6 @@ class TensorRTLLMBench(Bench):
         self.trust_remote_code = trust_remote_code
         self.docker_manager = docker_manager
 
-        # Create output directory for results in the cache
         self.results_dir = os.path.join(os.path.expanduser(state.cache_dir), "trtllm_results")
         os.makedirs(self.results_dir, exist_ok=True)
 
@@ -207,7 +190,6 @@ class TensorRTLLMBench(Bench):
             'filename': prompt_label
         }]
 
-        # Create output file for this prompt
         output_file = os.path.join(self.results_dir, f"benchmark_results_{prompt_index}.json")
 
         # Compute container path relative to the mounted workspace
@@ -551,7 +533,6 @@ if __name__ == '__main__':
         stats = stats_obj.stats  # This loads from lemonade_stats.yaml
 
         if stats:
-            # Check for Nvidia power metrics
             if NvidiaKeys.PEAK_GPU_POWER in stats:
                 self.peak_gpu_power_list[-1] = stats[NvidiaKeys.PEAK_GPU_POWER]
                 self.avg_gpu_power_list[-1] = stats[NvidiaKeys.AVG_GPU_POWER]

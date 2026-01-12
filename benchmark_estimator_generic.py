@@ -201,32 +201,32 @@ def main():
 
             try:
                 if VENDOR == "NVIDIA":
-                    print(f"Running lemonade with prompt file: {fname}")
-                    # NVIDIA llamacpp backend (trtllm is handled in batch mode above)
-                    cmd = [
-                        "lemonade",
-                        "-d",
-                        CACHE_PATH,
-                        "-i",
-                        model_path,
-                        "--power-nvidia",
-                        "--memory",
-                        "llamacpp-load",
-                        "--device",
-                        "igpu",
-                        "llamacpp-bench",
-                        "--cli",
-                        "--iterations",
-                        str(ITERATIONS),
-                        "--warmup-iterations",
-                        str(WARMUPS),
-                        "--prompts",
-                        full_path,
-                        "--output-tokens",
-                        str(out_value),
-                        "--prompt-label",
-                        fname,
-                    ]
+                    if BACKEND == "llamacpp":
+                        print(f"Running lemonade with prompt file: {fname}")
+                        cmd = [
+                            "lemonade",
+                            "-d",
+                            CACHE_PATH,
+                            "-i",
+                            model_path,
+                            "--power-nvidia",
+                            "--memory",
+                            "llamacpp-load",
+                            "--device",
+                            "igpu",
+                            "llamacpp-bench",
+                            "--cli",
+                            "--iterations",
+                            str(ITERATIONS),
+                            "--warmup-iterations",
+                            str(WARMUPS),
+                            "--prompts",
+                            full_path,
+                            "--output-tokens",
+                            str(out_value),
+                            "--prompt-label",
+                            fname,
+                        ]
 
                 elif VENDOR == "AMD":
                     print(

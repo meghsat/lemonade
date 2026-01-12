@@ -1,7 +1,3 @@
-"""
-Utilities for TensorRT-LLM tool including Docker container management
-and TensorRT-LLM adapter.
-"""
 
 import subprocess
 import time
@@ -160,7 +156,7 @@ class DockerManager:
                 "run",
                 "--gpus",
                 "all",
-                "-d",  # Run in detached mode
+                "-d",
                 "--name",
                 self.container_name,
             ]
@@ -252,7 +248,6 @@ class DockerManager:
         cmd.extend(command)
 
         if stream_output:
-            # Stream output to terminal in real-time
             return subprocess.run(cmd, text=True)
         else:
             return subprocess.run(cmd, capture_output=True, text=True)
@@ -308,7 +303,6 @@ class TensorRTLLMAdapter:
 
 
 def check_nvidia_gpu() -> bool:
-    """Check if NVIDIA GPU is available"""
     try:
         result = subprocess.run(["nvidia-smi"], capture_output=True, timeout=5)
         return result.returncode == 0
