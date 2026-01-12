@@ -199,3 +199,4 @@ logs/*
 *.json
 Miniforge3.sh
 NVIDIA_*
+APPLE*

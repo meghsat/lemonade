@@ -3,11 +3,15 @@
 # Exit on error
 set -e
 
-# Source conda
-source "${HOME}/conda/etc/profile.d/conda.sh"
+# Vendor-specific setup
+if [ "$1" = "NVIDIA" ]; then
+    echo "Detected NVIDIA vendor - sourcing conda..."
+    source "${HOME}/conda/etc/profile.d/conda.sh"
+fi
 
-# Activate conda environment
-conda activate lemon
+if [ "$1" = "APPLE" ]; then
+    echo "Detected APPLE vendor - ensuring mlx-lm is installed..."
+    conda run -n lemon pip install mlx-lm --quiet
+fi
 
-
-python benchmark_estimator_generic.py "$@"
+conda run -n lemon python benchmark_estimator_generic.py "$@"

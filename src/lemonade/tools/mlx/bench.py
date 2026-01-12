@@ -162,12 +162,20 @@ class MLXBench(Bench):
         else:
             prompt_text = prompt
 
+        # Run warmup iterations before actual benchmarking
+        if warmup_iterations > 0:
+            model.run_warmup(
+                prompt=prompt_text,
+                max_new_tokens=output_tokens,
+                num_warmup=warmup_iterations
+            )
+
         per_iteration_tokens_per_second = []
         per_iteration_time_to_first_token = []
         per_iteration_prompt_tokens_per_second = []
         per_iteration_peak_memory = []
 
-        for iteration in range(iterations + warmup_iterations):
+        for iteration in range(iterations):
             try:
                 _ = model.generate(
                     prompt=prompt_text,
@@ -182,13 +190,18 @@ class MLXBench(Bench):
                     )
                     raise Exception(error_msg)
 
-                if iteration >= warmup_iterations:
-                    per_iteration_tokens_per_second.append(model.tokens_per_second)
-                    per_iteration_time_to_first_token.append(model.time_to_first_token)
-                    per_iteration_prompt_tokens_per_second.append(model.prompt_tokens_per_second)
-                    per_iteration_peak_memory.append(model.peak_memory_gb)
+                per_iteration_tokens_per_second.append(model.tokens_per_second)
+                per_iteration_time_to_first_token.append(model.time_to_first_token)
+                per_iteration_prompt_tokens_per_second.append(model.prompt_tokens_per_second)
+                per_iteration_peak_memory.append(model.peak_memory_gb)
 
-                report_progress_fn((iteration + 1) / (warmup_iterations + iterations))
+                report_progress_fn((iteration + 1) / iterations)
+
+                # Clear MLX Metal cache after each iteration to ensure fresh state
+                import gc
+                import mlx.core as mx
+                mx.clear_cache()
+                gc.collect()
 
             except Exception as e:
                 error_msg = f"Failed to run benchmark: {str(e)}"
@@ -309,11 +322,11 @@ class MLXBench(Bench):
             results["Peak CPU Power"] = self.peak_cpu_power_list[idx]
             results["Avg CPU Power"] = self.avg_cpu_power_list[idx]
 
-        if len(self.peak_ane_power_list) > idx and self.peak_ane_power_list[idx]:
+        if len(self.peak_ane_power_list) > idx and self.peak_ane_power_list[idx] is not None:
             results["Peak ANE Power"] = self.peak_ane_power_list[idx]
             results["Avg ANE Power"] = self.avg_ane_power_list[idx]
 
-        if len(self.peak_combined_power_list) > idx and self.peak_combined_power_list[idx]:
+        if len(self.peak_combined_power_list) > idx and self.peak_combined_power_list[idx] is not None:
             results["Peak Combined Power"] = self.peak_combined_power_list[idx]
             results["Avg Combined Power"] = self.avg_combined_power_list[idx]
 
@@ -391,11 +404,17 @@ class MLXBench(Bench):
                 if 'peak_ane_power_apple' in stats:
                     self.peak_ane_power_list.append(stats.get('peak_ane_power_apple', 0))
                     self.avg_ane_power_list.append(stats.get('avg_ane_power_apple', 0))
+                else:
+                    self.peak_ane_power_list.append(None)
+                    self.avg_ane_power_list.append(None)
 
                 # Combined power
                 if 'peak_combined_power_apple' in stats:
                     self.peak_combined_power_list.append(stats.get('peak_combined_power_apple', 0))
                     self.avg_combined_power_list.append(stats.get('avg_combined_power_apple', 0))
+                else:
+                    self.peak_combined_power_list.append(None)
+                    self.avg_combined_power_list.append(None)
 
                 if AppleKeys.POWER_USAGE_PLOT in stats:
                     self.power_plot_list.append(stats[AppleKeys.POWER_USAGE_PLOT])

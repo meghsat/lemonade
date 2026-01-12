@@ -278,11 +278,26 @@ class ApplePowerProfiler(Profiler):
         avg_gpu_power = df['gpu_power'].mean()
         peak_cpu_power = df['cpu_power'].max()
         avg_cpu_power = df['cpu_power'].mean()
+        peak_ane_power = df['ane_power'].max()
+        avg_ane_power = df['ane_power'].mean()
+
+        # Calculate combined power if available
+        if 'combined_power' in df.columns and df['combined_power'].notna().any():
+            peak_combined_power = df['combined_power'].max()
+            avg_combined_power = df['combined_power'].mean()
+        else:
+            # Fallback: calculate combined as sum of CPU + GPU + ANE
+            peak_combined_power = peak_cpu_power + peak_gpu_power + peak_ane_power
+            avg_combined_power = avg_cpu_power + avg_gpu_power + avg_ane_power
 
         printing.log_info(f"powermetrics: Peak GPU Power={peak_gpu_power:.1f}W, "
                         f"Avg GPU Power={avg_gpu_power:.1f}W")
         printing.log_info(f"powermetrics: Peak CPU Power={peak_cpu_power:.1f}W, "
                         f"Avg CPU Power={avg_cpu_power:.1f}W")
+        printing.log_info(f"powermetrics: Peak ANE Power={peak_ane_power:.1f}W, "
+                        f"Avg ANE Power={avg_ane_power:.1f}W")
+        printing.log_info(f"powermetrics: Peak Combined Power={peak_combined_power:.1f}W, "
+                        f"Avg Combined Power={avg_combined_power:.1f}W")
 
         # Create a figure with 2 subplots (GPU power, CPU/ANE power)
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 8))
@@ -389,6 +404,10 @@ class ApplePowerProfiler(Profiler):
         state.save_stat(Keys.AVG_GPU_POWER, f"{avg_gpu_power:0.1f} W")
         state.save_stat(Keys.PEAK_CPU_POWER, f"{peak_cpu_power:0.1f} W")
         state.save_stat(Keys.AVG_CPU_POWER, f"{avg_cpu_power:0.1f} W")
+        state.save_stat('peak_ane_power_apple', f"{peak_ane_power:0.1f} W")
+        state.save_stat('avg_ane_power_apple', f"{avg_ane_power:0.1f} W")
+        state.save_stat('peak_combined_power_apple', f"{peak_combined_power:0.1f} W")
+        state.save_stat('avg_combined_power_apple', f"{avg_combined_power:0.1f} W")
 
         printing.log_info(f"Power usage plot saved to: {plot_path}")
 

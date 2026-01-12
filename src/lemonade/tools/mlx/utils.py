@@ -1,8 +1,7 @@
 
 import os
 import re
-import sys
-from io import StringIO
+
 
 # Disable tokenizers parallelism warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -30,7 +29,31 @@ class MLXAdapter:
         self.prompt_tokens_per_second = 0
         self.peak_memory_gb = 0
 
+    def run_warmup(self, prompt: str, max_new_tokens: int, num_warmup: int):
+        import gc
+
+        print(f"\nRunning {num_warmup} warmup iterations...")
+
+        for i in range(num_warmup):
+            print(f"Warmup {i+1}/{num_warmup}: ", end="", flush=True)
+
+            _ = self.generate(
+                prompt=prompt,
+                max_new_tokens=max_new_tokens,
+                verbose=True,
+            )
+
+            if self.time_to_first_token > 0:
+                print(f"TTFT: {self.time_to_first_token*1000:.2f} ms - ", end="", flush=True)
+
+            print(f"Generated {max_new_tokens} tokens")
+
+        print("Warmup complete.\n")
+
     def generate(self, prompt: str, max_new_tokens: int = 100, verbose: bool = True):
+        import sys
+        from io import StringIO
+
         old_stdout = sys.stdout
         sys.stdout = captured_output = StringIO()
 
@@ -46,7 +69,6 @@ class MLXAdapter:
             # Restore stdout
             sys.stdout = old_stdout
             output = captured_output.getvalue()
-
             # Parse metrics from MLX verbose output
             self._parse_metrics(output)
 
@@ -63,15 +85,19 @@ class MLXAdapter:
         Args:
             output: Captured verbose output from MLX generate
         """
+        # Parse prompt tokens
+        prompt_tokens_match = re.search(r'Prompt:\s*(\d+)\s*tokens', output)
+        if prompt_tokens_match:
+            self.prompt_tokens = int(prompt_tokens_match.group(1))
+
         # Parse prompt tokens per second
         prompt_tps_match = re.search(r'Prompt:.*?([0-9.]+) tokens-per-sec', output)
         if prompt_tps_match:
             self.prompt_tokens_per_second = float(prompt_tps_match.group(1))
 
         # Parse time to first token
-        ttft_match = re.search(r'Time to first token:\s*([0-9.]+)\s*sec', output)
-        if ttft_match:
-            self.time_to_first_token = float(ttft_match.group(1))
+        if self.prompt_tokens > 0 and self.prompt_tokens_per_second > 0:
+            self.time_to_first_token = self.prompt_tokens / self.prompt_tokens_per_second
 
         # Parse generation tokens per second
         gen_tps_match = re.search(r'Generation:.*?([0-9.]+) tokens-per-sec', output)
@@ -82,11 +108,6 @@ class MLXAdapter:
         peak_mem_match = re.search(r'Peak memory:\s*([0-9.]+)\s*GB', output)
         if peak_mem_match:
             self.peak_memory_gb = float(peak_mem_match.group(1))
-
-        # Estimate token counts from the metrics
-        # If we have TTFT and prompt TPS, we can estimate prompt tokens
-        if self.time_to_first_token > 0 and self.prompt_tokens_per_second > 0:
-            self.prompt_tokens = int(self.time_to_first_token * self.prompt_tokens_per_second)
 
 
 # Copyright (c) 2025 AMD

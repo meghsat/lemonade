@@ -189,7 +189,6 @@ def run_mlx_benchmark_with_metrics(
 
     sys.stdout = old_stdout
     output = captured_output.getvalue()
-
     metrics = {
         'total_time': end_time - start_time,
     }
