@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Boxes, ChevronRight, Cpu, Settings, SlidersHorizontal, Store } from './components/Icons';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Boxes, ChevronRight, Cpu, Settings as SettingsIcon, SlidersHorizontal, Store } from 'lucide-react';
 import { ModelInfo } from './utils/modelData';
 import { ToastContainer, useToast } from './Toast';
 import { useConfirmDialog } from './ConfirmDialog';
@@ -16,133 +16,12 @@ import SettingsPanel from './SettingsPanel';
 import BackendManager from './BackendManager';
 import MarketplacePanel, { MarketplaceCategory } from './MarketplacePanel';
 import { RECIPE_DISPLAY_NAMES } from './utils/recipeNames';
-import { EjectIcon } from './components/Icons';
-import { getExperienceComponents, isExperienceFullyDownloaded, isExperienceFullyLoaded, isExperienceModel, isModelEffectivelyDownloaded } from './utils/experienceModels';
-
-interface ModelFamily {
-  displayName: string;
-  regex: RegExp;
-  defaultMember: string;
-}
-
-const SIZE_TOKEN = String.raw`(\d+\.?\d*B(?:-A\d+\.?\d*B)?)`;
-
-function buildFamilyRegex(prefix: string, suffix = '-GGUF$'): RegExp {
-  return new RegExp(`^${prefix}-${SIZE_TOKEN}${suffix}`);
-}
-
-const MODEL_FAMILIES: ModelFamily[] = [
-  // Standardized family matching: capture *B or *B-A*B.
-  {
-    displayName: 'Qwen3',
-    regex: buildFamilyRegex('Qwen3'),
-    defaultMember: '4B',
-  },
-  {
-    displayName: 'Qwen3-Instruct-2507',
-    regex: buildFamilyRegex('Qwen3', '-Instruct-2507-GGUF$'),
-    defaultMember: '4B',
-  },
-  {
-    displayName: 'Qwen3.5',
-    regex: buildFamilyRegex('Qwen3\\.5'),
-    defaultMember: '4B',
-  },
-  {
-    displayName: 'Qwen3-Embedding',
-    regex: buildFamilyRegex('Qwen3-Embedding'),
-    defaultMember: '0.6B',
-  },
-  {
-    displayName: 'Qwen2.5-VL-Instruct',
-    regex: buildFamilyRegex('Qwen2\\.5-VL', '-Instruct-GGUF$'),
-    defaultMember: '3B',
-  },
-  {
-    displayName: 'Qwen3-VL-Instruct',
-    regex: buildFamilyRegex('Qwen3-VL', '-Instruct-GGUF$'),
-    defaultMember: '4B',
-  },
-  {
-    displayName: 'Llama-3.2-Instruct',
-    regex: buildFamilyRegex('Llama-3\\.2', '-Instruct-GGUF$'),
-    defaultMember: '3B',
-  },
-  {
-    displayName: 'gpt-oss',
-    regex: /^gpt-oss-(\d+\.?\d*b)-mxfp4?-GGUF$/,
-    defaultMember: '20b',
-  },
-  {
-    displayName: 'LFM2',
-    regex: buildFamilyRegex('LFM2'),
-    defaultMember: '8B-A1B',
-  },
-];
-
-type ModelListItem =
-  | { type: 'model'; name: string; info: ModelInfo }
-  | { type: 'family'; family: ModelFamily; members: { label: string; name: string; info: ModelInfo }[] };
-
-function buildModelList(
-  models: Array<{ name: string; info: ModelInfo }>
-): ModelListItem[] {
-  // Build family groups
-  const consumed = new Set<string>();
-  const familyItems: ModelListItem[] = [];
-
-  for (const family of MODEL_FAMILIES) {
-    const members: { label: string; name: string; info: ModelInfo }[] = [];
-    for (const m of models) {
-      const match = family.regex.exec(m.name);
-      if (match) {
-        members.push({ label: match[1], name: m.name, info: m.info });
-        consumed.add(m.name);
-      }
-    }
-    if (members.length > 1) {
-      members.sort((a, b) => parseFloat(a.label) - parseFloat(b.label));
-      familyItems.push({ type: 'family', family, members });
-    } else {
-      members.forEach(m => consumed.delete(m.name));
-    }
-  }
-
-  // Build individual items for non-consumed models
-  const individualItems: ModelListItem[] = models
-    .filter(m => !consumed.has(m.name))
-    .map(m => ({ type: 'model' as const, name: m.name, info: m.info }));
-
-  // Merge and sort alphabetically by display name
-  const allItems = [...familyItems, ...individualItems];
-  allItems.sort((a, b) => {
-    const nameA = a.type === 'family' ? a.family.displayName : a.name;
-    const nameB = b.type === 'family' ? b.family.displayName : b.name;
-    return nameA.localeCompare(nameB);
-  });
-
-  return allItems;
-}
 
 interface ModelManagerProps {
-  isContentVisible: boolean;
-  onContentVisibilityChange: (visible: boolean) => void;
+  isVisible: boolean;
   width?: number;
   currentView: LeftPanelView;
   onViewChange: (view: LeftPanelView) => void;
-}
-
-interface ModelJSON {
-  id?: string,
-  model_name?: string,
-  recipe: string,
-  recipe_options?: object,
-  checkpoint?: string,
-  checkpoints?: string[],
-  downloaded?: boolean,
-  labels?: string[],
-  size?: number,
-  image_defaults?: []
 }
 
 export type LeftPanelView = 'models' | 'backends' | 'marketplace' | 'settings';
@@ -150,15 +29,61 @@ export type LeftPanelView = 'models' | 'backends' | 'marketplace' | 'settings';
 const createEmptyModelForm = () => ({
   name: '',
   checkpoint: '',
-  recipe: 'llamacpp',
-  mmproj: '',
-  reasoning: false,
-  vision: false,
-  embedding: false,
-  reranking: false,
 });
 
-const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContentVisibilityChange, width = 280, currentView, onViewChange }) => {
+// ── HuggingFace fetch helpers ──────────────────────────────────────────────
+
+interface GgufOption { label: string; filename: string; }
+
+function longestCommonPrefix(strs: string[]): string {
+  if (strs.length === 0) return '';
+  let prefix = strs[0];
+  for (let i = 1; i < strs.length; i++) {
+    while (!strs[i].startsWith(prefix)) prefix = prefix.slice(0, -1);
+    if (prefix === '') return '';
+  }
+  return prefix;
+}
+
+/** Given flat GGUF filenames, strip the common prefix to get quant labels. */
+function extractGgufOptions(files: string[]): GgufOption[] {
+  if (files.length === 0) return [];
+  const stems = files.map(f => f.replace(/\.gguf$/i, ''));
+  let prefix = stems.length > 1 ? longestCommonPrefix(stems) : '';
+  // Trim to last '-' so the label starts cleanly
+  const dashIdx = prefix.lastIndexOf('-');
+  prefix = dashIdx >= 0 ? prefix.slice(0, dashIdx + 1) : prefix;
+  return stems.map((stem, i) => ({
+    label: prefix && stem.startsWith(prefix) ? stem.slice(prefix.length) : stem,
+    filename: files[i],
+  }));
+}
+
+/** Given mmproj filenames like "mmproj-F16.gguf", extract data type labels. */
+function extractMmprojOptions(files: string[]): GgufOption[] {
+  return files.map(f => ({
+    label: f.replace(/\.gguf$/i, '').replace(/^mmproj-/i, ''),
+    filename: f,
+  }));
+}
+
+/** Given folder names like ["Q4_0", "Q8_0"], each folder = one variant option. */
+function extractFolderOptions(folders: string[]): GgufOption[] {
+  return folders.map(folder => ({ label: folder, filename: folder }));
+}
+
+/** Derive recipe from discovered files and repo id. */
+function detectRecipe(filePaths: string[], repoId: string): string {
+  if (filePaths.some(p => p.toLowerCase().endsWith('.gguf'))) return 'llamacpp';
+  if (
+    filePaths.some(p => p.toLowerCase().endsWith('.onnx') || p.toLowerCase().endsWith('.onnx_data')) &&
+    repoId.toLowerCase().includes('-ryzenai-npu')
+  ) return 'ryzenai-llm';
+  if (repoId.toLowerCase().startsWith('fastflowlm/')) return 'flm';
+  return '';
+}
+
+const ModelManager: React.FC<ModelManagerProps> = ({ isVisible, width = 280, currentView, onViewChange }) => {
   // Get shared model data from context
   const { modelsData, suggestedModels, refresh: refreshModels } = useModels();
   // Get system context for lazy loading system info
@@ -176,12 +101,23 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
   const [optionsModel, setOptionsModel] = useState<string | null>(null);
   const [showModelOptionsModal, setShowModelOptionsModal] = useState(false);
   const [newModel, setNewModel] = useState(createEmptyModelForm);
+
+  // HF fetch state
+  const [isFetching, setIsFetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [ggufOptions, setGgufOptions] = useState<GgufOption[]>([]);
+  const [mmprojOptions, setMmprojOptions] = useState<GgufOption[]>([]);
+  const [nonGgufOptions, setNonGgufOptions] = useState<GgufOption[]>([]);
+  const [selectedGgufLabel, setSelectedGgufLabel] = useState('');
+  const [selectedMmprojLabel, setSelectedMmprojLabel] = useState('');
+  const [selectedNonGguf, setSelectedNonGguf] = useState('');
+  const [selectedRecipe, setSelectedRecipe] = useState('llamacpp');
+  const [autoHasVision, setAutoHasVision] = useState(false);
+  const [fetchedRepoId, setFetchedRepoId] = useState('');
+
   const [selectedMarketplaceCategory, setSelectedMarketplaceCategory] = useState<string>('all');
   const [marketplaceCategories, setMarketplaceCategories] = useState<MarketplaceCategory[]>([]);
-  const [expandedFamilies, setExpandedFamilies] = useState<Set<string>>(new Set());
   const filterAnchorRef = useRef<HTMLDivElement | null>(null);
-  const addModelFromJSONRef = useRef<HTMLInputElement>(null);
-
 
   const { toasts, removeToast, showError, showSuccess, showWarning } = useToast();
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -292,6 +228,17 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
     };
   }, [showFilterPanel]);
 
+  // Auto-expand the single category if only one is available
+  useEffect(() => {
+    const groupedModels = organizationMode === 'recipe' ? groupModelsByRecipe() : groupModelsByCategory();
+    const categories = Object.keys(groupedModels);
+
+    // If only one category exists and it's not already expanded, expand it
+    if (categories.length === 1 && !expandedCategories.has(categories[0])) {
+      setExpandedCategories(new Set([categories[0]]));
+    }
+  }, [suggestedModels, organizationMode, showDownloadedOnly, searchQuery]);
+
   const getFilteredModels = () => {
     let filtered = suggestedModels;
 
@@ -350,29 +297,6 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
     return grouped;
   };
 
-  const groupedModels = useMemo(
-    () => organizationMode === 'recipe' ? groupModelsByRecipe() : groupModelsByCategory(),
-    [suggestedModels, modelsData, organizationMode, showDownloadedOnly, searchQuery]
-  );
-  const availableModelCount = useMemo(
-    () => Object.values(groupedModels).reduce((sum, arr) => sum + arr.length, 0),
-    [groupedModels]
-  );
-  const categories = useMemo(() => Object.keys(groupedModels).sort(), [groupedModels]);
-  const builtModelLists = useMemo(
-    () => Object.fromEntries(
-      Object.entries(groupedModels).map(([cat, models]) => [cat, buildModelList(models)])
-    ),
-    [groupedModels]
-  );
-
-  // Auto-expand the single category if only one is available
-  useEffect(() => {
-    if (categories.length === 1 && !expandedCategories.has(categories[0])) {
-      setExpandedCategories(new Set([categories[0]]));
-    }
-  }, [categories]);
-
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => {
       const newSet = new Set(prev);
@@ -396,42 +320,8 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
     return `${size.toFixed(2)} GB`;
   };
 
-  const getModelSize = (modelName: string, info: ModelInfo): number | undefined => {
-    if (!isExperienceModel(info)) {
-      return info.size;
-    }
-    const components = getExperienceComponents(info);
-    if (components.length === 0) return info.size;
-    const total = components.reduce((sum, component) => sum + (modelsData[component]?.size || 0), 0);
-    return total > 0 ? total : info.size;
-  };
-
-  const getDisplayLabelsForModel = (modelName: string, info: ModelInfo): string[] => {
-    if (isExperienceModel(info)) {
-      // Experiences intentionally show a single, consistent legend marker.
-      return ['experience'];
-    }
-    return (info.labels || []).filter((label): label is string => typeof label === 'string' && label.length > 0);
-  };
-
-  const getModelDownloadedState = (modelName: string, info: ModelInfo): boolean => {
-    return isModelEffectivelyDownloaded(modelName, info, modelsData);
-  };
-
-  const getModelLoadedState = (modelName: string, info: ModelInfo): boolean => {
-    if (isExperienceModel(info)) {
-      return isExperienceFullyLoaded(modelName, modelsData, loadedModels);
-    }
-    return loadedModels.has(modelName);
-  };
-
-  const getModelLoadingState = (modelName: string): boolean => {
-    return loadingModels.has(modelName);
-  };
-
   const getCategoryLabel = (category: string): string => {
     const labels: { [key: string]: string } = {
-      'experience': 'Experience',
       'reasoning': 'Reasoning',
       'coding': 'Coding',
       'vision': 'Vision',
@@ -444,6 +334,12 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
     };
     return labels[category] || category.charAt(0).toUpperCase() + category.slice(1);
   };
+
+  if (!isVisible) return null;
+
+  const groupedModels = organizationMode === 'recipe' ? groupModelsByRecipe() : groupModelsByCategory();
+  const availableModelCount = getFilteredModels().length;
+  const categories = Object.keys(groupedModels).sort();
 
   // Auto-expand all categories when searching
   const shouldShowCategory = (category: string): boolean => {
@@ -465,59 +361,172 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
     .map(modelName => ({ modelName }))
     .sort((a, b) => a.modelName.localeCompare(b.modelName));
 
+  const resetFetchState = () => {
+    setIsFetching(false);
+    setFetchError(null);
+    setGgufOptions([]);
+    setMmprojOptions([]);
+    setNonGgufOptions([]);
+    setSelectedGgufLabel('');
+    setSelectedMmprojLabel('');
+    setSelectedNonGguf('');
+    setSelectedRecipe('llamacpp');
+    setAutoHasVision(false);
+    setFetchedRepoId('');
+  };
+
   const resetNewModelForm = () => {
     setNewModel(createEmptyModelForm());
+    resetFetchState();
     setShowAddModelForm(false);
+  };
+
+  const handleFetch = async () => {
+    const rawCheckpoint = newModel.checkpoint.trim();
+    if (!rawCheckpoint) {
+      showWarning('Enter a checkpoint first.');
+      return;
+    }
+    const repoId = rawCheckpoint.split(':')[0].trim();
+    setIsFetching(true);
+    setFetchError(null);
+    setGgufOptions([]);
+    setMmprojOptions([]);
+    setNonGgufOptions([]);
+    setSelectedGgufLabel('');
+    setSelectedMmprojLabel('');
+    setSelectedNonGguf('');
+    setFetchedRepoId(repoId);
+
+    try {
+      const metaResp = await fetch(`https://huggingface.co/api/models/${repoId}`);
+      if (!metaResp.ok) throw new Error(`Model not found (${metaResp.status})`);
+
+      const meta: { siblings: { rfilename: string }[] } = await metaResp.json();
+      const filePaths = (meta.siblings ?? []).map(s => s.rfilename);
+
+      const recipe = detectRecipe(filePaths, repoId);
+      setSelectedRecipe(recipe || 'llamacpp');
+
+      if (recipe === 'llamacpp') {
+        // ── GGUF handling ──────────────────────────────────────────────
+        const ggufPaths = filePaths.filter(p => p.toLowerCase().endsWith('.gguf'));
+        const mmprojPaths = ggufPaths.filter(p => p.toLowerCase().includes('mmproj'));
+        const mainPaths = ggufPaths.filter(p => !p.toLowerCase().includes('mmproj'));
+
+        if (mainPaths.length === 0 && mmprojPaths.length === 0) {
+          setFetchError('No GGUF files found in this repository.');
+          return;
+        }
+
+        // Determine GGUF file structure
+        let opts: GgufOption[];
+        const hasFolders = mainPaths.some(p => p.includes('/'));
+        if (hasFolders) {
+          const topFolders = [...new Set(mainPaths.map(p => p.split('/')[0]))];
+          if (topFolders.length === 1 && topFolders[0].toLowerCase() === 'gguf') {
+            // Files inside a "gguf/" folder — strip the prefix and treat as flat
+            opts = extractGgufOptions(mainPaths.map(p => p.replace(/^gguf\//i, '')));
+          } else {
+            // Files inside quant-named folders (e.g. Q4_0/, Q8_0/)
+            opts = extractFolderOptions(topFolders);
+          }
+        } else {
+          opts = extractGgufOptions(mainPaths.map(p => p.split('/').pop()!));
+        }
+
+        const mmprojOpts = extractMmprojOptions(mmprojPaths.map(p => p.split('/').pop()!));
+
+        setGgufOptions(opts);
+        setMmprojOptions(mmprojOpts);
+        setSelectedGgufLabel(opts[0]?.label ?? '');
+        setSelectedMmprojLabel(mmprojOpts[0]?.label ?? '');
+        setAutoHasVision(mmprojOpts.length > 0);
+      } else {
+        // ── Non-GGUF handling ──────────────────────────────────────────
+        const stPaths = filePaths.filter(p => p.toLowerCase().endsWith('.safetensors'));
+        const onnxPaths = filePaths.filter(p =>
+          p.toLowerCase().endsWith('.onnx') || p.toLowerCase().endsWith('.onnx_data')
+        );
+        const nonOpts: GgufOption[] = [
+          ...stPaths.map(p => ({ label: p.split('/').pop()!, filename: p })),
+          ...(onnxPaths.length > 0 ? [{ label: 'Download all files (ONNX)', filename: '' }] : []),
+        ];
+        if (nonOpts.length === 0) {
+          setFetchError('No downloadable files detected. Try specifying the variant manually.');
+          return;
+        }
+        setNonGgufOptions(nonOpts);
+        setSelectedNonGguf(nonOpts[0]?.label ?? '');
+      }
+    } catch (e) {
+      setFetchError(e instanceof Error ? e.message : 'Fetch failed');
+    } finally {
+      setIsFetching(false);
+    }
   };
 
   const handleInstallModel = () => {
     const trimmedName = newModel.name.trim();
-    const trimmedCheckpoint = newModel.checkpoint.trim();
-    const trimmedRecipe = newModel.recipe.trim();
-    const trimmedMmproj = newModel.mmproj.trim();
+    const rawCheckpoint = newModel.checkpoint.trim();
 
     if (!trimmedName) {
       showWarning('Model name is required.');
       return;
     }
 
-    if (!trimmedCheckpoint) {
+    if (!rawCheckpoint) {
       showWarning('Checkpoint is required.');
       return;
     }
 
-    if (!trimmedRecipe) {
-      showWarning('Recipe is required.');
-      return;
+    const repoId = fetchedRepoId || rawCheckpoint.split(':')[0];
+    let checkpoint: string;
+    let recipe: string;
+    let mmproj: string | undefined;
+    let vision = false;
+
+    if (ggufOptions.length > 0) {
+      // Fetch was done and GGUF files found
+      const selected = ggufOptions.find((o: GgufOption) => o.label === selectedGgufLabel);
+      checkpoint = selected ? `${repoId}:${selected.label}` : rawCheckpoint;
+      recipe = 'llamacpp';
+      const selectedMmproj = mmprojOptions.find((o: GgufOption) => o.label === selectedMmprojLabel);
+      if (selectedMmproj) {
+        mmproj = selectedMmproj.filename;
+        vision = autoHasVision;
+      }
+    } else if (nonGgufOptions.length > 0) {
+      // Non-GGUF fetch result
+      const selected = nonGgufOptions.find((o: GgufOption) => o.label === selectedNonGguf);
+      checkpoint = selected?.filename
+        ? `${repoId}:${selected.filename}`
+        : repoId; // empty filename = download all (ONNX)
+      recipe = selectedRecipe;
+    } else {
+      // No fetch done — use checkpoint as-is
+      checkpoint = rawCheckpoint;
+      recipe = selectedRecipe;
     }
 
-    // Validate GGUF checkpoint format
-    if (trimmedCheckpoint.toLowerCase().includes('gguf') && !trimmedCheckpoint.includes(':')) {
-      showWarning('GGUF checkpoints must include a variant using the CHECKPOINT:VARIANT syntax');
-      return;
-    }
-
-    // Close the form and start the download
     const modelName = `user.${trimmedName}`;
     resetNewModelForm();
 
-    // Use the same download flow as registered models, but include registration data
     handleDownloadModel(modelName, {
-      checkpoint: trimmedCheckpoint,
-      recipe: trimmedRecipe,
-      mmproj: trimmedMmproj || undefined,
-      reasoning: newModel.reasoning,
-      vision: newModel.vision,
-      embedding: newModel.embedding,
-      reranking: newModel.reranking,
+      checkpoint,
+      recipe,
+      mmproj,
+      vision,
+      reasoning: false,
+      embedding: false,
+      reranking: false,
     });
   };
 
-  const handleInputChange = (field: string, value: string | boolean) => {
-    setNewModel(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleInputChange = (field: string, value: string) => {
+    setNewModel((prev: { name: string; checkpoint: string }) => ({ ...prev, [field]: value }));
+    // Clear fetch results when checkpoint changes
+    if (field === 'checkpoint') resetFetchState();
   };
 
   const handleDownloadModel = useCallback(async (modelName: string, registrationData?: ModelRegistrationData) => {
@@ -545,7 +554,7 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
       setLoadingModels(prev => new Set(prev).add(modelName));
 
       // Use the single consolidated download function
-      await pullModel(modelName, { registrationData: registrationData });
+      await pullModel(modelName, { registrationData });
 
       await fetchCurrentLoadedModel();
       showSuccess(`Model "${modelName}" downloaded successfully.`);
@@ -622,37 +631,6 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
         return;
       }
 
-      if (isExperienceModel(modelData)) {
-        const components = getExperienceComponents(modelData);
-        if (components.length === 0) {
-          showError(`Experience model "${modelName}" has no component models.`);
-          return;
-        }
-
-        setLoadingModels(prev => {
-          const next = new Set(prev);
-          next.add(modelName);
-          components.forEach((component) => next.add(component));
-          return next;
-        });
-        window.dispatchEvent(new CustomEvent('modelLoadStart', { detail: { modelId: modelName } }));
-
-        for (const component of components) {
-          if (!modelsData[component]) {
-            throw new Error(`Missing component model "${component}" for ${modelName}.`);
-          }
-          await ensureModelReady(component, modelsData, {
-            onModelLoading: () => {},
-            skipHealthCheck: false,
-          });
-        }
-
-        await fetchCurrentLoadedModel();
-        window.dispatchEvent(new CustomEvent('modelLoadEnd', { detail: { modelId: modelName } }));
-        window.dispatchEvent(new CustomEvent('modelsUpdated'));
-        return;
-      }
-
       setLoadingModels(prev => new Set(prev).add(modelName));
       window.dispatchEvent(new CustomEvent('modelLoadStart', { detail: { modelId: modelName } }));
 
@@ -679,40 +657,13 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
         showError(`Failed to load model: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
 
-      setLoadingModels(prev => {
-        const next = new Set(prev);
-        next.delete(modelName);
-        const info = modelsData[modelName];
-        if (isExperienceModel(info)) {
-          getExperienceComponents(info).forEach((component) => next.delete(component));
-        }
-        return next;
-      });
+      setLoadingModels(prev => { const s = new Set(prev); s.delete(modelName); return s; });
       window.dispatchEvent(new CustomEvent('modelLoadEnd', { detail: { modelId: modelName } }));
     }
   };
 
   const handleUnloadModel = async (modelName: string) => {
     try {
-      const modelData = modelsData[modelName];
-      if (modelData && isExperienceModel(modelData)) {
-        const components = getExperienceComponents(modelData);
-        for (const component of components) {
-          if (!loadedModels.has(component)) continue;
-          const response = await serverFetch('/unload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model_name: component })
-          });
-          if (!response.ok) {
-            throw new Error(`Failed to unload model: ${response.statusText}`);
-          }
-        }
-        await fetchCurrentLoadedModel();
-        window.dispatchEvent(new CustomEvent('modelUnload'));
-        return;
-      }
-
       const response = await serverFetch('/unload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -758,49 +709,6 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
     }
   };
 
-  const handleUploadModel = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-
-    if (!files || files.length === 0) {
-      return;
-    }
-
-    const file = files[0];
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const result = JSON.parse(e.target?.result as string);
-        uploadModelJSON(result);
-      } catch(err: any) {
-        showError(`Failed to parse JSON file. ${err}`);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-  }
-
-  const uploadModelJSON = (json: ModelJSON) => {
-    let modelName: string;
-
-    if (!json.recipe) {
-      showError("Invalid model JSON. Recipe is missing");
-      return;
-    }
-
-    if(!json.model_name && !json.id) {
-      showError("Invalid model JSON. Either model or id must be present.");
-      return;
-    }
-
-    modelName = json.model_name ? json.model_name : json.id as string;
-
-    if (json.checkpoint && json.checkpoints) delete json.checkpoint;
-    if (json.model_name) delete json.model_name;
-    if(json.id) delete json.id;
-
-    handleDownloadModel(modelName as string, json as ModelRegistrationData);
-  }
-
   const viewTitle = currentView === 'models'
     ? 'Model Manager'
     : currentView === 'backends'
@@ -818,257 +726,196 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
         : 'Filter settings...';
   const showInlineFilterButton = currentView === 'models' || currentView === 'marketplace';
 
-  const getModelStatus = (modelName: string) => {
-    const isDownloaded = modelsData[modelName]?.downloaded ?? false;
-    const isLoaded = loadedModels.has(modelName);
-    const isLoading = loadingModels.has(modelName);
-
-    let statusClass = 'not-downloaded';
-    let statusTitle = 'Not downloaded';
-
-    if (isLoading) {
-      statusClass = 'loading';
-      statusTitle = 'Loading...';
-    } else if (isLoaded) {
-      statusClass = 'loaded';
-      statusTitle = 'Model is loaded';
-    } else if (isDownloaded) {
-      statusClass = 'available';
-      statusTitle = 'Available locally';
-    }
-
-    return { isDownloaded, isLoaded, isLoading, statusClass, statusTitle };
-  };
-
-  const renderLoadOptionsButton = (modelName: string) => (
-    <button
-      className="model-action-btn load-btn"
-      onClick={(e) => {
-        e.stopPropagation();
-        setOptionsModel(modelName);
-        setShowModelOptionsModal(true);
-      }}
-      title="Load model with options"
-    >
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-           xmlns="http://www.w3.org/2000/svg">
-        <path
-          d="M6.5 1.5H9.5L9.9 3.4C10.4 3.6 10.9 3.9 11.3 4.2L13.1 3.5L14.6 6L13.1 7.4C13.2 7.9 13.2 8.1 13.2 8.5C13.2 8.9 13.2 9.1 13.1 9.6L14.6 11L13.1 13.5L11.3 12.8C10.9 13.1 10.4 13.4 9.9 13.6L9.5 15.5H6.5L6.1 13.6C5.6 13.4 5.1 13.1 4.7 12.8L2.9 13.5L1.4 11L2.9 9.6C2.8 9.1 2.8 8.9 2.8 8.5C2.8 8.1 2.8 7.9 2.9 7.4L1.4 6L2.9 3.5L4.7 4.2C5.1 3.9 5.6 3.6 6.1 3.4L6.5 1.5Z"
-          stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"
-          strokeLinejoin="round"/>
-        <circle cx="8" cy="8.5" r="2.5" stroke="currentColor"
-                strokeWidth="1.2"/>
-      </svg>
-    </button>
-  );
-
-  const renderDeleteButton = (modelName: string) => (
-    <button
-      className="model-action-btn delete-btn"
-      onClick={(e) => { e.stopPropagation(); handleDeleteModel(modelName); }}
-      title="Delete model"
-    >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="3 6 5 6 21 6" />
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      </svg>
-    </button>
-  );
-
-  const renderActionButtonsContent = (modelName: string) => {
-    const { isDownloaded, isLoaded, isLoading } = getModelStatus(modelName);
-    return (
-      <>
-        {!isDownloaded && (
-          <button
-            className="model-action-btn download-btn"
-            onClick={(e) => { e.stopPropagation(); handleDownloadModel(modelName); }}
-            title="Download model"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-          </button>
-        )}
-        {isDownloaded && !isLoaded && !isLoading && (
-          <>
-            <button
-              className="model-action-btn load-btn"
-              onClick={(e) => { e.stopPropagation(); handleLoadModel(modelName); }}
-              title="Load model"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="5 3 19 12 5 21" fill="currentColor" />
-              </svg>
-            </button>
-            {renderDeleteButton(modelName)}
-            {renderLoadOptionsButton(modelName)}
-          </>
-        )}
-        {isLoaded && (
-          <>
-            <button
-              className="model-action-btn unload-btn"
-              onClick={(e) => { e.stopPropagation(); handleUnloadModel(modelName); }}
-              title="Eject model"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 11L12 8L15 11" />
-                <path d="M12 8V16" />
-                <path d="M5 20H19" />
-              </svg>
-            </button>
-            {renderDeleteButton(modelName)}
-            {renderLoadOptionsButton(modelName)}
-          </>
-        )}
-      </>
-    );
-  };
-
-  const renderActionButtons = (modelName: string, isHovered: boolean) => {
-    if (!isHovered) return null;
-    return (
-      <span className="model-actions">
-        {renderActionButtonsContent(modelName)}
-      </span>
-    );
-  };
-
-  const renderModelItem = (
-    modelName: string, modelInfo: ModelInfo, hoverKey: string,
-    displayName?: string, extraClass?: string
-  ) => {
-    const { isDownloaded, statusClass, statusTitle } = getModelStatus(modelName);
-    const isHovered = hoveredModel === hoverKey;
-    return (
-      <div
-        key={modelName}
-        className={`model-item model-catalog-item ${extraClass ?? ''} ${isDownloaded ? 'downloaded' : ''}`}
-        onMouseEnter={() => setHoveredModel(hoverKey)}
-        onMouseLeave={() => setHoveredModel(null)}
-      >
-        <div className="model-item-content">
-          <div className="model-info-left">
-            <span className={`model-status-indicator ${statusClass}`} title={statusTitle}>●</span>
-            <span className="model-name">{displayName ?? modelName}</span>
-            <span className="model-size">{formatSize(modelInfo.size)}</span>
-            {renderActionButtons(modelName, isHovered)}
-          </div>
-          {modelInfo.labels && modelInfo.labels.length > 0 && (
-            <span className="model-labels">
-              {modelInfo.labels.map(label => (
-                <span key={label} className={`model-label label-${label}`} title={getCategoryLabel(label)} />
-              ))}
-            </span>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const toggleFamily = (familyName: string) => {
-    setExpandedFamilies(prev => {
-      const next = new Set(prev);
-      if (next.has(familyName)) next.delete(familyName);
-      else next.add(familyName);
-      return next;
-    });
-  };
-
-  const renderFamilyItem = (item: Extract<ModelListItem, { type: 'family' }>) => {
-    const { family, members } = item;
-    const isExpanded = expandedFamilies.has(family.displayName);
-
-    // Collect shared labels from first member (labels are shared at family level)
-    const sharedLabels = members[0]?.info.labels;
-
-    return (
-      <div key={family.displayName} className="model-family-group">
-        <div
-          className="model-family-header"
-          onClick={() => toggleFamily(family.displayName)}
-        >
-          <span className={`family-chevron ${isExpanded ? 'expanded' : ''}`}>
-            <ChevronRight size={11} strokeWidth={2.1} />
-          </span>
-          <span className="model-name family-model-name">{family.displayName}</span>
-          {sharedLabels && sharedLabels.length > 0 && (
-            <span className="model-labels">
-              {sharedLabels.map(label => (
-                <span key={label} className={`model-label label-${label}`} title={getCategoryLabel(label)} />
-              ))}
-            </span>
-          )}
-        </div>
-        {isExpanded && (
-          <div className="model-family-members-list">
-            {members.map(m =>
-              renderModelItem(
-                m.name, m.info,
-                `family-${family.displayName}-${m.label}`,
-                m.label, 'model-family-member-row'
-              )
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const renderModelsView = () => (
     <>
-      {categories.map(category => {
-        const listItems = builtModelLists[category] || [];
-        return (
-          <div key={category} className="model-category">
-            <div
-              className="model-category-header"
-              onClick={() => toggleCategory(category)}
-            >
-              <span className={`category-chevron ${shouldShowCategory(category) ? 'expanded' : ''}`}>
-                <ChevronRight size={11} strokeWidth={2.1} />
-              </span>
-              <span className="category-label">{getDisplayLabel(category)}</span>
-              <span className="category-count">({groupedModels[category].length})</span>
-            </div>
-
-            {shouldShowCategory(category) && (
-              <div className="model-list">
-                <ModelOptionsModal model={optionsModel} isOpen={showModelOptionsModal}
-                                   onCancel={() => {
-                                     setShowModelOptionsModal(false);
-                                     setOptionsModel(null);
-                                   }}
-                                   onSubmit={(modelName, options) => {
-                                     setShowModelOptionsModal(false);
-                                     setOptionsModel(null);
-                                     handleLoadModel(modelName, options);
-                                   }}/>
-                {listItems.map(item => {
-                  if (item.type === 'family') {
-                    return renderFamilyItem(item);
-                  }
-                  return renderModelItem(item.name, item.info, item.name);
-                })}
-              </div>
-            )}
+      {categories.map(category => (
+        <div key={category} className="model-category">
+          <div
+            className="model-category-header"
+            onClick={() => toggleCategory(category)}
+          >
+            <span className={`category-chevron ${shouldShowCategory(category) ? 'expanded' : ''}`}>
+              <ChevronRight size={11} strokeWidth={2.1} />
+            </span>
+            <span className="category-label">{getDisplayLabel(category)}</span>
+            <span className="category-count">({groupedModels[category].length})</span>
           </div>
-        );
-      })}
+
+          {shouldShowCategory(category) && (
+            <div className="model-list">
+              <ModelOptionsModal model={optionsModel} isOpen={showModelOptionsModal}
+                                 onCancel={() => {
+                                   setShowModelOptionsModal(false);
+                                   setOptionsModel(null);
+                                 }}
+                                 onSubmit={(modelName, options) => {
+                                   setShowModelOptionsModal(false);
+                                   setOptionsModel(null);
+                                   handleLoadModel(modelName, options);
+                                 }}/>
+              {groupedModels[category].map(model => {
+                const isDownloaded = modelsData[model.name]?.downloaded ?? false;
+                const isLoaded = loadedModels.has(model.name);
+                const isLoading = loadingModels.has(model.name);
+
+                let statusClass = 'not-downloaded';
+                let statusTitle = 'Not downloaded';
+
+                if (isLoading) {
+                  statusClass = 'loading';
+                  statusTitle = 'Loading...';
+                } else if (isLoaded) {
+                  statusClass = 'loaded';
+                  statusTitle = 'Model is loaded';
+                } else if (isDownloaded) {
+                  statusClass = 'available';
+                  statusTitle = 'Available locally';
+                }
+
+                const isHovered = hoveredModel === model.name;
+                const renderLoadOptionsButton = () => (
+                  <button
+                    className="model-action-btn load-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOptionsModel(model.name);
+                      setShowModelOptionsModal(true);
+                    }}
+                    title="Load model with options"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
+                         xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M6.5 1.5H9.5L9.9 3.4C10.4 3.6 10.9 3.9 11.3 4.2L13.1 3.5L14.6 6L13.1 7.4C13.2 7.9 13.2 8.1 13.2 8.5C13.2 8.9 13.2 9.1 13.1 9.6L14.6 11L13.1 13.5L11.3 12.8C10.9 13.1 10.4 13.4 9.9 13.6L9.5 15.5H6.5L6.1 13.6C5.6 13.4 5.1 13.1 4.7 12.8L2.9 13.5L1.4 11L2.9 9.6C2.8 9.1 2.8 8.9 2.8 8.5C2.8 8.1 2.8 7.9 2.9 7.4L1.4 6L2.9 3.5L4.7 4.2C5.1 3.9 5.6 3.6 6.1 3.4L6.5 1.5Z"
+                        stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"
+                        strokeLinejoin="round"/>
+                      <circle cx="8" cy="8.5" r="2.5" stroke="currentColor"
+                              strokeWidth="1.2"/>
+                    </svg>
+                  </button>
+                );
+
+                return (
+                  <div
+                    key={model.name}
+                    className={`model-item model-catalog-item ${isDownloaded ? 'downloaded' : ''}`}
+                    onMouseEnter={() => setHoveredModel(model.name)}
+                    onMouseLeave={() => setHoveredModel(null)}
+                  >
+                    <div className="model-item-content">
+                      <div className="model-info-left">
+                        <span
+                          className={`model-status-indicator ${statusClass}`}
+                          title={statusTitle}
+                        >
+                          ●
+                        </span>
+                        <span className="model-name">{model.name}</span>
+                        <span className="model-size">{formatSize(model.info.size)}</span>
+                        {isHovered && (
+                          <span className="model-actions">
+                            {!isDownloaded && (
+                              <button
+                                className="model-action-btn download-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownloadModel(model.name);
+                                }}
+                                title="Download model"
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                  <polyline points="7 10 12 15 17 10" />
+                                  <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                              </button>
+                            )}
+                            {isDownloaded && !isLoaded && !isLoading && (
+                              <>
+                                <button
+                                  className="model-action-btn load-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleLoadModel(model.name);
+                                  }}
+                                  title="Load model"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polygon points="5 3 19 12 5 21" fill="currentColor" />
+                                  </svg>
+                                </button>
+                                <button
+                                  className="model-action-btn delete-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteModel(model.name);
+                                  }}
+                                  title="Delete model"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                  </svg>
+                                </button>
+                                {renderLoadOptionsButton()}
+                              </>
+                            )}
+                            {isLoaded && (
+                              <>
+                                {renderLoadOptionsButton()}
+                                <button
+                                  className="model-action-btn unload-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUnloadModel(model.name);
+                                  }}
+                                  title="Eject model"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M9 11L12 8L15 11" />
+                                    <path d="M12 8V16" />
+                                    <path d="M5 20H19" />
+                                  </svg>
+                                </button>
+                                <button
+                                  className="model-action-btn delete-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteModel(model.name);
+                                  }}
+                                  title="Delete model"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                  </svg>
+                                </button>
+                              </>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                      {model.info.labels && model.info.labels.length > 0 && (
+                        <span className="model-labels">
+                          {model.info.labels.map(label => (
+                            <span
+                              key={label}
+                              className={`model-label label-${label}`}
+                              title={getCategoryLabel(label)}
+                            />
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
     </>
   );
-
-  const handleRailClick = (view: LeftPanelView) => {
-    if (view === currentView && isContentVisible) {
-      onContentVisibilityChange(false);
-    } else {
-      onViewChange(view);
-      onContentVisibilityChange(true);
-    }
-  };
 
   return (
     <div className="model-manager" style={{ width: `${width}px` }}>
@@ -1076,22 +923,22 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
       <ConfirmDialog />
       <div className="left-panel-shell">
         <div className="left-panel-mode-rail">
-          <button className={`left-panel-mode-btn ${currentView === 'models' && isContentVisible ? 'active' : ''}`} onClick={() => handleRailClick('models')} title="Models" aria-label="Models">
+          <button className={`left-panel-mode-btn ${currentView === 'models' ? 'active' : ''}`} onClick={() => onViewChange('models')} title="Models" aria-label="Models">
             <Boxes size={14} strokeWidth={1.9} />
           </button>
-          <button className={`left-panel-mode-btn ${currentView === 'backends' && isContentVisible ? 'active' : ''}`} onClick={() => handleRailClick('backends')} title="Backends" aria-label="Backends">
+          <button className={`left-panel-mode-btn ${currentView === 'backends' ? 'active' : ''}`} onClick={() => onViewChange('backends')} title="Backends" aria-label="Backends">
             <Cpu size={14} strokeWidth={1.9} />
           </button>
-          <button className={`left-panel-mode-btn ${currentView === 'marketplace' && isContentVisible ? 'active' : ''}`} onClick={() => handleRailClick('marketplace')} title="Marketplace" aria-label="Marketplace">
+          <button className={`left-panel-mode-btn ${currentView === 'marketplace' ? 'active' : ''}`} onClick={() => onViewChange('marketplace')} title="Marketplace" aria-label="Marketplace">
             <Store size={14} strokeWidth={1.9} />
           </button>
           <div className="left-panel-mode-rail-spacer" />
-          <button className={`left-panel-mode-btn ${currentView === 'settings' && isContentVisible ? 'active' : ''}`} onClick={() => handleRailClick('settings')} title="Settings" aria-label="Settings">
-            <Settings size={14} strokeWidth={1.9} />
+          <button className={`left-panel-mode-btn ${currentView === 'settings' ? 'active' : ''}`} onClick={() => onViewChange('settings')} title="Settings" aria-label="Settings">
+            <SettingsIcon size={14} strokeWidth={1.9} />
           </button>
         </div>
 
-        {isContentVisible && <div className={`left-panel-main ${showFilterPanel ? 'filter-menu-open' : ''}`}>
+        <div className={`left-panel-main ${showFilterPanel ? 'filter-menu-open' : ''}`}>
           <div className="model-manager-header">
             <div className="left-panel-header-top">
               <h3>{viewTitle}</h3>
@@ -1189,7 +1036,11 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
                       <span className="loaded-model-name">{modelName}</span>
                     </div>
                     <button className="model-action-btn unload-btn active-model-eject-button" onClick={() => handleUnloadModel(modelName)} title="Eject model">
-                      <EjectIcon />
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M9 11L12 8L15 11" />
+                        <path d="M12 8V16" />
+                        <path d="M5 20H19" />
+                      </svg>
                     </button>
                   </div>
                 ))}
@@ -1227,23 +1078,18 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
           {currentView === 'models' && (
             <div className="model-manager-footer">
               {!showAddModelForm ? (
-                <div className="add-model-buttons-container">
-                  <input ref={addModelFromJSONRef} type="file" accept=".json" onChange={handleUploadModel} style={{ display: 'none' }}/>
-                  <button className="add-model-button" onClick={() => addModelFromJSONRef.current?.click()} title="Import JSON">
-                    Import a model
-                  </button>
-                  <button
-                    className="add-model-button"
-                    onClick={() => {
-                      setNewModel(createEmptyModelForm());
-                      setShowAddModelForm(true);
-                    }}
-                  >
-                    Add a model
-                  </button>
-                </div>
+                <button
+                  className="add-model-button"
+                  onClick={() => {
+                    setNewModel(createEmptyModelForm());
+                    setShowAddModelForm(true);
+                  }}
+                >
+                  Add a model
+                </button>
               ) : (
                 <div className="add-model-form">
+                  {/* Model Name */}
                   <div className="form-section">
                     <label className="form-label" title="A unique name to identify your model in the catalog">Model Name</label>
                     <div className="input-with-prefix">
@@ -1251,89 +1097,94 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
                       <input
                         type="text"
                         className="form-input with-prefix"
-                        placeholder="Gemma-3-12b-it-GGUF"
+                        placeholder="Qwen3.5-35B-A3B"
                         value={newModel.name}
                         onChange={(e) => handleInputChange('name', e.target.value)}
                       />
                     </div>
                   </div>
 
+                  {/* Checkpoint + Fetch */}
                   <div className="form-section">
-                    <label className="form-label" title="Hugging Face model path (repo/model:quantization)">Checkpoint</label>
+                    <label className="form-label" title="Hugging Face repo (e.g. unsloth/Qwen3.5-35B-A3B-GGUF)">Checkpoint</label>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="unsloth/gemma-3-12b-it-GGUF:Q4_0"
+                      placeholder="unsloth/Qwen3.5-35B-A3B-GGUF"
                       value={newModel.checkpoint}
                       onChange={(e) => handleInputChange('checkpoint', e.target.value)}
                     />
-                  </div>
-
-                  <div className="form-section">
-                    <label className="form-label" title="Inference backend to use for this model">Recipe</label>
-                    <select
-                      className="form-input form-select"
-                      value={newModel.recipe}
-                      onChange={(e) => handleInputChange('recipe', e.target.value)}
+                    <button
+                      className="fetch-button"
+                      onClick={handleFetch}
+                      disabled={isFetching}
                     >
-                      <option value="">Select a recipe...</option>
-                      <option value="llamacpp">Llama.cpp GPU</option>
-                      <option value="flm">FastFlowLM NPU</option>
-                      <option value="ryzenai-llm">Ryzen AI LLM</option>
-                    </select>
+                      {isFetching ? 'Fetching...' : 'Fetch'}
+                    </button>
+                    {fetchError && <span className="fetch-error">{fetchError}</span>}
                   </div>
 
-                  <div className="form-section">
-                    <label className="form-label">More info</label>
-                    <div className="form-subsection">
-                      <label className="form-label-secondary" title="Multimodal projection file for vision models">mmproj file (Optional)</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="mmproj-F16.gguf"
-                        value={newModel.mmproj}
-                        onChange={(e) => handleInputChange('mmproj', e.target.value)}
-                      />
+                  {/* GGUF file selection */}
+                  {ggufOptions.length > 0 && (
+                    <div className="hf-files-box">
+                      <div className="form-section">
+                        <label className="form-label">File Type</label>
+                        <select
+                          className="form-input form-select"
+                          value={selectedGgufLabel}
+                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedGgufLabel(e.target.value)}
+                        >
+                          {ggufOptions.map((o: GgufOption) => (
+                            <option key={o.label} value={o.label}>{o.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {mmprojOptions.length > 0 && (
+                        <div className="form-section">
+                          <label className="form-label">Data Type (mmproj)</label>
+                          <select
+                            className="form-input form-select"
+                            value={selectedMmprojLabel}
+                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedMmprojLabel(e.target.value)}
+                          >
+                            {mmprojOptions.map((o: GgufOption) => (
+                              <option key={o.label} value={o.label}>{o.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
+                  )}
 
-                    <div className="form-checkboxes">
-                      <label className="checkbox-label" title="Enable if model supports chain-of-thought reasoning">
-                        <input
-                          type="checkbox"
-                          checked={newModel.reasoning}
-                          onChange={(e) => handleInputChange('reasoning', e.target.checked)}
-                        />
-                        <span>Reasoning</span>
-                      </label>
-
-                      <label className="checkbox-label" title="Enable if model can process images">
-                        <input
-                          type="checkbox"
-                          checked={newModel.vision}
-                          onChange={(e) => handleInputChange('vision', e.target.checked)}
-                        />
-                        <span>Vision</span>
-                      </label>
-
-                      <label className="checkbox-label" title="Enable if model generates text embeddings">
-                        <input
-                          type="checkbox"
-                          checked={newModel.embedding}
-                          onChange={(e) => handleInputChange('embedding', e.target.checked)}
-                        />
-                        <span>Embedding</span>
-                      </label>
-
-                      <label className="checkbox-label" title="Enable if model performs reranking">
-                        <input
-                          type="checkbox"
-                          checked={newModel.reranking}
-                          onChange={(e) => handleInputChange('reranking', e.target.checked)}
-                        />
-                        <span>Reranking</span>
-                      </label>
+                  {/* Non-GGUF file selection */}
+                  {nonGgufOptions.length > 0 && (
+                    <div className="hf-files-box">
+                      <div className="form-section">
+                        <label className="form-label">Format</label>
+                        <select
+                          className="form-input form-select"
+                          value={selectedNonGguf}
+                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedNonGguf(e.target.value)}
+                        >
+                          {nonGgufOptions.map((o: GgufOption) => (
+                            <option key={o.label} value={o.label}>{o.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-section">
+                        <label className="form-label">Recipe</label>
+                        <select
+                          className="form-input form-select"
+                          value={selectedRecipe}
+                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedRecipe(e.target.value)}
+                        >
+                          <option value="llamacpp">Llama.cpp GPU</option>
+                          <option value="flm">FastFlowLM NPU</option>
+                          <option value="ryzenai-llm">Ryzen AI LLM</option>
+                        </select>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="form-actions">
                     <button className="install-button" onClick={handleInstallModel}>
@@ -1347,7 +1198,7 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
               )}
             </div>
           )}
-        </div>}
+        </div>
       </div>
     </div>
   );
