@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Boxes, ChevronRight, Cpu, Settings, SlidersHorizontal, Store } from './components/Icons';
+import { Boxes, ChevronRight, Cpu, Settings, SlidersHorizontal, Store, XIcon } from './components/Icons';
 import { ModelInfo } from './utils/modelData';
 import { ToastContainer, useToast } from './Toast';
 import { useConfirmDialog } from './ConfirmDialog';
@@ -1248,6 +1248,18 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
     }
   };
 
+  const addModelFooterContent: React.ReactNode = !showAddModelForm
+    ? React.createElement(
+        'div',
+        { className: 'add-model-buttons-container' },
+        React.createElement(
+          'button',
+          { className: 'add-model-button', onClick: () => setShowAddModelForm(true) },
+          'Manually Add a Model'
+        )
+      )
+    : null;
+
   return (
     <div className="model-manager" style={{ width: `${width}px` }}>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
@@ -1290,6 +1302,16 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
                   aria-label="Filters"
                 >
                   <SlidersHorizontal size={13} strokeWidth={2} />
+                </button>
+              )}
+              {searchQuery.length > 0 && (
+                <button
+                  className="left-panel-inline-filter-btn"
+                  onClick={() => setSearchQuery('')}
+                  title="Clear search"
+                  aria-label="Clear search"
+                >
+                  <XIcon size={13} strokeWidth={2} />
                 </button>
               )}
               {currentView === 'marketplace' && showFilterPanel && (
@@ -1379,7 +1401,7 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
             {currentView === 'models' && (
               <div className="available-models-section widget">
                 <div className="available-models-header">
-                  <div className="loaded-model-label">AVAILABLE MODELS</div>
+                  <div className="loaded-model-label">SUGGESTED MODELS</div>
                   <div className="loaded-model-count-pill">{availableModelCount} shown</div>
                 </div>
                 {renderModelsView()}
@@ -1405,33 +1427,32 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
                   const size = hfModelSizes[hfModel.id];
                   return (
                     <div key={hfModel.id} className="hf-model-item">
-                      <div className="hf-model-main">
+                      <div className="hf-model-info">
                         <span className="hf-model-name" title={hfModel.id}>{hfModel.id}</span>
+                        {!isDetecting && backend && quants.length > 1 && (
+                          <select
+                            className="hf-quant-select"
+                            value={selectedQuant ?? ''}
+                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                              const q = quants.find((x: GGUFQuantization) => x.filename === e.target.value);
+                              setHfSelectedQuantizations((prev: Record<string, string>) => ({ ...prev, [hfModel.id]: e.target.value }));
+                              if (q?.size !== undefined) setHfModelSizes((prev: Record<string, number | undefined>) => ({ ...prev, [hfModel.id]: q.size }));
+                            }}
+                          >
+                            {quants.map((q: GGUFQuantization) => (
+                              <option key={q.filename} value={q.filename}>{q.quantization}</option>
+                            ))}
+                          </select>
+                        )}
+                        {!isDetecting && backend && <span className="hf-backend-badge">{backend.label}</span>}
+                        {!isDetecting && backend === null && <span className="hf-unsupported">Unsupported</span>}
+                        {size !== undefined && <span className="hf-model-size">{formatSize(size / (1024 ** 3))}</span>}
                         <span className="hf-model-meta">↓ {formatDownloads(hfModel.downloads)}</span>
-                      </div>
-                      <div className="hf-model-controls">
                         {isDetecting && <span className="hf-search-spinner" />}
+                      </div>
+                      <div className="hf-model-actions">
                         {!isDetecting && backend && (
                           <>
-                            <span className="hf-backend-badge">{backend.label}</span>
-                            {quants.length > 1 && (
-                              <select
-                                className="hf-quant-select"
-                                value={selectedQuant ?? ''}
-                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                                  const q = quants.find((x: GGUFQuantization) => x.filename === e.target.value);
-                                  setHfSelectedQuantizations((prev: Record<string, string>) => ({ ...prev, [hfModel.id]: e.target.value }));
-                                  if (q?.size !== undefined) setHfModelSizes((prev: Record<string, number | undefined>) => ({ ...prev, [hfModel.id]: q.size }));
-                                }}
-                              >
-                                {quants.map((q: GGUFQuantization) => (
-                                  <option key={q.filename} value={q.filename}>{q.quantization}</option>
-                                ))}
-                              </select>
-                            )}
-                            {size !== undefined && (
-                              <span className="hf-model-size">{formatSize(size / (1024 ** 3))}</span>
-                            )}
                             <button
                               className="model-action-btn edit-btn"
                               title="Edit before adding"
@@ -1471,9 +1492,6 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
                             </button>
                           </>
                         )}
-                        {!isDetecting && backend === null && (
-                          <span className="hf-unsupported">Unsupported</span>
-                        )}
                       </div>
                     </div>
                   );
@@ -1499,23 +1517,13 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
 
           {currentView === 'models' && (
             <div className="model-manager-footer">
-              {!showAddModelForm ? (
-                <div className="add-model-buttons-container">
-                  <input ref={addModelFromJSONRef} type="file" accept=".json" onChange={handleUploadModel} style={{ display: 'none' }}/>
-                  <button className="add-model-button" onClick={() => addModelFromJSONRef.current?.click()} title="Import JSON">
-                    Import a model
-                  </button>
-                  <button
-                    className="add-model-button"
-                    onClick={() => setShowAddModelForm(true)}
-                  >
-                    Add a model
-                  </button>
-                </div>
-              ) : (
+              <input ref={addModelFromJSONRef} type="file" accept=".json" onChange={handleUploadModel} style={{ display: 'none' }}/>
+              {addModelFooterContent}
+              {showAddModelForm && (
                 <AddModelPanel
                   onClose={resetNewModelForm}
                   initialValues={addModelInitialValues}
+                  onImportJSON={() => addModelFromJSONRef.current?.click()}
                   onInstall={(data: ModelInstallData) => {
                     resetNewModelForm();
                     handleDownloadModel(`user.${data.name}`, {

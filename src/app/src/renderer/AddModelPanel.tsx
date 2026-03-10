@@ -25,6 +25,7 @@ export interface ModelInstallData {
 interface AddModelPanelProps {
   onClose: () => void;
   onInstall: (data: ModelInstallData) => void;
+  onImportJSON?: () => void;
   initialValues?: AddModelInitialValues;
 }
 
@@ -50,7 +51,7 @@ const createEmptyForm = (initial?: AddModelInitialValues) => ({
   reranking: initial?.reranking ?? false,
 });
 
-const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, initialValues }) => {
+const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, onImportJSON, initialValues }) => {
   const { supportedRecipes } = useSystem();
   const [form, setForm] = useState(() => createEmptyForm(initialValues));
   const [error, setError] = useState<string | null>(null);
@@ -108,14 +109,57 @@ const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, initi
     });
   };
 
-  const recipeOptions = Object.keys(supportedRecipes).length > 0
-    ? Object.keys(supportedRecipes)
+  const filteredSupportedRecipes = Object.keys(supportedRecipes).filter(r => r in RECIPE_LABELS);
+  const recipeOptions = filteredSupportedRecipes.length > 0
+    ? filteredSupportedRecipes
     : Object.keys(RECIPE_LABELS);
+
+  const fromJsonButton: React.ReactNode = onImportJSON
+    ? React.createElement(
+        'div',
+        { className: 'form-section' },
+        React.createElement(
+          'button',
+          { className: 'add-model-button', onClick: onImportJSON, title: 'Import model definition from a JSON file' },
+          'From JSON'
+        )
+      )
+    : null;
 
   const mmprojOptionElements = mmprojOptions.map((f: string) => {
     const label = getMmprojLabel(f);
     return React.createElement('option', { key: f, value: f }, label);
   });
+
+  const showMmproj = mmprojOptions.length > 0 || !initialValues;
+  const mmprojField: React.ReactNode = showMmproj
+    ? React.createElement(
+        'div',
+        { className: 'form-subsection' },
+        React.createElement(
+          'label',
+          { className: 'form-label-secondary', title: 'Multimodal projection file for vision models' },
+          'mmproj file (Optional)'
+        ),
+        mmprojOptions.length > 0
+          ? React.createElement(
+              'select',
+              {
+                className: 'form-input form-select',
+                value: form.mmproj,
+                onChange: (e: React.ChangeEvent<HTMLSelectElement>) => handleChange('mmproj', e.target.value),
+              },
+              ...mmprojOptionElements
+            )
+          : React.createElement('input', {
+              type: 'text',
+              className: 'form-input',
+              placeholder: 'mmproj-F16.gguf',
+              value: form.mmproj,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => handleChange('mmproj', e.target.value),
+            })
+      )
+    : null;
 
   return (
     <div className="add-model-form">
@@ -166,28 +210,7 @@ const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, initi
 
       <div className="form-section">
         <label className="form-label">More info</label>
-        <div className="form-subsection">
-          <label className="form-label-secondary" title="Multimodal projection file for vision models">
-            mmproj file (Optional)
-          </label>
-          {mmprojOptions.length > 0 ? (
-            <select
-              className="form-input form-select"
-              value={form.mmproj}
-              onChange={(e) => handleChange('mmproj', e.target.value)}
-            >
-              {mmprojOptionElements}
-            </select>
-          ) : (
-            <input
-              type="text"
-              className="form-input"
-              placeholder="mmproj-F16.gguf"
-              value={form.mmproj}
-              onChange={(e) => handleChange('mmproj', e.target.value)}
-            />
-          )}
-        </div>
+        {mmprojField}
 
         <div className="form-checkboxes">
           <label className="checkbox-label" title="Enable if model supports chain-of-thought reasoning">
@@ -227,6 +250,8 @@ const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, initi
           </label>
         </div>
       </div>
+
+      {fromJsonButton}
 
       {error && <div className="form-error">{error}</div>}
 
