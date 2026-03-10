@@ -200,41 +200,53 @@ const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, initi
         {mmprojField}
 
         <div className="form-checkboxes">
-          <label className="checkbox-label" title="Enable if model supports chain-of-thought reasoning">
-            <input
-              type="checkbox"
-              checked={form.reasoning}
-              onChange={(e) => handleChange('reasoning', e.target.checked)}
-            />
-            <span>Reasoning</span>
-          </label>
+          <div className="checkbox-item">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.reasoning}
+                onChange={(e) => handleChange('reasoning', e.target.checked)}
+              />
+              <span>Reasoning</span>
+            </label>
+            <p className="checkbox-desc">Model performs multi-step logical thinking. Checkbox is purely for metadata and doesn't affect the output.</p>
+          </div>
 
-          <label className="checkbox-label" title="Enable if model can process images">
-            <input
-              type="checkbox"
-              checked={form.vision}
-              onChange={(e) => handleChange('vision', e.target.checked)}
-            />
-            <span>Vision</span>
-          </label>
+          <div className="checkbox-item">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.embedding}
+                onChange={(e) => handleChange('embedding', e.target.checked)}
+              />
+              <span>Embedding</span>
+            </label>
+            <p className="checkbox-desc">Outputs numerical vectors that capture semantic meaning. Affects llama.cpp through the <code>--embeddings</code> flag.</p>
+          </div>
 
-          <label className="checkbox-label" title="Enable if model generates text embeddings">
-            <input
-              type="checkbox"
-              checked={form.embedding}
-              onChange={(e) => handleChange('embedding', e.target.checked)}
-            />
-            <span>Embedding</span>
-          </label>
+          <div className="checkbox-item">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.reranking}
+                onChange={(e) => handleChange('reranking', e.target.checked)}
+              />
+              <span>Reranking</span>
+            </label>
+            <p className="checkbox-desc">Reorders a list of inputs based on relevance to a query. Affects llama.cpp through the <code>--reranking</code> flag.</p>
+          </div>
 
-          <label className="checkbox-label" title="Enable if model performs reranking">
-            <input
-              type="checkbox"
-              checked={form.reranking}
-              onChange={(e) => handleChange('reranking', e.target.checked)}
-            />
-            <span>Reranking</span>
-          </label>
+          <div className="checkbox-item">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.vision}
+                onChange={(e) => handleChange('vision', e.target.checked)}
+              />
+              <span>Vision</span>
+            </label>
+            <p className="checkbox-desc">Responds to combinations of image and text. Gets auto-selected upon detection of an mmproj file. llama.cpp receives <code>--mmproj &lt;path&gt;</code> for multimodal input.</p>
+          </div>
         </div>
       </div>
 

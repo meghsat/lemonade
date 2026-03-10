@@ -13,7 +13,7 @@ import TranscriptionPanel from './components/panels/TranscriptionPanel';
 import ImageGenerationPanel from './components/panels/ImageGenerationPanel';
 import TTSPanel from './components/panels/TTSPanel';
 import LLMChatPanel from './components/panels/LLMChatPanel';
-import { RefreshIcon, PlusIcon, AttachIcon } from './components/Icons';
+import { RefreshIcon } from './components/Icons';
 import { isExperienceModel, getExperienceComponents } from './utils/experienceModels';
 import AddModelPanel, { AddModelInitialValues, ModelInstallData } from './AddModelPanel';
 
@@ -38,7 +38,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isVisible, width }) => {
   const [resetKey, setResetKey] = useState(0);
   const [showAddModelForm, setShowAddModelForm] = useState(false);
   const [addModelInitialValues, setAddModelInitialValues] = useState<AddModelInitialValues | undefined>(undefined);
-  const addModelBtnRef = useRef<HTMLButtonElement>(null);
   const addModelFromJSONRef = useRef<HTMLInputElement>(null);
 
   type ModelType = 'llm' | 'embedding' | 'reranking' | 'transcription' | 'image' | 'speech';
@@ -182,8 +181,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isVisible, width }) => {
       setAddModelInitialValues(detail?.initialValues ?? undefined);
       setShowAddModelForm(true);
     };
+    const handleOpenAddModelFromJSON = () => {
+      addModelFromJSONRef.current?.click();
+    };
     window.addEventListener('openAddModel', handleOpenAddModel);
-    return () => window.removeEventListener('openAddModel', handleOpenAddModel);
+    window.addEventListener('openAddModelFromJSON', handleOpenAddModelFromJSON);
+    return () => {
+      window.removeEventListener('openAddModel', handleOpenAddModel);
+      window.removeEventListener('openAddModelFromJSON', handleOpenAddModelFromJSON);
+    };
   }, []);
 
   const handleAddModelInstall = (data: ModelInstallData) => {
@@ -269,41 +275,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isVisible, width }) => {
         <div className="chat-header">
           <h3>{headerTitle}</h3>
           <div className="chat-header-actions">
-            <input
-              ref={addModelFromJSONRef}
-              type="file"
-              accept=".json"
-              style={{ display: 'none' }}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  try {
-                    const json = JSON.parse(ev.target?.result as string);
-                    window.dispatchEvent(new CustomEvent('installModelFromJSON', { detail: json }));
-                    setShowAddModelForm(false);
-                  } catch { /* ignore */ }
-                };
-                reader.readAsText(file);
-                e.target.value = '';
-              }}
-            />
-            <button
-              className="new-chat-button"
-              onClick={() => addModelFromJSONRef.current?.click()}
-              title="Import a Model from JSON"
-            >
-              <AttachIcon size={16} strokeWidth={2} />
-            </button>
-            <button
-              ref={addModelBtnRef}
-              className="new-chat-button"
-              onClick={() => setShowAddModelForm((prev: boolean) => !prev)}
-              title="Manually Add a Model"
-            >
-              <PlusIcon size={16} strokeWidth={2} />
-            </button>
             <button
               className="new-chat-button"
               onClick={handleNewChat}
@@ -312,15 +283,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isVisible, width }) => {
             >
               <RefreshIcon />
             </button>
-            {showAddModelForm && (
-              <div className="add-model-floating-panel">
-                <AddModelPanel
-                  onClose={() => { setShowAddModelForm(false); setAddModelInitialValues(undefined); }}
-                  initialValues={addModelInitialValues}
-                  onInstall={handleAddModelInstall}
-                />
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -341,6 +303,36 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isVisible, width }) => {
           onNewChat={handleNewChat}
           onUnloadExperience={handleUnloadExperienceModel}
         />
+      )}
+      <input
+        ref={addModelFromJSONRef}
+        type="file"
+        accept=".json"
+        style={{ display: 'none' }}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            try {
+              const json = JSON.parse(ev.target?.result as string);
+              window.dispatchEvent(new CustomEvent('installModelFromJSON', { detail: json }));
+            } catch { /* ignore */ }
+          };
+          reader.readAsText(file);
+          e.target.value = '';
+        }}
+      />
+      {showAddModelForm && (
+        <div className="add-model-modal-overlay" onClick={(e: React.MouseEvent<HTMLDivElement>) => { if (e.target === e.currentTarget) { setShowAddModelForm(false); setAddModelInitialValues(undefined); } }}>
+          <div className="add-model-modal">
+            <AddModelPanel
+              onClose={() => { setShowAddModelForm(false); setAddModelInitialValues(undefined); }}
+              initialValues={addModelInitialValues}
+              onInstall={handleAddModelInstall}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
