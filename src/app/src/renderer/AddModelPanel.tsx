@@ -25,7 +25,6 @@ export interface ModelInstallData {
 interface AddModelPanelProps {
   onClose: () => void;
   onInstall: (data: ModelInstallData) => void;
-  onImportJSON?: () => void;
   initialValues?: AddModelInitialValues;
 }
 
@@ -51,7 +50,7 @@ const createEmptyForm = (initial?: AddModelInitialValues) => ({
   reranking: initial?.reranking ?? false,
 });
 
-const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, onImportJSON, initialValues }) => {
+const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, initialValues }) => {
   const { supportedRecipes } = useSystem();
   const [form, setForm] = useState(() => createEmptyForm(initialValues));
   const [error, setError] = useState<string | null>(null);
@@ -113,18 +112,6 @@ const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, onImp
   const recipeOptions = filteredSupportedRecipes.length > 0
     ? filteredSupportedRecipes
     : Object.keys(RECIPE_LABELS);
-
-  const fromJsonButton: React.ReactNode = onImportJSON
-    ? React.createElement(
-        'div',
-        { className: 'form-section' },
-        React.createElement(
-          'button',
-          { className: 'add-model-button', onClick: onImportJSON, title: 'Import model definition from a JSON file' },
-          'From JSON'
-        )
-      )
-    : null;
 
   const mmprojOptionElements = mmprojOptions.map((f: string) => {
     const label = getMmprojLabel(f);
@@ -250,8 +237,6 @@ const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, onImp
           </label>
         </div>
       </div>
-
-      {fromJsonButton}
 
       {error && <div className="form-error">{error}</div>}
 

@@ -13,8 +13,9 @@ import TranscriptionPanel from './components/panels/TranscriptionPanel';
 import ImageGenerationPanel from './components/panels/ImageGenerationPanel';
 import TTSPanel from './components/panels/TTSPanel';
 import LLMChatPanel from './components/panels/LLMChatPanel';
-import { RefreshIcon } from './components/Icons';
+import { RefreshIcon, PlusIcon, AttachIcon } from './components/Icons';
 import { isExperienceModel, getExperienceComponents } from './utils/experienceModels';
+import AddModelPanel, { AddModelInitialValues, ModelInstallData } from './AddModelPanel';
 
 interface ChatWindowProps {
   isVisible: boolean;
@@ -35,6 +36,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isVisible, width }) => {
   const [currentLoadedModel, setCurrentLoadedModel] = useState<string | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [resetKey, setResetKey] = useState(0);
+  const [showAddModelForm, setShowAddModelForm] = useState(false);
+  const [addModelInitialValues, setAddModelInitialValues] = useState<AddModelInitialValues | undefined>(undefined);
+  const addModelBtnRef = useRef<HTMLButtonElement>(null);
+  const addModelFromJSONRef = useRef<HTMLInputElement>(null);
 
   type ModelType = 'llm' | 'embedding' | 'reranking' | 'transcription' | 'image' | 'speech';
 
@@ -171,6 +176,35 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isVisible, width }) => {
     };
   }, [fetchLoadedModel, setSelectedModel, setUserHasSelectedModel]);
 
+  useEffect(() => {
+    const handleOpenAddModel = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setAddModelInitialValues(detail?.initialValues ?? undefined);
+      setShowAddModelForm(true);
+    };
+    window.addEventListener('openAddModel', handleOpenAddModel);
+    return () => window.removeEventListener('openAddModel', handleOpenAddModel);
+  }, []);
+
+  const handleAddModelInstall = (data: ModelInstallData) => {
+    setShowAddModelForm(false);
+    setAddModelInitialValues(undefined);
+    window.dispatchEvent(new CustomEvent('installModel', {
+      detail: {
+        name: `user.${data.name}`,
+        registrationData: {
+          checkpoint: data.checkpoint,
+          recipe: data.recipe,
+          mmproj: data.mmproj,
+          reasoning: data.reasoning,
+          vision: data.vision,
+          embedding: data.embedding,
+          reranking: data.reranking,
+        },
+      },
+    }));
+  };
+
   const handleNewChat = () => {
     inference.reset();
     setResetKey(k => k + 1);
@@ -234,14 +268,60 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isVisible, width }) => {
       {activeModelType !== 'llm' && (
         <div className="chat-header">
           <h3>{headerTitle}</h3>
-          <button
-            className="new-chat-button"
-            onClick={handleNewChat}
-            disabled={inference.isBusy}
-            title="Clear"
-          >
-            <RefreshIcon />
-          </button>
+          <div className="chat-header-actions">
+            <input
+              ref={addModelFromJSONRef}
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  try {
+                    const json = JSON.parse(ev.target?.result as string);
+                    window.dispatchEvent(new CustomEvent('installModelFromJSON', { detail: json }));
+                    setShowAddModelForm(false);
+                  } catch { /* ignore */ }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+              }}
+            />
+            <button
+              className="new-chat-button"
+              onClick={() => addModelFromJSONRef.current?.click()}
+              title="Import a Model from JSON"
+            >
+              <AttachIcon size={16} strokeWidth={2} />
+            </button>
+            <button
+              ref={addModelBtnRef}
+              className="new-chat-button"
+              onClick={() => setShowAddModelForm((prev: boolean) => !prev)}
+              title="Manually Add a Model"
+            >
+              <PlusIcon size={16} strokeWidth={2} />
+            </button>
+            <button
+              className="new-chat-button"
+              onClick={handleNewChat}
+              disabled={inference.isBusy}
+              title="Clear"
+            >
+              <RefreshIcon />
+            </button>
+            {showAddModelForm && (
+              <div className="add-model-floating-panel">
+                <AddModelPanel
+                  onClose={() => { setShowAddModelForm(false); setAddModelInitialValues(undefined); }}
+                  initialValues={addModelInitialValues}
+                  onInstall={handleAddModelInstall}
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -2691,6 +2691,27 @@ footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: relative;
+}
+
+.chat-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+}
+
+.add-model-floating-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 200;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 12px;
+    width: 320px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 
 .chat-window-experience .chat-header {

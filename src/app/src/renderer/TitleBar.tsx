@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import logo from '../../assets/logo.svg';
 import AboutModal from './AboutModal';
 
-type MenuType = 'view' | 'help' | null;
+type MenuType = 'file' | 'view' | 'help' | null;
 
 interface TitleBarProps {
   isChatVisible: boolean;
@@ -51,6 +51,15 @@ const TitleBar: React.FC<TitleBarProps> = ({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey) {
+        switch (event.key.toLowerCase()) {
+          case 'm':
+            event.preventDefault();
+            window.dispatchEvent(new CustomEvent('openAddModel'));
+            setActiveMenu(null);
+            break;
+        }
+      }
       if ((event.ctrlKey || event.metaKey) && event.shiftKey) {
         switch (event.key.toLowerCase()) {
           case 'm':
@@ -102,6 +111,22 @@ const TitleBar: React.FC<TitleBarProps> = ({
         <div className="title-bar-left">
           <img src={logo} alt="Lemonade" className="title-bar-logo" />
           <div className="menu-items">
+            <div className="menu-item-wrapper">
+              <span
+                className={`menu-item ${activeMenu === 'file' ? 'active' : ''}`}
+                onClick={() => handleMenuClick('file')}
+              >
+                File
+              </span>
+              {activeMenu === 'file' && (
+                <div className="menu-dropdown">
+                  <div className="menu-option" onClick={() => { window.dispatchEvent(new CustomEvent('openAddModel')); setActiveMenu(null); }}>
+                    <span>Add a Model</span>
+                    <span className="menu-shortcut">{isMacPlatform ? '⌘M' : 'Ctrl+M'}</span>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="menu-item-wrapper">
               <span
                 className={`menu-item ${activeMenu === 'view' ? 'active' : ''}`}

@@ -18,7 +18,6 @@ import MarketplacePanel, { MarketplaceCategory } from './MarketplacePanel';
 import { RECIPE_DISPLAY_NAMES } from './utils/recipeNames';
 import { EjectIcon } from './components/Icons';
 import { getExperienceComponents, isExperienceFullyDownloaded, isExperienceFullyLoaded, isExperienceModel, isModelEffectivelyDownloaded } from './utils/experienceModels';
-import AddModelPanel, { AddModelInitialValues, ModelInstallData } from './AddModelPanel';
 
 interface ModelFamily {
   displayName: string;
@@ -192,9 +191,7 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
   const [organizationMode, setOrganizationMode] = useState<'recipe' | 'category'>('recipe');
   const [showDownloadedOnly, setShowDownloadedOnly] = useState(false);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [showAddModelForm, setShowAddModelForm] = useState(false);
-  const [addModelInitialValues, setAddModelInitialValues] = useState<AddModelInitialValues | undefined>(undefined);
-  const [searchQuery, setSearchQuery] = useState('');
+const [searchQuery, setSearchQuery] = useState('');
   const [loadedModels, setLoadedModels] = useState<Set<string>>(new Set());
   const [loadingModels, setLoadingModels] = useState<Set<string>>(new Set());
   const [hoveredModel, setHoveredModel] = useState<string | null>(null);
@@ -204,8 +201,6 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
   const [marketplaceCategories, setMarketplaceCategories] = useState<MarketplaceCategory[]>([]);
   const [expandedFamilies, setExpandedFamilies] = useState<Set<string>>(new Set());
   const filterAnchorRef = useRef<HTMLDivElement | null>(null);
-  const addModelFromJSONRef = useRef<HTMLInputElement>(null);
-
   // HuggingFace search state
   const [hfSearchResults, setHfSearchResults] = useState<HFModelInfo[]>([]);
   const [isSearchingHF, setIsSearchingHF] = useState(false);
@@ -499,10 +494,7 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
     .map(modelName => ({ modelName }))
     .sort((a, b) => a.modelName.localeCompare(b.modelName));
 
-  const resetNewModelForm = () => {
-    setShowAddModelForm(false);
-    setAddModelInitialValues(undefined);
-  };
+
 
   const formatDownloads = (downloads: number): string => {
     if (downloads >= 1_000_000) return `${(downloads / 1_000_000).toFixed(1)}M`;
@@ -936,27 +928,6 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
     }
   };
 
-  const handleUploadModel = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-
-    if (!files || files.length === 0) {
-      return;
-    }
-
-    const file = files[0];
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const result = JSON.parse(e.target?.result as string);
-        uploadModelJSON(result);
-      } catch(err: any) {
-        showError(`Failed to parse JSON file. ${err}`);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-  }
-
   const uploadModelJSON = (json: ModelJSON) => {
     let modelName: string;
 
@@ -978,6 +949,23 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
 
     handleDownloadModel(modelName as string, json as ModelRegistrationData);
   }
+
+  useEffect(() => {
+    const handleInstallModel = (e: Event) => {
+      const { name, registrationData } = (e as CustomEvent).detail;
+      if (name) handleDownloadModel(name, registrationData);
+    };
+    const handleInstallFromJSON = (e: Event) => {
+      const json = (e as CustomEvent).detail;
+      if (json) uploadModelJSON(json);
+    };
+    window.addEventListener('installModel', handleInstallModel);
+    window.addEventListener('installModelFromJSON', handleInstallFromJSON);
+    return () => {
+      window.removeEventListener('installModel', handleInstallModel);
+      window.removeEventListener('installModelFromJSON', handleInstallFromJSON);
+    };
+  }, [handleDownloadModel]);
 
   const viewTitle = currentView === 'models'
     ? 'Model Manager'
@@ -1248,18 +1236,6 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
     }
   };
 
-  const addModelFooterContent: React.ReactNode = !showAddModelForm
-    ? React.createElement(
-        'div',
-        { className: 'add-model-buttons-container' },
-        React.createElement(
-          'button',
-          { className: 'add-model-button', onClick: () => setShowAddModelForm(true) },
-          'Manually Add a Model'
-        )
-      )
-    : null;
-
   return (
     <div className="model-manager" style={{ width: `${width}px` }}>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
@@ -1462,16 +1438,19 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
                                   ? resolveGgufCheckpoint(hfModel.id, backend)
                                   : hfModel.id;
                                 const idLower = hfModel.id.toLowerCase();
-                                setAddModelInitialValues({
-                                  name: hfModel.id.split('/').pop() || hfModel.id,
-                                  checkpoint,
-                                  recipe: backend.recipe,
-                                  mmprojOptions: backend.mmprojFiles,
-                                  vision: (backend.mmprojFiles?.length ?? 0) > 0,
-                                  reranking: idLower.includes('rerank'),
-                                  embedding: idLower.includes('embed'),
-                                });
-                                setShowAddModelForm(true);
+                                window.dispatchEvent(new CustomEvent('openAddModel', {
+                                  detail: {
+                                    initialValues: {
+                                      name: hfModel.id.split('/').pop() || hfModel.id,
+                                      checkpoint,
+                                      recipe: backend.recipe,
+                                      mmprojOptions: backend.mmprojFiles,
+                                      vision: (backend.mmprojFiles?.length ?? 0) > 0,
+                                      reranking: idLower.includes('rerank'),
+                                      embedding: idLower.includes('embed'),
+                                    },
+                                  },
+                                }));
                               }}
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1515,31 +1494,6 @@ const ModelManager: React.FC<ModelManagerProps> = ({ isContentVisible, onContent
             {currentView === 'settings' && <SettingsPanel isVisible={true} searchQuery={searchQuery} />}
           </div>
 
-          {currentView === 'models' && (
-            <div className="model-manager-footer">
-              <input ref={addModelFromJSONRef} type="file" accept=".json" onChange={handleUploadModel} style={{ display: 'none' }}/>
-              {addModelFooterContent}
-              {showAddModelForm && (
-                <AddModelPanel
-                  onClose={resetNewModelForm}
-                  initialValues={addModelInitialValues}
-                  onImportJSON={() => addModelFromJSONRef.current?.click()}
-                  onInstall={(data: ModelInstallData) => {
-                    resetNewModelForm();
-                    handleDownloadModel(`user.${data.name}`, {
-                      checkpoint: data.checkpoint,
-                      recipe: data.recipe,
-                      mmproj: data.mmproj,
-                      reasoning: data.reasoning,
-                      vision: data.vision,
-                      embedding: data.embedding,
-                      reranking: data.reranking,
-                    });
-                  }}
-                />
-              )}
-            </div>
-          )}
         </div>}
       </div>
     </div>
