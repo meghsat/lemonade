@@ -149,118 +149,126 @@ const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, initi
     : null;
 
   return (
-    <div className="add-model-form">
-      <div className="form-section">
-        <label className="form-label" title="A unique name to identify your model in the catalog">
-          Model Name
-        </label>
-        <div className="input-with-prefix">
-          <span className="input-prefix">user.</span>
+    <>
+      <div className="settings-header">
+        <h3>Add a Model</h3>
+        <button className="settings-close-button" onClick={onClose} title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M 1,1 L 13,13 M 13,1 L 1,13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div className="settings-content">
+        <div className="form-section">
+          <label className="form-label" title="A unique name to identify your model in the catalog">
+            Model Name
+          </label>
+          <div className="input-with-prefix">
+            <span className="input-prefix">user.</span>
+            <input
+              type="text"
+              className="form-input with-prefix"
+              placeholder="Gemma-3-12b-it-GGUF"
+              value={form.name}
+              onChange={(e) => handleChange('name', e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="form-section">
+          <label className="form-label" title="Hugging Face model path (repo/model:quantization)">
+            Checkpoint
+          </label>
           <input
             type="text"
-            className="form-input with-prefix"
-            placeholder="Gemma-3-12b-it-GGUF"
-            value={form.name}
-            onChange={(e) => handleChange('name', e.target.value)}
+            className="form-input"
+            placeholder="unsloth/gemma-3-12b-it-GGUF:Q4_0"
+            value={form.checkpoint}
+            onChange={(e) => handleChange('checkpoint', e.target.value)}
           />
         </div>
-      </div>
 
-      <div className="form-section">
-        <label className="form-label" title="Hugging Face model path (repo/model:quantization)">
-          Checkpoint
-        </label>
-        <input
-          type="text"
-          className="form-input"
-          placeholder="unsloth/gemma-3-12b-it-GGUF:Q4_0"
-          value={form.checkpoint}
-          onChange={(e) => handleChange('checkpoint', e.target.value)}
-        />
-      </div>
+        <div className="form-section">
+          <label className="form-label" title="Inference backend to use for this model">Recipe</label>
+          <select
+            className="form-input form-select"
+            value={form.recipe}
+            onChange={(e) => handleChange('recipe', e.target.value)}
+          >
+            <option value="">Select a recipe...</option>
+            {recipeOptions.map(recipe => (
+              <option key={recipe} value={recipe}>
+                {RECIPE_LABELS[recipe] ?? recipe}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      <div className="form-section">
-        <label className="form-label" title="Inference backend to use for this model">Recipe</label>
-        <select
-          className="form-input form-select"
-          value={form.recipe}
-          onChange={(e) => handleChange('recipe', e.target.value)}
-        >
-          <option value="">Select a recipe...</option>
-          {recipeOptions.map(recipe => (
-            <option key={recipe} value={recipe}>
-              {RECIPE_LABELS[recipe] ?? recipe}
-            </option>
-          ))}
-        </select>
-      </div>
+        <div className="form-section">
+          <label className="form-label">More info</label>
+          {mmprojField}
+        </div>
 
-      <div className="form-section">
-        <label className="form-label">More info</label>
-        {mmprojField}
-
-        <div className="form-checkboxes">
-          <div className="checkbox-item">
-            <label className="checkbox-label">
+        <div className="settings-section-container">
+          <div className="settings-section">
+            <label className="settings-checkbox-label">
               <input
                 type="checkbox"
-                checked={form.reasoning}
-                onChange={(e) => handleChange('reasoning', e.target.checked)}
-              />
-              <span>Reasoning</span>
-            </label>
-            <p className="checkbox-desc">Model performs multi-step logical thinking. Checkbox is purely for metadata and doesn't affect the output.</p>
-          </div>
-
-          <div className="checkbox-item">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
+                className="settings-checkbox"
                 checked={form.embedding}
                 onChange={(e) => handleChange('embedding', e.target.checked)}
               />
-              <span>Embedding</span>
+              <div className="settings-checkbox-content">
+                <span className="settings-label-text">Embedding</span>
+                <span className="settings-description">Outputs numerical vectors that capture semantic meaning. Affects llama.cpp through the <code>--embeddings</code> flag.</span>
+              </div>
             </label>
-            <p className="checkbox-desc">Outputs numerical vectors that capture semantic meaning. Affects llama.cpp through the <code>--embeddings</code> flag.</p>
           </div>
 
-          <div className="checkbox-item">
-            <label className="checkbox-label">
+          <div className="settings-section">
+            <label className="settings-checkbox-label">
               <input
                 type="checkbox"
+                className="settings-checkbox"
                 checked={form.reranking}
                 onChange={(e) => handleChange('reranking', e.target.checked)}
               />
-              <span>Reranking</span>
+              <div className="settings-checkbox-content">
+                <span className="settings-label-text">Reranking</span>
+                <span className="settings-description">Reorders a list of inputs based on relevance to a query. Affects llama.cpp through the <code>--reranking</code> flag.</span>
+              </div>
             </label>
-            <p className="checkbox-desc">Reorders a list of inputs based on relevance to a query. Affects llama.cpp through the <code>--reranking</code> flag.</p>
           </div>
 
-          <div className="checkbox-item">
-            <label className="checkbox-label">
+          <div className="settings-section">
+            <label className="settings-checkbox-label">
               <input
                 type="checkbox"
+                className="settings-checkbox"
                 checked={form.vision}
                 onChange={(e) => handleChange('vision', e.target.checked)}
               />
-              <span>Vision</span>
+              <div className="settings-checkbox-content">
+                <span className="settings-label-text">Vision</span>
+                <span className="settings-description">Responds to combinations of image and text. Gets auto-selected upon detection of an mmproj file. llama.cpp receives <code>--mmproj &lt;path&gt;</code> for multimodal input.</span>
+              </div>
             </label>
-            <p className="checkbox-desc">Responds to combinations of image and text. Gets auto-selected upon detection of an mmproj file. llama.cpp receives <code>--mmproj &lt;path&gt;</code> for multimodal input.</p>
           </div>
         </div>
+
+        {error && <div className="form-error">{error}</div>}
       </div>
 
-      {error && <div className="form-error">{error}</div>}
-
-      <div className="form-actions">
-        <button className="install-button" onClick={handleInstall}>
-          Install
-        </button>
-        <button className="cancel-button" onClick={onClose}>
+      <div className="settings-footer">
+        <button className="settings-reset-button" onClick={onClose}>
           Cancel
         </button>
+        <button className="settings-save-button" onClick={handleInstall}>
+          Install
+        </button>
       </div>
-    </div>
+    </>
   );
 };
 

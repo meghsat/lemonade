@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AppSettings,
   mergeWithDefaultSettings,
@@ -323,16 +324,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isVisible, width }) => {
           e.target.value = '';
         }}
       />
-      {showAddModelForm && (
-        <div className="add-model-modal-overlay" onClick={(e: React.MouseEvent<HTMLDivElement>) => { if (e.target === e.currentTarget) { setShowAddModelForm(false); setAddModelInitialValues(undefined); } }}>
-          <div className="add-model-modal">
+      {showAddModelForm && createPortal(
+        <div className="settings-overlay" onClick={(e: React.MouseEvent<HTMLDivElement>) => { if (e.target === e.currentTarget) { setShowAddModelForm(false); setAddModelInitialValues(undefined); } }}>
+          <div className="settings-modal">
             <AddModelPanel
               onClose={() => { setShowAddModelForm(false); setAddModelInitialValues(undefined); }}
               initialValues={addModelInitialValues}
               onInstall={handleAddModelInstall}
             />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
