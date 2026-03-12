@@ -1224,7 +1224,6 @@ footer {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 4px;
     padding: 4px 8px 4px 12px;
     border-left: 2px solid transparent;
     transition: background-color 0.15s ease;
@@ -1235,13 +1234,21 @@ footer {
     border-left-color: #444;
 }
 
-.hf-model-info {
+.hf-model-left {
     display: flex;
     align-items: center;
     gap: 5px;
-    flex: 1;
+    flex: 0 0 70%;
     min-width: 0;
     overflow: hidden;
+}
+
+.hf-model-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    flex: 0 0 30%;
 }
 
 .hf-model-name {
@@ -1266,6 +1273,12 @@ footer {
     align-items: center;
     gap: 2px;
     flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+}
+
+.hf-model-item:hover .hf-model-actions {
+    opacity: 1;
 }
 
 .hf-backend-badge {

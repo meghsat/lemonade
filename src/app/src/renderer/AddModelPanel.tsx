@@ -32,11 +32,6 @@ const RECIPE_LABELS: Record<string, string> = {
   'llamacpp': 'Llama.cpp GPU',
   'flm': 'FastFlowLM NPU',
   'ryzenai-llm': 'Ryzen AI LLM',
-  // 'oga-hybrid': 'Ryzen AI LLM',
-  // 'oga-npu': 'Ryzen AI LLM',
-  // 'oga-igpu': 'Ryzen AI LLM',
-  // 'whispercpp': 'Whisper.cpp',
-  // 'sd-cpp': 'StableDiffusion.cpp',
 };
 
 const createEmptyForm = (initial?: AddModelInitialValues) => ({

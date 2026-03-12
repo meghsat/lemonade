@@ -439,6 +439,13 @@ const [searchQuery, setSearchQuery] = useState('');
     }
   }, [categories]);
 
+  // Auto-expand all categories when a search query is entered
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      setExpandedCategories(new Set(categories));
+    }
+  }, [searchQuery]);
+
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => {
       const newSet = new Set(prev);
@@ -511,11 +518,7 @@ const [searchQuery, setSearchQuery] = useState('');
     return labels[category] || category.charAt(0).toUpperCase() + category.slice(1);
   };
 
-  // Auto-expand all categories when searching
   const shouldShowCategory = (category: string): boolean => {
-    if (searchQuery.trim()) {
-      return true; // Show all categories when searching
-    }
     return expandedCategories.has(category);
   };
 
@@ -1479,10 +1482,15 @@ const [searchQuery, setSearchQuery] = useState('');
                 {hfRateLimited && (
                   <div className="hf-search-message">Rate limited — try again shortly.</div>
                 )}
-                {!hfRateLimited && !isSearchingHF && hfSearchResults.length === 0 && (
+                {!hfRateLimited && !isSearchingHF && (
+                  hfSearchResults.length === 0 ||
+                  (hfSearchResults.length > 0 &&
+                    detectingBackendFor === null &&
+                    hfSearchResults.every((m: HFModelInfo) => hfModelBackends[m.id] === null))
+                ) && (
                   <div className="hf-search-message">No compatible models found.</div>
                 )}
-                {hfSearchResults.map((hfModel: HFModelInfo) => {
+                {hfSearchResults.filter((hfModel: HFModelInfo) => hfModelBackends[hfModel.id] !== null).map((hfModel: HFModelInfo) => {
                   const backend = hfModelBackends[hfModel.id];
                   const isDetecting = detectingBackendFor === hfModel.id;
                   const quants = backend?.quantizations ?? [];
@@ -1490,8 +1498,59 @@ const [searchQuery, setSearchQuery] = useState('');
                   const size = hfModelSizes[hfModel.id];
                   return (
                     <div key={hfModel.id} className="hf-model-item">
-                      <div className="hf-model-info">
+                      <div className="hf-model-left">
                         <span className="hf-model-name" title={hfModel.id}>{hfModel.id}</span>
+                        {size !== undefined && <span className="hf-model-size">{formatSize(size / (1024 ** 3))}</span>}
+                        <span className="hf-model-meta">↓ {formatDownloads(hfModel.downloads)}</span>
+                        {isDetecting && <span className="hf-search-spinner" />}
+                        <div className="hf-model-actions">
+                          {!isDetecting && backend && (
+                            <>
+                              <button
+                                className="model-action-btn edit-btn"
+                                title="Edit before adding"
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  const checkpoint = backend.recipe === 'llamacpp'
+                                    ? resolveGgufCheckpoint(hfModel.id, backend)
+                                    : hfModel.id;
+                                  const idLower = hfModel.id.toLowerCase();
+                                  window.dispatchEvent(new CustomEvent('openAddModel', {
+                                    detail: {
+                                      initialValues: {
+                                        name: hfModel.id.split('/').pop() || hfModel.id,
+                                        checkpoint,
+                                        recipe: backend.recipe,
+                                        mmprojOptions: backend.mmprojFiles,
+                                        vision: (backend.mmprojFiles?.length ?? 0) > 0,
+                                        reranking: idLower.includes('rerank'),
+                                        embedding: idLower.includes('embed'),
+                                      },
+                                    },
+                                  }));
+                                }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                              </button>
+                              <button
+                                className="model-action-btn download-btn"
+                                title="Download from Hugging Face"
+                                onClick={() => handleInstallHFModel(hfModel)}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                  <polyline points="7 10 12 15 17 10" />
+                                  <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="hf-model-right">
                         {!isDetecting && backend && quants.length > 1 && (
                           <select
                             className="hf-quant-select"
@@ -1508,56 +1567,6 @@ const [searchQuery, setSearchQuery] = useState('');
                           </select>
                         )}
                         {!isDetecting && backend && <span className="hf-backend-badge">{backend.label}</span>}
-                        {!isDetecting && backend === null && <span className="hf-unsupported">Unsupported</span>}
-                        {size !== undefined && <span className="hf-model-size">{formatSize(size / (1024 ** 3))}</span>}
-                        <span className="hf-model-meta">↓ {formatDownloads(hfModel.downloads)}</span>
-                        {isDetecting && <span className="hf-search-spinner" />}
-                      </div>
-                      <div className="hf-model-actions">
-                        {!isDetecting && backend && (
-                          <>
-                            <button
-                              className="model-action-btn edit-btn"
-                              title="Edit before adding"
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                const checkpoint = backend.recipe === 'llamacpp'
-                                  ? resolveGgufCheckpoint(hfModel.id, backend)
-                                  : hfModel.id;
-                                const idLower = hfModel.id.toLowerCase();
-                                window.dispatchEvent(new CustomEvent('openAddModel', {
-                                  detail: {
-                                    initialValues: {
-                                      name: hfModel.id.split('/').pop() || hfModel.id,
-                                      checkpoint,
-                                      recipe: backend.recipe,
-                                      mmprojOptions: backend.mmprojFiles,
-                                      vision: (backend.mmprojFiles?.length ?? 0) > 0,
-                                      reranking: idLower.includes('rerank'),
-                                      embedding: idLower.includes('embed'),
-                                    },
-                                  },
-                                }));
-                              }}
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                              </svg>
-                            </button>
-                            <button
-                              className="model-action-btn download-btn"
-                              title="Download from Hugging Face"
-                              onClick={() => handleInstallHFModel(hfModel)}
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                              </svg>
-                            </button>
-                          </>
-                        )}
                       </div>
                     </div>
                   );
