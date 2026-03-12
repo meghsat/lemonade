@@ -221,7 +221,7 @@ const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, initi
               />
               <div className="settings-checkbox-content">
                 <span className="settings-label-text">Embedding</span>
-                <span className="settings-description">Outputs numerical vectors that capture semantic meaning. Affects llama.cpp through the <code>--embeddings</code> flag.</span>
+                <span className="settings-description">Select this box if your model outputs numerical vectors that capture semantic meaning. This enables the <code>--embeddings</code> flag in llama.cpp</span>
               </div>
             </label>
           </div>
@@ -236,7 +236,7 @@ const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, initi
               />
               <div className="settings-checkbox-content">
                 <span className="settings-label-text">Reranking</span>
-                <span className="settings-description">Reorders a list of inputs based on relevance to a query. Affects llama.cpp through the <code>--reranking</code> flag.</span>
+                <span className="settings-description">Select this box if your model reorders a list of inputs based on relevance to a query. This enables the <code>--reranking</code> flag in llama.cpp</span>
               </div>
             </label>
           </div>
@@ -251,7 +251,7 @@ const AddModelPanel: React.FC<AddModelPanelProps> = ({ onClose, onInstall, initi
               />
               <div className="settings-checkbox-content">
                 <span className="settings-label-text">Vision</span>
-                <span className="settings-description">Responds to combinations of image and text. Gets auto-selected upon detection of an mmproj file. llama.cpp receives <code>--mmproj &lt;path&gt;</code> for multimodal input.</span>
+                <span className="settings-description">Select this box if your model can respond to combinations of image and text. If selected, llama.cpp will be run with <code>--mmproj &lt;path&gt;</code> for multimodal input.</span>
               </div>
             </label>
           </div>

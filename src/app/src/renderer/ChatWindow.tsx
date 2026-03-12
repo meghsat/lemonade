@@ -275,16 +275,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isVisible, width }) => {
       {activeModelType !== 'llm' && (
         <div className="chat-header">
           <h3>{headerTitle}</h3>
-          <div className="chat-header-actions">
-            <button
-              className="new-chat-button"
-              onClick={handleNewChat}
-              disabled={inference.isBusy}
-              title="Clear"
-            >
-              <RefreshIcon />
-            </button>
-          </div>
+          <button
+            className="new-chat-button"
+            onClick={handleNewChat}
+            disabled={inference.isBusy}
+            title="Clear"
+          >
+            <RefreshIcon />
+          </button>
         </div>
       )}
 
