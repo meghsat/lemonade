@@ -125,11 +125,11 @@ const TitleBar: React.FC<TitleBarProps> = ({
                     <span className="submenu-arrow">›</span>
                     <div className="menu-submenu">
                       <div className="menu-option new-model-submenu-option" title="Manually add a model by filling out a form" onClick={() => { window.dispatchEvent(new CustomEvent('openAddModel')); setActiveMenu(null); }}>
-                        <span>Manually Add a Model</span>
+                        <span>Manually</span>
                         <span className="menu-shortcut">{isMacPlatform ? '⌘M' : 'Ctrl+M'}</span>
                       </div>
                       <div className="menu-option new-model-submenu-option" title="Upload a local JSON file" onClick={() => { window.dispatchEvent(new CustomEvent('openAddModelFromJSON')); setActiveMenu(null); }}>
-                        <span>Upload a Model from JSON</span>
+                        <span>From JSON</span>
                       </div>
                     </div>
                   </div>
