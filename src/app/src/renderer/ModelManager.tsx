@@ -503,7 +503,7 @@ const [searchQuery, setSearchQuery] = useState('');
   };
 
   const searchHuggingFace = useCallback(async (query: string) => {  //Searching the HF API for GGUF, ONNX, and FastFlowLM models
-    if (!query.trim() || query.length < 2) {
+    if (!query.trim() || query.length < 3) {
       setHfSearchResults([]);
       setHfRateLimited(false);
       return;
@@ -513,9 +513,9 @@ const [searchQuery, setSearchQuery] = useState('');
     try {
       const encoded = encodeURIComponent(query);
       const [ggufRes, onnxRes, flmRes] = await Promise.all([
-        fetch(`https://huggingface.co/api/models?search=${encoded}&filter=gguf&limit=8&sort=downloads&direction=-1`),
-        fetch(`https://huggingface.co/api/models?search=${encoded}&filter=onnx&limit=8&sort=downloads&direction=-1`),
-        fetch(`https://huggingface.co/api/models?author=FastFlowLM&search=${encoded}&limit=4&sort=downloads&direction=-1`),
+        fetch(`https://huggingface.co/api/models?search=${encoded}&filter=gguf&limit=6&sort=downloads&direction=-1`),
+        fetch(`https://huggingface.co/api/models?search=${encoded}&filter=onnx&limit=6&sort=downloads&direction=-1`),
+        fetch(`https://huggingface.co/api/models?author=FastFlowLM&search=${encoded}&limit=3&sort=downloads&direction=-1`),
       ]);
       if (ggufRes.status === 429 || onnxRes.status === 429 || flmRes.status === 429) {
         setHfRateLimited(true);
@@ -623,10 +623,10 @@ const [searchQuery, setSearchQuery] = useState('');
       // ONNX detection
       if (files.some(f => f.endsWith('.onnx') || f.endsWith('.onnx_data'))) {
         const id = modelId.toLowerCase();
-        let recipe = 'oga', label = 'ONNX CPU';
-        if (id.includes('-ryzenai-npu') || tags.includes('npu')) { recipe = 'oga'; label = 'ONNX NPU'; }
-        else if (id.includes('-ryzenai-hybrid') || tags.includes('hybrid')) { recipe = 'oga'; label = 'ONNX Hybrid'; }
-        else if (tags.includes('igpu')) { recipe = 'oga'; label = 'ONNX iGPU'; }
+        let recipe = 'ryzenai-llm', label = 'ONNX CPU';
+        if (id.includes('-ryzenai-npu') || tags.includes('npu')) { recipe = 'ryzenai-llm'; label = 'ONNX NPU'; }
+        else if (id.includes('-ryzenai-hybrid') || tags.includes('hybrid')) { recipe = 'ryzenai-llm'; label = 'ONNX Hybrid'; }
+        else if (tags.includes('igpu')) { recipe = 'ryzenai-llm'; label = 'ONNX iGPU'; }
         setHfModelBackends((prev: Record<string, DetectedBackend | null>) => ({ ...prev, [modelId]: { recipe, label } }));
         return;
       }
@@ -734,8 +734,8 @@ const [searchQuery, setSearchQuery] = useState('');
   useEffect(() => {
     if (currentView !== 'models') return;
     if (hfSearchTimeoutRef.current) clearTimeout(hfSearchTimeoutRef.current);
-    if (searchQuery.trim().length >= 2) {
-      hfSearchTimeoutRef.current = setTimeout(() => searchHuggingFace(searchQuery), 600);
+    if (searchQuery.trim().length >= 3) {
+      hfSearchTimeoutRef.current = setTimeout(() => searchHuggingFace(searchQuery), 1200);
     } else {
       setHfSearchResults([]);
       setHfRateLimited(false);
@@ -1383,7 +1383,7 @@ const [searchQuery, setSearchQuery] = useState('');
                 {renderModelsView()}
               </div>
             )}
-            {currentView === 'models' && searchQuery.trim().length >= 2 && ( // Rendering the HF models by searching
+            {currentView === 'models' && searchQuery.trim().length >= 3 && ( // Rendering the HF models by searching
               <div className="hf-search-section widget">
                 <div className="available-models-header">
                   <div className="loaded-model-label">FROM HUGGING FACE</div>
