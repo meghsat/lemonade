@@ -323,8 +323,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isVisible, width }) => {
         }}
       />
       {showAddModelForm && createPortal(
-        <div className="settings-overlay" onClick={(e: React.MouseEvent<HTMLDivElement>) => { if (e.target === e.currentTarget) { setShowAddModelForm(false); setAddModelInitialValues(undefined); } }}>
-          <div className="settings-modal">
+        <div className="settings-overlay" onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => { if (e.target === e.currentTarget) { setShowAddModelForm(false); setAddModelInitialValues(undefined); } }}>
+          <div className="settings-modal" onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}>
             <AddModelPanel
               onClose={() => { setShowAddModelForm(false); setAddModelInitialValues(undefined); }}
               initialValues={addModelInitialValues}

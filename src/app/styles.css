@@ -2875,28 +2875,60 @@ footer {
     bottom: calc(100% + 4px);
     left: 0;
     min-width: 100%;
-    max-height: calc(5 * 30px);
-    overflow-y: auto;
     background: #1e1e1e;
     border: 1px solid #444;
     border-radius: 6px;
     z-index: 100;
-    padding: 3px;
+    padding: 3px 3px 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.model-selector-list {
+    max-height: calc(8 * 30px);
+    overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: #444 transparent;
 }
 
-.model-selector-dropdown::-webkit-scrollbar {
+.model-selector-list::-webkit-scrollbar {
     width: 4px;
 }
 
-.model-selector-dropdown::-webkit-scrollbar-track {
+.model-selector-list::-webkit-scrollbar-track {
     background: transparent;
 }
 
-.model-selector-dropdown::-webkit-scrollbar-thumb {
+.model-selector-list::-webkit-scrollbar-thumb {
     background: #444;
     border-radius: 4px;
+}
+
+.model-selector-empty {
+    padding: 6px 8px;
+    font-size: 0.72rem;
+    color: #555;
+}
+
+.model-selector-search-bar {
+    padding: 4px 2px 4px;
+    border-top: 1px solid #2a2a2a;
+    margin-top: 2px;
+}
+
+.model-selector-search {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ccc;
+    font-size: 0.72rem;
+    padding: 2px 6px;
+    box-sizing: border-box;
+}
+
+.model-selector-search::placeholder {
+    color: #444;
 }
 
 .model-selector-option {
@@ -2919,6 +2951,11 @@ footer {
 .model-selector-option.selected {
     color: #fff;
     background: #2e2e2e;
+}
+
+.model-selector-option.highlighted {
+    background: #2a2a2a;
+    color: #fff;
 }
 
 .chat-messages {

@@ -374,7 +374,7 @@ const [searchQuery, setSearchQuery] = useState('');
     // Inject empty categories for supported recipes that have no models
     // (e.g., FLM when backend needs install/upgrade)
     const recipes = systemInfo?.recipes;
-    if (recipes && !showDownloadedOnly) {
+    if (recipes && !showDownloadedOnly && !searchQuery.trim()) {
       for (const [recipeName, recipe] of Object.entries(recipes)) {
         if (grouped[recipeName]) continue; // Already has models
         const backends = recipe?.backends;
@@ -552,26 +552,14 @@ const [searchQuery, setSearchQuery] = useState('');
     setHfRateLimited(false);
     try {
       const encoded = encodeURIComponent(query);
-      const [ggufRes, onnxRes, flmRes] = await Promise.all([
-        fetch(`https://huggingface.co/api/models?search=${encoded}&filter=gguf&limit=6&sort=downloads&direction=-1`),
-        fetch(`https://huggingface.co/api/models?search=${encoded}&filter=onnx&limit=6&sort=downloads&direction=-1`),
-        fetch(`https://huggingface.co/api/models?author=FastFlowLM&search=${encoded}&limit=3&sort=downloads&direction=-1`),
-      ]);
-      if (ggufRes.status === 429 || onnxRes.status === 429 || flmRes.status === 429) {
+      const ggufRes = await fetch(`https://huggingface.co/api/models?search=${encoded}&filter=gguf&limit=12&sort=downloads&direction=-1`);
+      if (ggufRes.status === 429) {
         setHfRateLimited(true);
         setHfSearchResults([]);
         return;
       }
       const ggufData: HFModelInfo[] = ggufRes.ok ? await ggufRes.json() : [];
-      const onnxData: HFModelInfo[] = onnxRes.ok ? await onnxRes.json() : [];
-      const flmData: HFModelInfo[] = flmRes.ok ? await flmRes.json() : [];
-      const seen = new Set<string>();
-      const merged: HFModelInfo[] = [];
-      for (const m of [...ggufData, ...onnxData, ...flmData]) {
-        if (!seen.has(m.id)) { seen.add(m.id); merged.push(m); }
-      }
-      merged.sort((a, b) => b.downloads - a.downloads);
-      setHfSearchResults(merged.slice(0, 12));
+      setHfSearchResults(ggufData);
     } catch {
       setHfSearchResults([]);
     } finally {

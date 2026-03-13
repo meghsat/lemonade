@@ -16,7 +16,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ disabled }) => {
   } = useModels();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const visibleDownloadedModels = downloadedModels.filter((model) => {
     if (!isExperienceModel(model.info)) {
@@ -25,9 +27,13 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ disabled }) => {
     return model.info.suggested === true;
   });
 
-  const dropdownModels = isDefaultModelPending
+  const allModels = isDefaultModelPending
     ? [{ id: DEFAULT_MODEL_ID }]
     : visibleDownloadedModels;
+
+  const dropdownModels = searchQuery.trim()
+    ? allModels.filter(m => m.id.toLowerCase().includes(searchQuery.toLowerCase()))
+    : allModels;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -38,6 +44,13 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ disabled }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSearchQuery('');
+      setTimeout(() => searchRef.current?.focus(), 0);
+    }
+  }, [isOpen]);
 
   const handleSelect = (id: string) => {
     setUserHasSelectedModel(true);
@@ -64,16 +77,33 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ disabled }) => {
 
       {isOpen && (
         <div className="model-selector-dropdown">
-          {dropdownModels.map((model) => (
-            <div
-              key={model.id}
-              className={`model-selector-option${model.id === selectedModel ? ' selected' : ''}`}
-              onClick={() => handleSelect(model.id)}
-              title={model.id}
-            >
-              {model.id}
-            </div>
-          ))}
+          <div className="model-selector-list">
+            {dropdownModels.length > 0 ? dropdownModels.map((model) => (
+              <div
+                key={model.id}
+                className={`model-selector-option${model.id === selectedModel ? ' selected' : ''}`}
+                onClick={() => handleSelect(model.id)}
+                title={model.id}
+              >
+                {model.id}
+              </div>
+            )) : (
+              <div className="model-selector-empty">No models match</div>
+            )}
+          </div>
+          <div className="model-selector-search-bar">
+            <input
+              ref={searchRef}
+              type="text"
+              className="model-selector-search"
+              placeholder="Search models..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') { e.stopPropagation(); setIsOpen(false); }
+              }}
+            />
+          </div>
         </div>
       )}
     </div>
