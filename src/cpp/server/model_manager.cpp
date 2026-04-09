@@ -19,6 +19,7 @@
 #include <set>
 #include <unordered_set>
 #include <iomanip>
+#include <cstring>
 #include <lemon/utils/aixlog.hpp>
 
 namespace fs = std::filesystem;
@@ -75,6 +76,24 @@ static bool starts_with_ignore_case(const std::string& str, const std::string& p
 
 static bool contains_ignore_case(const std::string& str, const std::string& substr) {
     return to_lower(str).find(to_lower(substr)) != std::string::npos;
+}
+
+static constexpr const char* USER_MODEL_PREFIX = "user.";
+static constexpr const char* APPEAR_BUILTIN_LABEL = "appear-builtin";
+
+static bool has_label(const ModelInfo& info, const std::string& label) {
+    return std::find(info.labels.begin(), info.labels.end(), label) != info.labels.end();
+}
+
+static bool is_user_model_name(const std::string& model_name) {
+    return model_name.rfind(USER_MODEL_PREFIX, 0) == 0;
+}
+
+static std::string strip_user_model_prefix(const std::string& model_name) {
+    if (is_user_model_name(model_name)) {
+        return model_name.substr(std::strlen(USER_MODEL_PREFIX));
+    }
+    return model_name;
 }
 
 static std::string repo_id_to_cache_dir_name(const std::string& repo_id) {
@@ -903,7 +922,11 @@ std::map<std::string, ModelInfo> ModelManager::get_supported_models() {
 
     // Return copy of cache (all models, including their download status)
     std::lock_guard<std::mutex> lock(models_cache_mutex_);
-    return models_cache_;
+    std::map<std::string, ModelInfo> public_models;
+    for (const auto& [name, info] : models_cache_) {
+        public_models[canonical_public_names_.count(name) ? canonical_public_names_.at(name) : name] = info;
+    }
+    return public_models;
 }
 
 static void load_checkpoints(ModelInfo& info, json& model_json) {
@@ -1145,6 +1168,8 @@ void ModelManager::build_cache() {
         models_cache_[name] = info;
     }
 
+    rebuild_public_model_aliases_locked();
+
     cache_valid_ = true;
     LOG(INFO, "ModelManager") << "Cache built: " << models_cache_.size()
               << " total, " << downloaded_count << " downloaded" << std::endl;
@@ -1252,6 +1277,7 @@ void ModelManager::add_model_to_cache(const std::string& model_name) {
     }
 
     models_cache_[model_name] = info;
+    rebuild_public_model_aliases_locked();
     LOG(INFO, "ModelManager") << "Added '" << model_name << "' to cache (downloaded=" << info.downloaded << ")" << std::endl;
 }
 
@@ -1311,6 +1337,7 @@ void ModelManager::remove_model_from_cache(const std::string& model_name) {
         bool is_user_model = model_name.substr(0, 5) == "user.";
         if (is_user_model || it->second.source == "local_upload") {
             models_cache_.erase(model_name);
+            rebuild_public_model_aliases_locked();
             LOG(INFO, "ModelManager") << "Removed '" << model_name << "' from cache" << std::endl;
         } else {
             // Registered model - just mark as not downloaded
@@ -1330,7 +1357,7 @@ std::map<std::string, ModelInfo> ModelManager::get_downloaded_models() {
     std::map<std::string, ModelInfo> downloaded;
     for (const auto& [name, info] : models_cache_) {
         if (info.downloaded) {
-            downloaded[name] = info;
+            downloaded[canonical_public_names_.count(name) ? canonical_public_names_.at(name) : name] = info;
         }
     }
     return downloaded;
@@ -2706,14 +2733,15 @@ void ModelManager::download_from_flm(const std::string& checkpoint,
 }
 
 void ModelManager::delete_model(const std::string& model_name) {
-    auto info = get_model_info(model_name);
+    std::string canonical_model_name = resolve_model_name(model_name);
+    auto info = get_model_info(canonical_model_name);
 
-    LOG(INFO, "ModelManager") << "Deleting model: " << model_name << std::endl;
+    LOG(INFO, "ModelManager") << "Deleting model: " << canonical_model_name << std::endl;
     LOG(INFO, "ModelManager") << "Checkpoint: " << info.checkpoint() << std::endl;
     LOG(INFO, "ModelManager") << "Recipe: " << info.recipe << std::endl;
 
     // Handle extra models (from --extra-models-dir) - these are user-managed external files
-    if (model_name.substr(0, 6) == "extra.") {
+    if (canonical_model_name.substr(0, 6) == "extra.") {
         throw std::runtime_error("Cannot delete extra models via API. Models in --extra-models-dir are user-managed. "
                                  "Delete the file directly from: " + info.checkpoint());
     }
@@ -2754,7 +2782,7 @@ void ModelManager::delete_model(const std::string& model_name) {
                 int exit_code = utils::ProcessManager::get_exit_code(handle);
                 if (exit_code != 0) {
                     LOG(ERROR, "ModelManager") << "FLM remove failed with exit code: " << exit_code << std::endl;
-                    throw std::runtime_error("Failed to delete FLM model " + model_name + ": FLM remove failed with exit code " + std::to_string(exit_code));
+                    throw std::runtime_error("Failed to delete FLM model " + canonical_model_name + ": FLM remove failed with exit code " + std::to_string(exit_code));
                 }
                 break;
             }
@@ -2764,14 +2792,14 @@ void ModelManager::delete_model(const std::string& model_name) {
         // Check if process is still running (timeout)
         if (utils::ProcessManager::is_running(handle)) {
             LOG(ERROR, "ModelManager") << "FLM remove timed out" << std::endl;
-            throw std::runtime_error("Failed to delete FLM model " + model_name + ": FLM remove timed out");
+            throw std::runtime_error("Failed to delete FLM model " + canonical_model_name + ": FLM remove timed out");
         }
 
-        LOG(INFO, "ModelManager") << "Successfully deleted FLM model: " << model_name << std::endl;
+        LOG(INFO, "ModelManager") << "Successfully deleted FLM model: " << canonical_model_name << std::endl;
 
         // Remove from user models if it's a user model
-        if (model_name.substr(0, 5) == "user.") {
-            std::string clean_name = model_name.substr(5);
+        if (canonical_model_name.substr(0, 5) == "user.") {
+            std::string clean_name = canonical_model_name.substr(5);
             json updated_user_models = user_models_;
             updated_user_models.erase(clean_name);
             save_user_models(updated_user_models);
@@ -2780,7 +2808,7 @@ void ModelManager::delete_model(const std::string& model_name) {
         }
 
         // Remove from cache after successful deletion
-        remove_model_from_cache(model_name);
+        remove_model_from_cache(canonical_model_name);
 
         return;
     }
@@ -2815,14 +2843,14 @@ void ModelManager::delete_model(const std::string& model_name) {
     std::string main_repo = checkpoint_to_repo_id(info.checkpoint("main"));
 
     // Check if the main repo is shared with another model
-    bool main_shared = is_repo_shared(main_repo, model_name, models_cache_);
+    bool main_shared = is_repo_shared(main_repo, canonical_model_name, models_cache_);
 
     if (!main_shared) {
         // No other model uses this repo — safe to delete the entire directory
         if (fs::exists(model_cache_path_fs)) {
             LOG(INFO, "ModelManager") << "Removing directory..." << std::endl;
             fs::remove_all(model_cache_path_fs);
-            LOG(INFO, "ModelManager") << "✓ Deleted model files: " << model_name << std::endl;
+            LOG(INFO, "ModelManager") << "✓ Deleted model files: " << canonical_model_name << std::endl;
         } else {
             LOG(INFO, "ModelManager") << "Warning: Model cache directory not found (may already be deleted)" << std::endl;
         }
@@ -2840,7 +2868,7 @@ void ModelManager::delete_model(const std::string& model_name) {
                 cleanup_empty_parents(file_path, model_cache_path_fs);
             }
         }
-        LOG(INFO, "ModelManager") << "✓ Deleted variant for: " << model_name << std::endl;
+        LOG(INFO, "ModelManager") << "✓ Deleted variant for: " << canonical_model_name << std::endl;
     }
 
     // Clean up non-main checkpoint files in their own repo dirs (multi-repo models)
@@ -2851,7 +2879,7 @@ void ModelManager::delete_model(const std::string& model_name) {
         std::string cp_repo = checkpoint_to_repo_id(checkpoint);
         if (cp_repo.empty() || cp_repo == main_repo) continue;
 
-        if (is_repo_shared(cp_repo, model_name, models_cache_)) {
+        if (is_repo_shared(cp_repo, canonical_model_name, models_cache_)) {
             LOG(INFO, "ModelManager") << "Keeping shared repo " << cp_repo
                         << " (used by other models)" << std::endl;
             continue;
@@ -2867,8 +2895,8 @@ void ModelManager::delete_model(const std::string& model_name) {
     }
 
     // Remove from user models if it's a user model
-    if (model_name.substr(0, 5) == "user.") {
-        std::string clean_name = model_name.substr(5);
+    if (canonical_model_name.substr(0, 5) == "user.") {
+        std::string clean_name = canonical_model_name.substr(5);
         json updated_user_models = user_models_;
         updated_user_models.erase(clean_name);
         save_user_models(updated_user_models);
@@ -2877,7 +2905,7 @@ void ModelManager::delete_model(const std::string& model_name) {
     }
 
     // Remove from cache after successful deletion
-    remove_model_from_cache(model_name);
+    remove_model_from_cache(canonical_model_name);
 }
 
 json ModelManager::cleanup_orphaned_cache(bool dry_run) {
@@ -2960,12 +2988,30 @@ ModelInfo ModelManager::get_model_info(const std::string& model_name) {
 
     // O(1) lookup in cache
     std::lock_guard<std::mutex> lock(models_cache_mutex_);
-    auto it = models_cache_.find(model_name);
+    auto alias_it = public_model_aliases_.find(model_name);
+    std::string canonical_name = alias_it != public_model_aliases_.end() ? alias_it->second : model_name;
+    auto it = models_cache_.find(canonical_name);
     if (it != models_cache_.end()) {
         return it->second;
     }
 
     throw std::runtime_error("Model not found: " + model_name);
+}
+
+std::string ModelManager::resolve_model_name(const std::string& model_name) {
+    build_cache();
+
+    std::lock_guard<std::mutex> lock(models_cache_mutex_);
+    auto it = public_model_aliases_.find(model_name);
+    return it != public_model_aliases_.end() ? it->second : model_name;
+}
+
+std::string ModelManager::get_public_model_name(const std::string& model_name) {
+    build_cache();
+
+    std::lock_guard<std::mutex> lock(models_cache_mutex_);
+    auto it = canonical_public_names_.find(model_name);
+    return it != canonical_public_names_.end() ? it->second : model_name;
 }
 
 bool ModelManager::model_exists(const std::string& model_name) {
@@ -2974,30 +3020,49 @@ bool ModelManager::model_exists(const std::string& model_name) {
 
     // O(1) lookup in cache
     std::lock_guard<std::mutex> lock(models_cache_mutex_);
-    return models_cache_.find(model_name) != models_cache_.end();
+    auto alias_it = public_model_aliases_.find(model_name);
+    std::string canonical_name = alias_it != public_model_aliases_.end() ? alias_it->second : model_name;
+    return models_cache_.find(canonical_name) != models_cache_.end();
 }
 
 bool ModelManager::model_exists_unfiltered(const std::string& model_name) {
-    // Check raw server_models_ JSON (before filtering)
     if (server_models_.contains(model_name)) {
         return true;
     }
-    // Also check user models
-    if (user_models_.contains(model_name)) {
-        return true;
+    if (is_user_model_name(model_name)) {
+        return user_models_.contains(strip_user_model_prefix(model_name));
     }
+
+    std::string canonical_name = resolve_model_name(model_name);
+    if (is_user_model_name(canonical_name)) {
+        return user_models_.contains(strip_user_model_prefix(canonical_name));
+    }
+
+    // Check raw server_models_ JSON (before filtering)
     return false;
 }
 
 ModelInfo ModelManager::get_model_info_unfiltered(const std::string& model_name) {
     ModelInfo info;
+    std::string registry_name = model_name;
+
+    if (!server_models_.contains(registry_name)) {
+        if (is_user_model_name(registry_name)) {
+            registry_name = strip_user_model_prefix(registry_name);
+        } else {
+            std::string canonical_name = resolve_model_name(model_name);
+            if (is_user_model_name(canonical_name)) {
+                registry_name = strip_user_model_prefix(canonical_name);
+            }
+        }
+    }
 
     // Check server models first
     json* model_json = nullptr;
-    if (server_models_.contains(model_name)) {
-        model_json = &server_models_[model_name];
-    } else if (user_models_.contains(model_name)) {
-        model_json = &user_models_[model_name];
+    if (server_models_.contains(registry_name)) {
+        model_json = &server_models_[registry_name];
+    } else if (user_models_.contains(registry_name)) {
+        model_json = &user_models_[registry_name];
     }
 
     if (!model_json) {
@@ -3005,7 +3070,8 @@ ModelInfo ModelManager::get_model_info_unfiltered(const std::string& model_name)
     }
 
     // Parse model info from JSON
-    info.model_name = model_name;
+    info.model_name = is_user_model_name(model_name) ? model_name
+        : (user_models_.contains(registry_name) ? std::string(USER_MODEL_PREFIX) + registry_name : registry_name);
     info.checkpoints["main"] = JsonUtils::get_or_default<std::string>(*model_json, "checkpoint", "");
     parse_legacy_mmproj(info, *model_json);
     load_checkpoints(info, *model_json);
@@ -3041,13 +3107,48 @@ std::string ModelManager::get_model_filter_reason(const std::string& model_name)
     // This is populated by filter_models_by_backend() during cache building
     std::lock_guard<std::mutex> lock(models_cache_mutex_);
 
-    auto it = filtered_out_models_.find(model_name);
+    auto alias_it = public_model_aliases_.find(model_name);
+    std::string canonical_name = alias_it != public_model_aliases_.end() ? alias_it->second : model_name;
+    auto it = filtered_out_models_.find(canonical_name);
     if (it != filtered_out_models_.end()) {
         return it->second;
     }
 
     // Model wasn't filtered out (either it's available or doesn't exist)
     return "";
+}
+
+void ModelManager::rebuild_public_model_aliases_locked() {
+    public_model_aliases_.clear();
+    canonical_public_names_.clear();
+
+    for (const auto& [name, _] : models_cache_) {
+        public_model_aliases_[name] = name;
+        canonical_public_names_[name] = name;
+    }
+
+    for (const auto& [name, info] : models_cache_) {
+        if (!is_user_model_name(name) || !has_label(info, APPEAR_BUILTIN_LABEL)) {
+            continue;
+        }
+
+        std::string bare_name = strip_user_model_prefix(name);
+        if (server_models_.contains(bare_name)) {
+            LOG(INFO, "ModelManager") << "Skipping public alias '" << bare_name
+                      << "' for '" << name << "' because it collides with a built-in model" << std::endl;
+            continue;
+        }
+
+        auto existing = public_model_aliases_.find(bare_name);
+        if (existing != public_model_aliases_.end() && existing->second != name) {
+            LOG(INFO, "ModelManager") << "Skipping public alias '" << bare_name
+                      << "' for '" << name << "' because it collides with '" << existing->second << "'" << std::endl;
+            continue;
+        }
+
+        public_model_aliases_[bare_name] = name;
+        canonical_public_names_[name] = bare_name;
+    }
 }
 
 } // namespace lemon
