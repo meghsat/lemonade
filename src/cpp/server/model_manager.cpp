@@ -924,7 +924,11 @@ std::map<std::string, ModelInfo> ModelManager::get_supported_models() {
     std::lock_guard<std::mutex> lock(models_cache_mutex_);
     std::map<std::string, ModelInfo> public_models;
     for (const auto& [name, info] : models_cache_) {
-        public_models[canonical_public_names_.count(name) ? canonical_public_names_.at(name) : name] = info;
+        auto it = canonical_public_names_.find(name);
+        const std::string& public_name = it != canonical_public_names_.end() ? it->second : name;
+        ModelInfo public_info = info;
+        public_info.model_name = public_name;
+        public_models[public_name] = std::move(public_info);
     }
     return public_models;
 }
@@ -1357,7 +1361,11 @@ std::map<std::string, ModelInfo> ModelManager::get_downloaded_models() {
     std::map<std::string, ModelInfo> downloaded;
     for (const auto& [name, info] : models_cache_) {
         if (info.downloaded) {
-            downloaded[canonical_public_names_.count(name) ? canonical_public_names_.at(name) : name] = info;
+            auto it = canonical_public_names_.find(name);
+            const std::string& public_name = it != canonical_public_names_.end() ? it->second : name;
+            ModelInfo public_info = info;
+            public_info.model_name = public_name;
+            downloaded[public_name] = std::move(public_info);
         }
     }
     return downloaded;
@@ -3116,6 +3124,7 @@ std::string ModelManager::get_model_filter_reason(const std::string& model_name)
     return "";
 }
 
+// Must be called with models_cache_mutex_ held.
 void ModelManager::rebuild_public_model_aliases_locked() {
     public_model_aliases_.clear();
     canonical_public_names_.clear();
