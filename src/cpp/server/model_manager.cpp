@@ -19,7 +19,6 @@
 #include <set>
 #include <unordered_set>
 #include <iomanip>
-#include <cstring>
 #include <lemon/utils/aixlog.hpp>
 
 namespace fs = std::filesystem;
@@ -78,7 +77,8 @@ static bool contains_ignore_case(const std::string& str, const std::string& subs
     return to_lower(str).find(to_lower(substr)) != std::string::npos;
 }
 
-static constexpr const char* USER_MODEL_PREFIX = "user.";
+static constexpr const char USER_MODEL_PREFIX[] = "user.";
+static constexpr size_t USER_MODEL_PREFIX_LEN = sizeof(USER_MODEL_PREFIX) - 1;
 static constexpr const char* APPEAR_BUILTIN_LABEL = "appear-builtin";
 
 static bool has_label(const ModelInfo& info, const std::string& label) {
@@ -91,7 +91,7 @@ static bool is_user_model_name(const std::string& model_name) {
 
 static std::string strip_user_model_prefix(const std::string& model_name) {
     if (is_user_model_name(model_name)) {
-        return model_name.substr(std::strlen(USER_MODEL_PREFIX));
+        return model_name.substr(USER_MODEL_PREFIX_LEN);
     }
     return model_name;
 }
@@ -1184,9 +1184,9 @@ void ModelManager::add_model_to_cache(const std::string& model_name) {
 
     // Parse model name to get JSON key
     std::string json_key = model_name;
-    bool is_user_model = model_name.substr(0, 5) == "user.";
+    bool is_user_model = is_user_model_name(model_name);
     if (is_user_model) {
-        json_key = model_name.substr(5);
+        json_key = strip_user_model_prefix(model_name);
     }
 
     // Find in JSON
@@ -1334,7 +1334,7 @@ void ModelManager::remove_model_from_cache(const std::string& model_name) {
     if (it != models_cache_.end()) {
         // User models and local uploads should be removed entirely from cache
         // (they're not in server_models.json, so keeping them makes no sense)
-        bool is_user_model = model_name.substr(0, 5) == "user.";
+        bool is_user_model = is_user_model_name(model_name);
         if (is_user_model || it->second.source == "local_upload") {
             models_cache_.erase(model_name);
             rebuild_public_model_aliases_locked();
@@ -1599,8 +1599,8 @@ void ModelManager::register_user_model(const std::string& model_name,
                                       const std::string& source) {
     // Remove "user." prefix if present
     std::string clean_name = model_name;
-    if (clean_name.substr(0, 5) == "user.") {
-        clean_name = clean_name.substr(5);
+    if (is_user_model_name(clean_name)) {
+        clean_name = strip_user_model_prefix(clean_name);
     }
 
     // Filter only known, user-definable model props
@@ -1878,7 +1878,7 @@ void ModelManager::download_model(const std::string& model_name,
     // If checkpoint or recipe are provided, this is a model registration
     // and the model name must have the "user." prefix
     if (!actual_checkpoint.empty() || !actual_recipe.empty()) {
-        if (model_name.substr(0, 5) != "user.") {
+        if (!is_user_model_name(model_name)) {
             throw std::runtime_error(
                 "When providing 'checkpoint' or 'recipe', the model name must include the "
                 "`user.` prefix, for example `user.Phi-4-Mini-GGUF`. Received: " +
@@ -1903,7 +1903,7 @@ void ModelManager::download_model(const std::string& model_name,
 
         // Model not in registry - this must be a user model registration
         // Validate it has the "user." prefix
-        if (model_name.substr(0, 5) != "user.") {
+        if (!is_user_model_name(model_name)) {
             throw std::runtime_error(
                 "When registering a new model, the model name must include the "
                 "`user` namespace, for example `user.Phi-4-Mini-GGUF`. Received: " +
@@ -1998,7 +1998,7 @@ void ModelManager::download_model(const std::string& model_name,
     }
 
     // Register user models to user_models.json
-    if (model_name.substr(0, 5) == "user." && !model_registered) {
+    if (is_user_model_name(model_name) && !model_registered) {
         register_user_model(model_name, model_data);
     }
 
@@ -2798,10 +2798,9 @@ void ModelManager::delete_model(const std::string& model_name) {
         LOG(INFO, "ModelManager") << "Successfully deleted FLM model: " << canonical_model_name << std::endl;
 
         // Remove from user models if it's a user model
-        if (canonical_model_name.substr(0, 5) == "user.") {
-            std::string clean_name = canonical_model_name.substr(5);
+        if (is_user_model_name(canonical_model_name)) {
             json updated_user_models = user_models_;
-            updated_user_models.erase(clean_name);
+            updated_user_models.erase(strip_user_model_prefix(canonical_model_name));
             save_user_models(updated_user_models);
             user_models_ = updated_user_models;
             LOG(INFO, "ModelManager") << "✓ Removed from user_models.json" << std::endl;
@@ -2895,10 +2894,9 @@ void ModelManager::delete_model(const std::string& model_name) {
     }
 
     // Remove from user models if it's a user model
-    if (canonical_model_name.substr(0, 5) == "user.") {
-        std::string clean_name = canonical_model_name.substr(5);
+    if (is_user_model_name(canonical_model_name)) {
         json updated_user_models = user_models_;
-        updated_user_models.erase(clean_name);
+        updated_user_models.erase(strip_user_model_prefix(canonical_model_name));
         save_user_models(updated_user_models);
         user_models_ = updated_user_models;
         LOG(INFO, "ModelManager") << "✓ Removed from user_models.json" << std::endl;
@@ -3121,11 +3119,6 @@ std::string ModelManager::get_model_filter_reason(const std::string& model_name)
 void ModelManager::rebuild_public_model_aliases_locked() {
     public_model_aliases_.clear();
     canonical_public_names_.clear();
-
-    for (const auto& [name, _] : models_cache_) {
-        public_model_aliases_[name] = name;
-        canonical_public_names_[name] = name;
-    }
 
     for (const auto& [name, info] : models_cache_) {
         if (!is_user_model_name(name) || !has_label(info, APPEAR_BUILTIN_LABEL)) {
