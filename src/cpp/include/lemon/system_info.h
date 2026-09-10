@@ -22,7 +22,10 @@ struct CPUInfo : DeviceInfo {
 };
 
 struct GPUInfo : DeviceInfo {
+    int index = -1;  // NVIDIA only: physical device index from nvidia-smi, when available
+    std::string uuid;  // NVIDIA only: stable GPU UUID from nvidia-smi (preferred for CUDA_VISIBLE_DEVICES)
     std::string driver_version;
+    std::string compute_capability;  // NVIDIA only: "MAJOR.MINOR" from nvidia-smi (e.g. "8.6")
     double vram_gb = 0.0;
     double virtual_gb = 0.0;
 };
@@ -63,6 +66,10 @@ public:
     virtual std::vector<GPUInfo> get_nvidia_gpu_devices() = 0;
     virtual NPUInfo get_npu_device() = 0;
 
+    // Apple Silicon unified-memory GPU. Only meaningful on macOS; the base
+    // implementation reports "unavailable" so non-Apple platforms need no stub.
+    virtual GPUInfo get_apple_silicon_device() { return GPUInfo{}; }
+
     // Common methods (can be overridden for detailed platform info)
     virtual std::string get_os_version();
 
@@ -102,6 +109,14 @@ public:
 
     // Device support detection
     static std::string get_rocm_arch();
+    static std::string get_cuda_arch();
+
+    // CUDA release assets are architecture-specific (sm_89, sm_120, etc.).
+    // Return the physical CUDA device indices whose compute capability matches
+    // the selected release architecture, so callers can hide incompatible GPUs
+    // with CUDA_VISIBLE_DEVICES while still using all GPUs of the same arch.
+    static std::vector<int> get_cuda_device_indices_for_arch(const std::string& arch);
+    static std::string get_cuda_visible_devices_for_arch(const std::string& arch);
 
     // Detect if the device is an iGPU
     static bool get_has_igpu();
@@ -111,6 +126,10 @@ public:
 
     // Check if the process is running under systemd
     static bool is_running_under_systemd();
+
+    // Global GPU memory pressure across all processes (used/total in [0,1]),
+    // or -1.0 if no source is available. Used by the dynamic VRAM eviction engine.
+    static double get_global_vram_usage_pct();
 };
 
 // Windows implementation
@@ -192,6 +211,7 @@ public:
     std::vector<GPUInfo> get_amd_dgpu_devices() override;
     std::vector<GPUInfo> get_nvidia_gpu_devices() override;
     NPUInfo get_npu_device() override;
+    GPUInfo get_apple_silicon_device() override;
 
     // Override to add macOS-specific fields
     json get_system_info_dict() override;
@@ -210,6 +230,10 @@ std::unique_ptr<SystemInfo> create_system_info();
 // Helper to identify ROCm architecture from GPU name
 // Returns architecture string (e.g., "gfx1150", "gfx1151", "gfx110X", "gfx120X") or empty string if not recognized
 std::string identify_rocm_arch_from_name(const std::string& device_name);
+
+// Helper to identify CUDA Compute Capability from a marketing GPU name
+// Returns an sm_XX token (e.g., "sm_75", "sm_86", "sm_120") or empty string if not recognized
+std::string identify_cuda_arch_from_name(const std::string& device_name);
 
 // Check if kernel has CWSR fix for Strix Halo
 bool needs_gfx1151_cwsr_fix();

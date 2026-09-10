@@ -6,6 +6,10 @@ Please carefully review Lemonade's [philosophy](./philosophy.md) before making a
 
 ## Development Process
 
+### Working Groups
+
+Lemonade's roadmap is defined by a set of [working groups](./working-groups/README.md), and most substantial contributions should be within the scope of one of these groups. If you would like to participate, start by reading this document and then reach out to the working group lead in your subject of interest.
+
 ### Merging a Contribution
 
 1. We highly recommend that all contributors join the [Lemonade discord community](https://discord.gg/5xXzkMu8Zk), meet [the maintainers](#maintainers) and get a sense of what is trending.
@@ -41,6 +45,8 @@ Reviewers are expected to use tools like Claude Code's `/review` to save time by
 
 __Please do not use AI to write issues__. If you feel an issue is important enough for a human to read it then please take the time to write it yourself.
 
+AI tools may be used to draft documentation, but the author is responsible for verifying accuracy before submitting. See the [documentation guide](./documentation.md) for a pre-submission checklist and style guidance.
+
 ## Maintainers
 
 While each maintainer is welcome to work on any part of the Lemonade codebase, each maintainer does have specific knowledge of certain areas. You should use their knowledge as a starting point for designing your contribution, and they will be the ones to review your contribution when it is ready.
@@ -73,7 +79,7 @@ While each maintainer is welcome to work on any part of the Lemonade codebase, e
 | Linux | @superm1, @kenvandine, @bitgamma (discord: mikkoph), @sofiageo |
 | Ubuntu, Debian, and Snap | @kenvandine, @superm1 |
 | Arch | @sofiageo, @bitgamma (discord: mikkoph) |
-| Fedora | Maintainer needed |
+| Fedora | @valiabhay |
 | macOS | @Geramy, @ramkrishna2910 |
 | Windows | @kpoineal (discord: primaL-), @jeremyfowers |
 | Docker | @siavashhub (discord: icmpreply) |

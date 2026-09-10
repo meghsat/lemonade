@@ -41,6 +41,7 @@ CAPABILITIES = {
             "backends": [
                 "vulkan",
                 "rocm",
+                "cuda",
                 "metal",
                 "cpu",
                 "system",
@@ -64,6 +65,7 @@ CAPABILITIES = {
                 "echo_parameter": False,
                 "generation_parameters": False,
                 "slots": True,
+                "tokenize": True,
                 "static_max_context_window": True,
             },
             "test_models": {
@@ -132,7 +134,7 @@ CAPABILITIES = {
     },
     "whisper": {
         "whispercpp": {
-            "backends": ["cpu", "npu", "vulkan"],
+            "backends": ["cpu", "npu", "vulkan", "metal"],
             "supports": {
                 "transcription": True,
                 "transcription_with_language": True,
@@ -155,16 +157,44 @@ CAPABILITIES = {
                 "audio": "whisper-v3-turbo-FLM",
             },
         },
+        "moonshine": {
+            "backends": ["cpu"],
+            "supports": {
+                "transcription": True,
+                # English-only checkpoints; the language param is ignored
+                "transcription_with_language": False,
+                "rai_cache": False,
+                "realtime_websocket": True,
+            },
+            "test_models": {
+                "audio": "Moonshine-Tiny-Streaming",
+            },
+        },
     },
     "stable_diffusion": {
         "sd-cpp": {
-            "backends": ["cpu", "vulkan"],
+            "backends": ["cpu", "vulkan", "metal"],
             "supports": {
                 "image_generation": True,
                 "image_generation_b64": True,
             },
             "test_models": {
                 "image": "SD-Turbo",
+            },
+        },
+    },
+    "omni": {
+        # Omni "collection" models run a server-side tool-calling loop. The
+        # wrapped server here is the collection's chat (planner) component,
+        # which is llamacpp — so --backend selects the llamacpp backend.
+        "llamacpp": {
+            "backends": ["vulkan", "rocm", "cpu", "metal"],
+            "supports": {
+                "collection_chat": True,
+                "collection_chat_streaming": True,
+            },
+            "test_models": {
+                "omni": "LMX-Omni-5.5B-Lite",
             },
         },
     },

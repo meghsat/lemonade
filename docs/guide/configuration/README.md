@@ -8,13 +8,26 @@ Lemonade Server starts automatically with the OS after installation. Configurati
 
 If you used an installer from the Lemonade release your `config.json` will be at these locations depending on your OS:
 
-- **Linux (systemd):** `/var/lib/lemonade/.cache/lemonade/config.json`
+- **Linux — `apt`/`.deb` (Debian/Ubuntu):** `/var/lib/lemonade/.cache/lemonade/config.json`
+- **Linux — `dnf`/`.rpm` (Fedora/Red Hat):** `/opt/var/lib/lemonade/.cache/lemonade/config.json`
+
+  > Note: For Debian/Ubuntu, upgrading the package automatically migrates data from the old `/opt/var/lib/lemonade` path to `/var/lib/lemonade`.
+
 - **Windows:** `%USERPROFILE%\.cache\lemonade\config.json`
 - **macOS:** `/Library/Application Support/lemonade/.cache/config.json`
 
 If you are using a standalone `lemond` exectable, the default location is `~/.cache/lemonade/config.json`.
 
 > Note: If `config.json` doesn't exist, it's created automatically with default values on first run.
+
+### Seeding defaults for packaged installs
+
+On first run, `config.json` is initialized from the defaults baked into the release (`resources/defaults.json`). Packagers can override those defaults without editing the release, in increasing precedence:
+
+1. On Linux, `lemond` also merges `/usr/share/lemonade/defaults.json` if it exists, so distro packages can ship their own defaults (e.g. backend `*_bin` paths pointing at system-installed binaries).
+2. Set the `LEMONADE_DEFAULTS_PATH` environment variable to a `defaults.json` at any location to merge it on top. This is the seam for non-FHS distros (Nix, Guix) that cannot write under `/usr/share`.
+
+Values set in the user's `config.json` always take precedence over these seeded defaults.
 
 ### Example config.json
 
@@ -24,20 +37,23 @@ If you are using a standalone `lemond` exectable, the default location is `~/.ca
   "port": 13305,
   "host": "localhost",
   "log_level": "info",
-  "global_timeout": 300,
+  "global_timeout": 600,
   "max_loaded_models": 1,
   "no_broadcast": false,
   "extra_models_dir": "",
   "models_dir": "auto",
-  "ctx_size": 4096,
+  "ctx_size": -1,
   "offline": false,
   "no_fetch_executables": false,
   "disable_model_filtering": false,
   "enable_dgpu_gtt": false,
-  "rocm_channel": "preview",
+  "rocm_channel": "stable",
   "llamacpp": {
     "backend": "auto",
     "args": "",
+    "vulkan_args": "",
+    "rocm_args": "",
+    "cpu_args": "",
 	"device": "",
     "prefer_system": false,
     "rocm_bin": "builtin",
@@ -47,12 +63,17 @@ If you are using a standalone `lemond` exectable, the default location is `~/.ca
   "whispercpp": {
     "backend": "auto",
     "args": "",
+    "cpu_args": "",
+    "npu_args": "",
     "cpu_bin": "builtin",
     "npu_bin": "builtin"
   },
   "sdcpp": {
     "backend": "auto",
     "args": "",
+    "cpu_args": "",
+    "rocm_args": "",
+    "vulkan_args": "",
     "steps": 20,
     "cfg_scale": 7.0,
     "width": 512,
@@ -80,17 +101,17 @@ If you are using a standalone `lemond` exectable, the default location is `~/.ca
 | `port` | int | 13305 | Port number for the HTTP server |
 | `host` | string | "localhost" | Address to bind for connections |
 | `log_level` | string | "info" | Logging level (trace, debug, info, warning, error, fatal, none) |
-| `global_timeout` | int | 300 | Timeout in seconds for HTTP, inference, and readiness checks |
+| `global_timeout` | int | 600 | Timeout in seconds for HTTP, inference, and readiness checks |
 | `max_loaded_models` | int | 1 | Max models per type slot. Use -1 for unlimited |
 | `no_broadcast` | bool | false | Disable UDP broadcasting for server discovery |
 | `extra_models_dir` | string | "" | Secondary directory to scan for GGUF model files |
 | `models_dir` | string | "auto" | Directory for cached model files. "auto" follows HF_HUB_CACHE / HF_HOME / platform default |
-| `ctx_size` | int | 4096 | Default context size for LLM models |
+| `ctx_size` | int | -1 | Default context size for LLM models. Use `-1` for auto-resolution: the server computes the largest context that fits in available device memory using GGUF architecture metadata. Use a positive integer to set an explicit size. |
 | `offline` | bool | false | Skip model downloads |
 | `no_fetch_executables` | bool | false | Prevent downloading backend executable artifacts; backends must already be installed or use the system backend |
 | `disable_model_filtering` | bool | false | Show all models regardless of hardware capabilities |
 | `enable_dgpu_gtt` | bool | false | Include GTT for hardware-based model filtering |
-| `rocm_channel` | string | "preview" | ROCm backend channel: "preview" (default), "stable", or "nightly". See [llama.cpp Backend](./llamacpp.md) for details |
+| `rocm_channel` | string | "stable" | ROCm backend channel: "stable" (default) or "nightly". See [llama.cpp Backend](./llamacpp.md) for details |
 
 ### Backend Configuration
 
@@ -100,7 +121,8 @@ Backend-specific settings are nested under their backend name:
 | Key | Default | Description |
 |-----|---------|-------------|
 | `backend` | "auto" | Backend to use: "auto" means "choose for me" |
-| `args` | "" | Custom arguments to pass to llama-server |
+| `args` | "" | Custom arguments to pass to llama-server (fallback, unused when backend-specific args defined) |
+| `*_args` | "" | Backend-specific custom arguments to pass to llama-server |
 | `device` | "" | Comma-separated list of devices to use for offloading. Empty is auto. |
 | `prefer_system` | false | Prefer system-installed llama.cpp over bundled |
 | `*_bin` | "builtin" | Backend binary selection — see [Backend binary selection](#backend-binary-selection) |
@@ -109,14 +131,16 @@ Backend-specific settings are nested under their backend name:
 | Key | Default | Description |
 |-----|---------|-------------|
 | `backend` | "auto" | Backend to use: "auto" means "choose for me" |
-| `args` | "" | Custom arguments to pass to whisper-server |
+| `args` | "" | Custom arguments to pass to whisper-server (fallback, unused when backend-specific args defined) |
+| `*_args` | "" | Backend-specific custom arguments to pass to whisper-server |
 | `*_bin` | "builtin" | Backend binary selection — see [Backend binary selection](#backend-binary-selection) |
 
 **sdcpp** — Image generation:
 | Key | Default | Description |
 |-----|---------|-------------|
 | `backend` | "auto" | Backend to use: "auto" means "choose for me" |
-| `args` | "" | Custom arguments to pass to `sd-server` |
+| `args` | "" | Custom arguments to pass to `sd-server` (fallback, unused when backend-specific args defined) |
+| `*_args` | "" | Backend-specific custom arguments to pass to `sd-server` |
 | `steps` | 20 | Number of inference steps |
 | `cfg_scale` | 7.0 | Classifier-free guidance scale |
 | `width` | 512 | Image width in pixels |
@@ -137,6 +161,15 @@ Backend-specific settings are nested under their backend name:
 | Key | Default | Description |
 |-----|---------|-------------|
 | `cpu_bin` | "builtin" | Backend binary selection — see [Backend binary selection](#backend-binary-selection) |
+
+**cloud_providers** — Cloud OpenAI-compatible providers (see [Cloud Offload](./cloud.md)). Array, one object per installed provider:
+
+| Key | Description |
+|-----|-------------|
+| `name` | Short identifier (e.g. `fireworks`). Used as the model-name prefix. |
+| `base_url` | OpenAI-compatible base URL ending in `/v1` (or equivalent). |
+
+API keys for these providers are **not** stored in `config.json` — they live in `LEMONADE_<PROVIDER>_API_KEY` env vars (persistent) or `lemond` process memory via `POST /v1/cloud/auth` (ephemeral). Manage providers with `lemonade cloud install/uninstall/auth/list` rather than editing this section by hand.
 
 ### Backend binary selection
 
@@ -232,9 +265,13 @@ lemond --port 9000 --host 0.0.0.0
 If the server won't start and CLI arguments aren't sufficient, you can edit config.json directly. Restart the server after making changes:
 
 ```bash
-# Linux
+# Linux (Debian/Ubuntu)
 sudo nano /var/lib/lemonade/.cache/lemonade/config.json
-sudo systemctl restart lemonade-server
+
+# Linux (Fedora/Red Hat)
+sudo nano /opt/var/lib/lemonade/.cache/lemonade/config.json
+
+sudo systemctl restart lemond
 
 # Windows — edit with your preferred text editor:
 # %USERPROFILE%\.cache\lemonade\config.json
@@ -257,9 +294,13 @@ lemond [cache_dir] [--port PORT] [--host HOST]
 
 The `LEMONADE_API_KEY` environment variable sets an API key for authentication on regular API endpoints (`/api/*`, `/v0/*`, `/v1/*`). On Linux with systemd, set it in the service environment (e.g., via a systemd override or drop-in file). On Windows, set it as a system environment variable.
 
+When `LEMONADE_API_KEY` is set, the inference and model-management endpoints reject any request that does not present a matching Bearer token. This is the only credential that gates those endpoints, so it controls whether unauthenticated clients can reach the server at all. When it is unset, those endpoints are reachable without authentication.
+
 ### Admin API Key
 
 The `LEMONADE_ADMIN_API_KEY` environment variable provides elevated access to both regular API endpoints and internal endpoints (`/internal/*`). When set, it takes precedence over `LEMONADE_API_KEY` for client authentication.
+
+`LEMONADE_ADMIN_API_KEY` enables privilege separation between two classes of authenticated clients. Holders of `LEMONADE_API_KEY` can reach the regular API endpoints, while only holders of `LEMONADE_ADMIN_API_KEY` can reach the internal control endpoints (`/internal/*`, e.g. shutdown and configuration). A client presenting only `LEMONADE_API_KEY` cannot reach `/internal/*` if `LEMONADE_ADMIN_API_KEY` is set to a distinct value. If `LEMONADE_ADMIN_API_KEY` is not set, it defaults to the value of `LEMONADE_API_KEY`, so the regular key then also authenticates against `/internal/*` and no privilege separation exists.
 
 **Authentication Hierarchy:**
 
@@ -280,7 +321,7 @@ To make Lemonade Server accessible from other machines on your network, set the 
 lemonade config set host=0.0.0.0
 ```
 
-> **Note:** Using `host: "0.0.0.0"` allows connections from any machine on the network. Only do this on trusted networks. Set `LEMONADE_API_KEY` or `LEMONADE_ADMIN_API_KEY` to manage access.
+> **Warning:** Using `host: "0.0.0.0"` allows connections from any machine on the network — including to the internal control endpoints (`/internal/*`, e.g. shutdown and config). Only do this on trusted networks, and set an API key to manage access. `LEMONADE_API_KEY` secures all endpoints; `LEMONADE_ADMIN_API_KEY` on its own secures only `/internal/*` and leaves the inference and model-management endpoints (`/api`, `/v0`, `/v1`) open, so set `LEMONADE_API_KEY` to protect those too. The server logs a warning at startup when bound to a non-loopback host without the regular key.
 
 ## Next Steps
 

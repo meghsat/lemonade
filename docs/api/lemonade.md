@@ -10,17 +10,23 @@ We have designed a set of Lemonade-specific endpoints to enable client applicati
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | [`/v1/pull`](#post-v1pull) | Install a model |
+| `GET` | [`/v1/downloads`](#get-v1downloads) | List server-owned model download jobs |
+| `POST` | [`/v1/downloads/control`](#post-v1downloadscontrol) | Pause, cancel, or remove server-owned model download jobs |
 | `GET` | [`/v1/pull/variants`](#get-v1pullvariants) | Enumerate GGUF variants for a Hugging Face checkpoint |
 | `POST` | [`/v1/delete`](#post-v1delete) | Delete a model |
 | `POST` | [`/v1/load`](#post-v1load) | Load a model |
 | `POST` | [`/v1/unload`](#post-v1unload) | Unload a model |
 | `GET` | [`/v1/health`](#get-v1health) | Check server status, such as models loaded |
 | `GET` | [`/v1/stats`](#get-v1stats) | Performance statistics from the last request |
+| `GET` | [`/v1/system-stats`](#get-v1system-stats) | Current host resource usage |
 | `GET` | [`/v1/system-info`](#get-v1system-info) | System information and device enumeration |
-| `POST` | [`/v1/install`](#post-v1install) | Install or update a backend |
-| `POST` | [`/v1/uninstall`](#post-v1uninstall) | Remove a backend |
+| `POST` | [`/v1/install`](#post-v1install) | Install or update a backend, or register a cloud provider |
+| `POST` | [`/v1/uninstall`](#post-v1uninstall) | Remove a backend or cloud provider |
+| `POST` | [`/v1/cloud/auth`](#post-v1cloudauth) | Set an in-memory API key for a cloud provider |
+| `DELETE` | [`/v1/cloud/auth/{provider}`](#delete-v1cloudauthprovider) | Clear the in-memory API key for a cloud provider |
 | `WS` | [`/logs/stream`](#log-streaming-api-websocket) | Log Streaming |
 | `GET` | [`/live`](#get-live) | Check server liveness for load balancers and orchestrators |
+| `GET` | [`/metrics`](#get-metrics) | Prometheus metrics scrape endpoint |
 
 ## `POST /v1/pull`
 <sub>![Status](https://img.shields.io/badge/status-fully_available-green)</sub>
@@ -36,6 +42,7 @@ The Lemonade Server built-in model registry has a collection of model names that
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `stream` | No | If `true`, returns Server-Sent Events (SSE) with download progress. Defaults to `false`. |
+| `subscribe` | No | Only applies when `stream=true`. If `false`, the server starts a background model download job and returns a JSON snapshot immediately instead of keeping the HTTP response subscribed to SSE progress. Defaults to `true` for backwards compatibility. |
 
 **Install a Model that is Already Registered**
 
@@ -49,7 +56,7 @@ Example request:
 curl -X POST http://localhost:13305/v1/pull \
   -H "Content-Type: application/json" \
   -d '{
-    "model_name": "Qwen2.5-0.5B-Instruct-CPU"
+    "model_name": "Qwen3-0.6B-GGUF"
   }'
 ```
 
@@ -58,7 +65,7 @@ Response format:
 ```json
 {
   "status":"success",
-  "message":"Installed model: Qwen2.5-0.5B-Instruct-CPU"
+  "message":"Installed model: Qwen3-0.6B-GGUF"
 }
 ```
 
@@ -106,6 +113,40 @@ Response format:
 
 In case of an error, the status will be `error` and the message will contain the error message.
 
+**Register an Omni-Model**
+
+An omni collection is a collection type that bundles several models into a single entry that can be loaded, pulled, or deleted as a unit. Use `recipe: "collection.omni"` with a `components` array instead of `checkpoint`.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `model_name` | Yes | Namespaced model name, e.g. `user.MyKit`. |
+| `recipe` | Yes | Must be `"collection.omni"`. |
+| `components` | Yes | Ordered, non-empty array of model names. Each component must be a regular model. |
+| `models` | No | Ordered array of full model definitions, one per `components` entry (the same fields as single-model registration, keyed by `model_name`). When present, component names that are not yet registered are registered from these definitions; names that already exist keep their local definition. When absent, every `components` entry must already exist in the registry (built-in or a previously registered `user.*` model). |
+
+Components do not need to be downloaded already — any not-yet-downloaded components are pulled by the same call. Deleting the collection removes only the collection entry; components stay on disk.
+
+Example request:
+
+```bash
+curl -X POST http://localhost:13305/v1/pull \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_name": "user.MyKit",
+    "recipe": "collection.omni",
+    "components": ["Qwen3-0.6B-GGUF", "Whisper-Tiny", "SD-Turbo"]
+  }'
+```
+
+### Import an Exported Model File
+
+Files written by `lemonade export` (and the desktop app's Export button) are import-ready
+`/v1/pull` request bodies — POST the file contents verbatim to register and install the model.
+This works for regular models and collections alike; exported collection files additionally
+carry `components` plus a `models` array embedding each component's definition (see the
+`models` parameter above). For the file format and the export/import/Hugging Face workflows,
+see [Share a collection](../guide/configuration/custom-models.md#share-a-collection-export-import-and-hugging-face).
+
 ### Streaming Response (stream=true)
 
 When `stream=true`, the endpoint returns Server-Sent Events with real-time download progress:
@@ -128,6 +169,169 @@ data: {"file_index":2,"total_files":2,"percent":100}
 | `progress` | Sent during download with current file and byte progress |
 | `complete` | Sent when all files are downloaded successfully |
 | `error` | Sent if download fails, with `error` field containing the message |
+
+### Server-owned download mode (`stream=true`, `subscribe=false`)
+
+By default, `stream=true` keeps the `/v1/pull` HTTP response subscribed to Server-Sent Events until the download finishes. Clients that need download state to survive a renderer reload, tab close, or reconnect can also send `subscribe=false`.
+
+When `stream=true` and `subscribe=false`, `/v1/pull` starts a server-owned model download job and returns a JSON snapshot immediately. The job continues on the server. Clients can poll [`GET /v1/downloads`](#get-v1downloads) to restore progress and can use [`POST /v1/downloads/control`](#post-v1downloadscontrol) to pause, cancel, or remove the job.
+
+Example request:
+
+```bash
+curl -X POST http://localhost:13305/v1/pull \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_name": "Qwen3-0.6B-GGUF",
+    "stream": true,
+    "subscribe": false
+  }'
+```
+
+Example response:
+
+```json
+{
+  "id": "model:Qwen3-0.6B-GGUF",
+  "type": "model",
+  "model_name": "Qwen3-0.6B-GGUF",
+  "status": "downloading",
+  "running": true,
+  "file": "",
+  "file_index": 0,
+  "total_files": 0,
+  "bytes_downloaded": 0,
+  "bytes_total": 0,
+  "total_download_size": 0,
+  "bytes_previously_downloaded": 0,
+  "completed_files_bytes": 0,
+  "cumulative_bytes_downloaded": 0,
+  "overall_bytes_downloaded": 0,
+  "percent": 0,
+  "complete": false
+}
+```
+
+## `GET /v1/downloads`
+<sub>![Status](https://img.shields.io/badge/status-fully_available-green)</sub>
+
+List server-owned model download jobs that were started with `POST /v1/pull` using `stream=true` and `subscribe=false`.
+
+This endpoint is intended for clients that need to restore download-manager state after a reload or reconnect. Active, paused, cancelled, and errored jobs remain visible until the client removes them. Completed jobs remain visible briefly so clients can observe completion and refresh model state.
+
+### Example request
+
+```bash
+curl http://localhost:13305/v1/downloads
+```
+
+### Response format
+
+```json
+[
+  {
+    "id": "model:Qwen3-0.6B-GGUF",
+    "type": "model",
+    "model_name": "Qwen3-0.6B-GGUF",
+    "status": "downloading",
+    "running": true,
+    "file": "model.gguf",
+    "file_index": 1,
+    "total_files": 2,
+    "bytes_downloaded": 1073741824,
+    "bytes_total": 2684354560,
+    "total_download_size": 2684355584,
+    "bytes_previously_downloaded": 0,
+    "completed_files_bytes": 0,
+    "cumulative_bytes_downloaded": 1073741824,
+    "overall_bytes_downloaded": 1073741824,
+    "percent": 40,
+    "complete": false
+  }
+]
+```
+
+### Download job fields
+
+| Field | Description |
+|-------|-------------|
+| `id` | Stable download id. Model downloads use `model:<model_name>`. |
+| `type` | Download type. Currently `model` for server-owned jobs. |
+| `model_name` | Lemonade model name associated with the job. |
+| `status` | Current state: `downloading`, `paused`, `cancelled`, `completed`, or `error`. |
+| `running` | Whether the download worker is still active. A terminal-looking status may still have `running=true` while the worker is releasing resources. |
+| `file`, `file_index`, `total_files` | Current file progress within the download. |
+| `bytes_downloaded`, `bytes_total`, `percent` | Current-file byte progress as reported by the downloader. |
+| `total_download_size` | Total expected bytes across all files when known. |
+| `bytes_previously_downloaded` | Bytes already present on disk for the current file when resuming or skipping existing data. |
+| `completed_files_bytes` | Bytes from files completed before the current file. |
+| `cumulative_bytes_downloaded`, `overall_bytes_downloaded` | Total bytes downloaded across the whole job. `overall_bytes_downloaded` is kept as a compatibility alias. |
+| `complete` | `true` when the download completed successfully. |
+| `error` | Error message, present only for failed jobs. |
+
+## `POST /v1/downloads/control`
+<sub>![Status](https://img.shields.io/badge/status-fully_available-green)</sub>
+
+Control a server-owned model download job.
+
+### Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `id` | Yes | Download id returned by `POST /v1/pull` or `GET /v1/downloads`, for example `model:Qwen3-0.6B-GGUF`. |
+| `action` | Yes | One of `pause`, `cancel`, or `remove`. |
+
+### Actions
+
+| Action | Description |
+|--------|-------------|
+| `pause` | Requests the worker to stop and keeps the job visible as `paused`. The worker may briefly report `running=true` while it unwinds. |
+| `cancel` | Requests the worker to stop and marks the job as `cancelled`. Clients should wait for `running=false` before deleting partial files. |
+| `remove` | Removes a stopped job from the server registry. If the worker is still running, the server keeps the job visible and treats the request as a cancel request until the worker stops. |
+
+### Example request
+
+```bash
+curl -X POST http://localhost:13305/v1/downloads/control \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "model:Qwen3-0.6B-GGUF",
+    "action": "pause"
+  }'
+```
+
+### Response format
+
+For `pause` and `cancel`, the endpoint returns the latest job snapshot:
+
+```json
+{
+  "id": "model:Qwen3-0.6B-GGUF",
+  "type": "model",
+  "model_name": "Qwen3-0.6B-GGUF",
+  "status": "paused",
+  "running": false,
+  "file": "model.gguf",
+  "file_index": 1,
+  "total_files": 2,
+  "bytes_downloaded": 1073741824,
+  "bytes_total": 2684354560,
+  "percent": 40,
+  "complete": false
+}
+```
+
+For `remove`, the endpoint returns:
+
+```json
+{"status":"ok"}
+```
+
+If the job is already missing and `action` is `remove`, the endpoint returns:
+
+```json
+{"status":"ok","missing":true}
+```
 
 ## `GET /v1/pull/variants`
 <sub>![Status](https://img.shields.io/badge/status-fully_available-green)</sub>
@@ -196,6 +400,8 @@ curl 'http://localhost:13305/v1/pull/variants?checkpoint=unsloth/Qwen3-8B-GGUF'
 
 Delete a model by removing it from local storage. If the model is currently loaded, it will be unloaded first.
 
+> Note: deleting a collection (`recipe: "collection.omni"`) removes only the collection entry from `user_models.json`; its components stay on disk. Delete the components individually if you want to free their disk space.
+
 ### Parameters
 
 | Parameter | Required | Description |
@@ -208,7 +414,7 @@ Example request:
 curl -X POST http://localhost:13305/v1/delete \
   -H "Content-Type: application/json" \
   -d '{
-    "model_name": "Qwen2.5-0.5B-Instruct-CPU"
+    "model_name": "Qwen3-0.6B-GGUF"
   }'
 ```
 
@@ -217,7 +423,7 @@ Response format:
 ```json
 {
   "status":"success",
-  "message":"Deleted model: Qwen2.5-0.5B-Instruct-CPU"
+  "message":"Deleted model: Qwen3-0.6B-GGUF"
 }
 ```
 
@@ -228,11 +434,14 @@ In case of an error, the status will be `error` and the message will contain the
 
 Explicitly load a registered model into memory. This is useful to ensure that the model is loaded before you make a request. Installs the model if necessary.
 
+> Note: loading a collection (`recipe: "collection.omni"`) loads each of its components in turn. Per-model options like `ctx_size` or `llamacpp_backend` are not forwarded to components — set them on each component's own `recipe_options.json` entry instead.
+
 ### Parameters
 
 | Parameter | Required | Applies to | Description |
 |-----------|----------|------------|-------------|
 | `model_name` | Yes | All | [Lemonade Server model name](https://lemonade-server.ai/models.html) to load. |
+| `pinned` | No | All | Boolean. If true, pins the loaded model to prevent LRU eviction. Defaults to `false`. |
 | `save_options` | No | All | Boolean. If true, saves recipe options to `recipe_options.json`. Any previously stored value for `model_name` is replaced. |
 | `ctx_size` | No | llamacpp, flm, ryzenai-llm | Context size for the model. Overrides the default value. |
 | `llamacpp_backend` | No | llamacpp | LlamaCpp backend to use (`vulkan`, `rocm`, `metal` or `cpu`). |
@@ -243,6 +452,7 @@ Explicitly load a registered model into memory. This is useful to ensure that th
 | `cfg_scale` | No | sd-cpp | Classifier-free guidance scale for image generation. Default: 7.0. |
 | `width` | No | sd-cpp | Image width in pixels. Default: 512. |
 | `height` | No | sd-cpp | Image height in pixels. Default: 512. |
+| `merge_args` | No | All | Boolean. If true (default), `*_args` values from global config and per-model config are merged (per-model takes priority). If false, per-model `*_args` replace global `*_args` entirely. |
 
 **Setting Priority:**
 
@@ -251,6 +461,7 @@ When loading a model, settings are applied in this priority order:
 2. Per-model values configurable in `recipe_options.json` (see below for details)
 3. Values from environment variables or server startup arguments (see [Server Configuration](../guide/configuration/README.md))
 4. Default hardcoded values in `lemond` (lowest priority)
+
 
 ### Per-model options
 
@@ -283,7 +494,7 @@ Basic load:
 curl -X POST http://localhost:13305/v1/load \
   -H "Content-Type: application/json" \
   -d '{
-    "model_name": "Qwen2.5-0.5B-Instruct-CPU"
+    "model_name": "Qwen3-0.6B-GGUF"
   }'
 ```
 
@@ -345,7 +556,7 @@ curl -X POST http://localhost:13305/v1/load \
 ```json
 {
   "status":"success",
-  "message":"Loaded model: Qwen2.5-0.5B-Instruct-CPU"
+  "message":"Loaded model: Qwen3-0.6B-GGUF"
 }
 ```
 
@@ -400,6 +611,8 @@ Error response (model not found):
 
 In case of an error, the status will be `error` and the message will contain the error message.
 
+
+
 ## `GET /v1/health`
 <sub>![Status](https://img.shields.io/badge/status-fully_available-green)</sub>
 
@@ -430,6 +643,7 @@ curl http://localhost:13305/v1/health
       "last_use": 1732123456.789,
       "type": "llm",
       "device": "gpu npu",
+      "pinned": true,
       "recipe": "ryzenai-llm",
       "pid": 12345,
       "recipe_options": {
@@ -443,6 +657,7 @@ curl http://localhost:13305/v1/health
       "last_use": 1732123450.123,
       "type": "embedding",
       "device": "gpu",
+      "pinned": false,
       "recipe": "llamacpp",
       "pid": 12346,
       "recipe_options": {
@@ -453,8 +668,16 @@ curl http://localhost:13305/v1/health
       "backend_url": "http://127.0.0.1:8002/v1"
     }
   ],
+  "pinned_models": {
+    "transcription":0,
+    "embedding":0,
+    "image":0,
+    "llm":1,
+    "reranking":0,
+    "tts":0
+  },
   "max_models": {
-    "audio":1,
+    "transcription":1,
     "embedding":1,
     "image":1,
     "llm":1,
@@ -473,17 +696,19 @@ curl http://localhost:13305/v1/health
   - `model_name` - Name of the loaded model
   - `checkpoint` - Full checkpoint identifier
   - `last_use` - Unix timestamp of last access (load or inference)
-  - `type` - Model type: `"llm"`, `"embedding"`, or `"reranking"`
+  - `type` - Model type: `"llm"`, `"embedding"`, `"reranking"`, `"transcription"`, `"image"`, or `"tts"`
   - `device` - Space-separated device list: `"cpu"`, `"gpu"`, `"npu"`, or combinations like `"gpu npu"`
+  - `pinned` - Boolean indicating if the model is currently pinned to prevent auto-eviction
   - `backend_url` - URL of the backend server process handling this model (useful for debugging)
   - `pid` - The Process ID (PID) of the backend engine handling this model
   - `recipe` - Backend/device recipe used to load the model (e.g., `"ryzenai-llm"`, `"llamacpp"`, `"flm"`)
   - `recipe_options` - Options used to load the model (e.g., `"ctx_size"`, `"llamacpp_backend"`, `"llamacpp_args"`, `"whispercpp_args"`)
+- `pinned_models` - Counts of pinned models currently loaded in memory per model type (e.g., `llm`, `embedding`, etc.)
 - `max_models` - Maximum number of models that can be loaded simultaneously per type (set via `max_loaded_models` in [Server Configuration](../guide/configuration/README.md)):
   - `llm` - Maximum LLM/chat models
   - `embedding` - Maximum embedding models
   - `reranking` - Maximum reranking models
-  - `audio` - Maximum speech-to-text models
+  - `transcription` - Maximum speech-to-text models
   - `image` - Maximum image models
   - `tts` - Maximum text-to-speech models
 - `websocket_port` - *(optional)* Port of the WebSocket server for the [Realtime Audio Transcription API](./openai.md#ws-realtime) and [Log Streaming API](#log-streaming-api-websocket). Only present when the WebSocket server is running. The port is OS-assigned or set via `--websocket-port`.
@@ -511,7 +736,6 @@ curl http://localhost:13305/v1/stats
   "tokens_per_second": 33.33,
   "input_tokens": 128,
   "output_tokens": 5,
-  "decode_token_times": [0.01, 0.02, 0.03, 0.04, 0.05],
   "prompt_tokens": 9
 }
 ```
@@ -522,8 +746,118 @@ curl http://localhost:13305/v1/stats
 - `tokens_per_second` - Generation speed in tokens per second
 - `input_tokens` - Number of tokens processed
 - `output_tokens` - Number of tokens generated
-- `decode_token_times` - Array of time taken for each generated token
 - `prompt_tokens` - Total prompt tokens including cached tokens
+
+## `GET /v1/system-stats`
+<sub>![Status](https://img.shields.io/badge/status-fully_available-green)</sub>
+
+Current host resource usage as measured by the Lemonade Server process. This endpoint is useful for first-party clients and dashboards that need lightweight runtime telemetry without scraping Prometheus.
+
+### Parameters
+
+This endpoint does not take any parameters.
+
+### Example request
+
+```bash
+curl http://localhost:13305/v1/system-stats
+```
+
+### Response format
+
+```json
+{
+  "cpu_percent": 12.3,
+  "memory_gb": 8.4,
+  "gpu_percent": 45.0,
+  "vram_gb": 2.1,
+  "npu_percent": null
+}
+```
+
+**Field Descriptions:**
+
+- `cpu_percent` - System CPU utilization percentage, or `null` when unavailable
+- `memory_gb` - System RAM currently in use, in GiB
+- `gpu_percent` - GPU utilization percentage, or `null` when unavailable
+- `vram_gb` - GPU memory currently in use, in GiB, or `null` when unavailable
+- `npu_percent` - NPU utilization percentage, or `null` when unavailable
+
+GPU, VRAM, and NPU telemetry availability depends on the operating system and installed drivers. Unsupported values are returned as `null`.
+
+## `GET /metrics`
+<sub>![Status](https://img.shields.io/badge/status-fully_available-green)</sub>
+
+Prometheus scrape endpoint for Lemonade Server. The endpoint returns Prometheus text exposition format and is intended to be scraped by Prometheus, not by Grafana directly.
+
+Unlike most Lemonade API endpoints, `/metrics` is root-level only. It is not mounted under `/api/v0/`, `/api/v1/`, `/v0/`, or `/v1/`.
+
+`HEAD /metrics` is also supported and returns `200 OK` with an empty body.
+
+### Authentication
+
+If `LEMONADE_API_KEY` is set, `/metrics` requires bearer authentication. Either the regular API key or `LEMONADE_ADMIN_API_KEY` is accepted.
+
+If only `LEMONADE_ADMIN_API_KEY` is set and `LEMONADE_API_KEY` is unset, `/metrics` is accessible without authentication, matching regular API endpoint behavior.
+
+### Polling and Refresh Rate
+
+The `/metrics` endpoint has no internal refresh timer. It renders the latest server state at the moment it is scraped.
+
+Polling frequency is configured in Prometheus via `scrape_interval`, for example:
+
+```yaml
+global:
+  scrape_interval: 10s
+```
+
+Grafana queries Prometheus. Grafana's dashboard refresh controls how often panels query Prometheus, but it does not control how often Prometheus scrapes Lemonade.
+
+### Example request
+
+```bash
+curl http://localhost:13305/metrics
+```
+
+With API-key auth:
+
+```bash
+curl http://localhost:13305/metrics \
+  -H "Authorization: Bearer $LEMONADE_API_KEY"
+```
+
+### Response format
+
+The response uses Prometheus text exposition format:
+
+```text
+# HELP lemonade_server_up Whether the Lemonade server is running.
+# TYPE lemonade_server_up gauge
+lemonade_server_up 1
+# HELP lemonade_server_info Lemonade server build information.
+# TYPE lemonade_server_info gauge
+lemonade_server_info{version="10.4.0"} 1
+```
+
+Content type:
+
+```text
+text/plain; version=0.0.4; charset=utf-8
+```
+
+### Lemonade Metric Families
+
+The authoritative metric-family list is generated by the `/metrics` implementation in [`src/cpp/server/server.cpp`](../../src/cpp/server/server.cpp). Search for `handle_metrics` and `metrics.describe(...)` to see the current names, types, labels, and descriptions.
+
+Unsupported, unavailable, null, NaN, and infinity values are omitted rather than emitted as samples.
+
+### llama.cpp Backend Metrics
+
+When a loaded model uses the `llamacpp` recipe, Lemonade makes a best-effort scrape of the loaded backend process's private `/metrics` endpoint. Backend scrape failures do not fail the Lemonade `/metrics` response.
+
+Scraped llama.cpp metrics are normalized under the `lemonade_llamacpp_*` prefix and labeled with the same Lemonade model metadata used by `lemonade_model_info`.
+
+Lemonade starts llama.cpp backends with metrics enabled so these backend metrics are available whenever the backend supports them.
 
 ## `GET /v1/system-info`
 <sub>![Status](https://img.shields.io/badge/status-fully_available-green)</sub>
@@ -677,13 +1011,23 @@ curl "http://localhost:13305/v1/system-info"
         - `message` - Human-readable status text for GUI and CLI users. Required for `unsupported`, `installable`, and `update_required`; empty for `installed`.
         - `action` - Actionable user instruction string. For install/update cases this is typically an exact CLI command; for other states it may be empty or another actionable value (for example, a URL).
         - `version` - Installed or configured backend version (when available)
+- `cloud` - Cloud OpenAI-compatible providers configured on this server (omitted when no providers are installed). Contains:
+  - `providers` - Array, one entry per installed provider:
+    - `name` - Provider name used as the model-name prefix (e.g. `fireworks`).
+    - `base_url` - Persisted base URL from `config.json`.
+    - `env_var` - Canonical environment variable name for this provider's API key (e.g. `LEMONADE_FIREWORKS_API_KEY`). The variable's *name* is reported, never its value.
+    - `env_var_set` - `true` if the env var is set in `lemond`'s environment.
+    - `runtime_key_set` - `true` if an in-memory key has been supplied via `POST /v1/cloud/auth` this session.
+    - `models_discovered` - Number of chat-capable models currently in the catalog for this provider.
 
 ## `POST /v1/install`
 <sub>![Status](https://img.shields.io/badge/status-fully_available-green)</sub>
 
-Install or update a backend for a specific recipe/backend pair. If the backend is already installed but outdated, this endpoint updates it to the configured version.
+Install or update a backend for a specific recipe/backend pair, **or** register a cloud OpenAI-compatible provider. The request body is dispatched by the `backend` field: any value other than `"cloud"` is treated as a local backend install.
 
-### Parameters
+### Install a local backend
+
+If the backend is already installed but outdated, this endpoint updates it to the configured version.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
@@ -692,7 +1036,7 @@ Install or update a backend for a specific recipe/backend pair. If the backend i
 | `stream` | No | If `true`, returns Server-Sent Events with progress. Defaults to `false`. |
 | `force` | No | If `true`, bypasses hardware filtering for `unsupported` backends and attempts installation anyway. Defaults to `false`. |
 
-### Example request
+Example request:
 
 ```bash
 curl -X POST http://localhost:13305/v1/install \
@@ -704,7 +1048,7 @@ curl -X POST http://localhost:13305/v1/install \
   }'
 ```
 
-### Response format
+Response format:
 
 ```json
 {
@@ -716,19 +1060,63 @@ curl -X POST http://localhost:13305/v1/install \
 
 In case of an error, returns an `error` field with details.
 
+### Install a cloud provider
+<sub>![Status](https://img.shields.io/badge/status-experimental-orange)</sub>
+
+Registers an OpenAI-compatible chat provider. The base URL is persisted to `config.json`; the optional `api_key` lives in `lemond` process memory only (cleared on restart). See the [Cloud Offload guide](../guide/configuration/cloud.md) for the full workflow.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `backend` | Yes | Must be the literal string `"cloud"`. |
+| `provider` | Yes | Short identifier (e.g. `fireworks`). Used as the model-name prefix. |
+| `base_url` | Yes | OpenAI-compatible base URL ending in `/v1` (or equivalent). |
+| `api_key` | No | Optional. If set, stored in process memory; honors env-wins precedence (see `/v1/cloud/auth`). |
+
+Example request:
+
+```bash
+curl -X POST http://localhost:13305/v1/install \
+  -H "Content-Type: application/json" \
+  -d '{
+    "backend": "cloud",
+    "provider": "fireworks",
+    "base_url": "https://api.fireworks.ai/inference/v1"
+  }'
+```
+
+Response format:
+
+```json
+{
+  "status": "success",
+  "backend": "cloud",
+  "provider": "fireworks",
+  "base_url": "https://api.fireworks.ai/inference/v1",
+  "models_discovered": 12,
+  "auth_state": {
+    "env_var_set": true,
+    "runtime_key_set": false
+  }
+}
+```
+
+`models_discovered` is `0` when no API key is resolvable. If `api_key` is supplied but the provider's env var is also set, the response includes a `warning` string explaining the env var took precedence.
+
 ## `POST /v1/uninstall`
 <sub>![Status](https://img.shields.io/badge/status-fully_available-green)</sub>
 
-Uninstall a backend for a specific recipe/backend pair. If loaded models are using that backend, they are unloaded first.
+Uninstall a backend for a specific recipe/backend pair, **or** remove a cloud provider. Dispatched by the `backend` field, mirroring `/v1/install`.
 
-### Parameters
+### Uninstall a local backend
+
+If loaded models are using that backend, they are unloaded first.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `recipe` | Yes | Recipe name |
 | `backend` | Yes | Backend name |
 
-### Example request
+Example request:
 
 ```bash
 curl -X POST http://localhost:13305/v1/uninstall \
@@ -739,7 +1127,7 @@ curl -X POST http://localhost:13305/v1/uninstall \
   }'
 ```
 
-### Response format
+Response format:
 
 ```json
 {
@@ -750,6 +1138,123 @@ curl -X POST http://localhost:13305/v1/uninstall \
 ```
 
 In case of an error, returns an `error` field with details.
+
+### Uninstall a cloud provider
+<sub>![Status](https://img.shields.io/badge/status-experimental-orange)</sub>
+
+Removes the provider record from `config.json`, drops its in-memory API key (if any), and evicts every discovered model for that provider from the cache. Returns 404 if the provider was never installed.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `backend` | Yes | Must be the literal string `"cloud"`. |
+| `provider` | Yes | Installed provider name. |
+
+Example request:
+
+```bash
+curl -X POST http://localhost:13305/v1/uninstall \
+  -H "Content-Type: application/json" \
+  -d '{
+    "backend": "cloud",
+    "provider": "fireworks"
+  }'
+```
+
+Response format:
+
+```json
+{
+  "status": "success",
+  "backend": "cloud",
+  "provider": "fireworks",
+  "models_evicted": 12
+}
+```
+
+## `POST /v1/cloud/auth`
+<sub>![Status](https://img.shields.io/badge/status-experimental-orange)</sub>
+
+Set an in-memory API key for a previously-installed cloud provider, and trigger a refresh of that provider's discovered model list. The key lives in `lemond` process memory only — it is never written to disk and is cleared on `lemond` restart. For persistence across restarts, set `LEMONADE_<PROVIDER>_API_KEY` in `lemond`'s environment instead.
+
+### Authentication precedence
+
+If `LEMONADE_<PROVIDER>_API_KEY` is set in `lemond`'s environment, the env var takes precedence and this endpoint returns **409 Conflict** without storing the supplied key. This is the safety guarantee that lets an operator provision a "house" key via env without worrying about a client silently overriding it.
+
+### Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `provider` | Yes | Installed provider name. |
+| `api_key` | Yes | API key to store in `lemond` process memory. |
+
+### Example request
+
+```bash
+curl -X POST http://localhost:13305/v1/cloud/auth \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "fireworks",
+    "api_key": "fw-XXXXX"
+  }'
+```
+
+### Response format (success — 200)
+
+```json
+{
+  "provider": "fireworks",
+  "auth_state": {
+    "env_var_set": false,
+    "runtime_key_set": true
+  },
+  "models_discovered": 12
+}
+```
+
+### Response format (env-var conflict — 409)
+
+```json
+{
+  "error": {
+    "type": "auth_conflict",
+    "env_var": "LEMONADE_FIREWORKS_API_KEY",
+    "message": "LEMONADE_FIREWORKS_API_KEY is set in the lemond process; the env var takes precedence and the supplied API key was not stored."
+  }
+}
+```
+
+### Other error responses
+
+| Status | Cause |
+|---|---|
+| `400` | Body is missing `provider` or `api_key`, or one of them is empty. |
+| `404` | Provider is not installed. Call `POST /v1/install` with `backend:"cloud"` first. |
+
+## `DELETE /v1/cloud/auth/{provider}`
+<sub>![Status](https://img.shields.io/badge/status-experimental-orange)</sub>
+
+Clear the in-memory API key for a provider. Any env-var-based key (`LEMONADE_<PROVIDER>_API_KEY`) remains in effect. If no env-var key is set, the provider's discovered models are evicted from the catalog since they are no longer authenticatable.
+
+### Example request
+
+```bash
+curl -X DELETE http://localhost:13305/v1/cloud/auth/fireworks
+```
+
+### Response format
+
+```json
+{
+  "provider": "fireworks",
+  "cleared_runtime_key": true,
+  "auth_state": {
+    "env_var_set": false,
+    "runtime_key_set": false
+  }
+}
+```
+
+`cleared_runtime_key` is `false` when no in-memory key was present (e.g., the only key was from the env var).
 
 ## Log Streaming API (WebSocket)
 <sub>![Status](https://img.shields.io/badge/status-fully_available-green)</sub>

@@ -42,7 +42,6 @@ Lemonade consists of these main executables:
 - **lemonade** - CLI client for terminal users (list, pull, delete, run, status, logs, launch, backends, scan)
 - **LemonadeServer.exe** (Windows only) - SUBSYSTEM:WINDOWS GUI app that embeds the server and shows a system tray icon
 - **lemonade-tray** (macOS/Linux) - Lightweight tray client that connects to a running `lemond`
-- **lemonade-server** - Deprecated backwards-compatibility shim (delegates to `lemond` or `lemonade`)
 
 ## Building from Source
 
@@ -99,12 +98,10 @@ cmake --build --preset vs18
   - `build/Release/lemond.exe` - HTTP server
   - `build/Release/LemonadeServer.exe` - GUI app (embedded server + system tray)
   - `build/Release/lemonade.exe` - CLI client
-  - `build/Release/lemonade-server.exe` - Legacy shim (deprecated)
 - **Linux/macOS:**
   - `build/lemond` - HTTP server
   - `build/lemonade` - CLI client
   - `build/lemonade-tray` - System tray client (macOS always; Linux when AppIndicator3 found)
-  - `build/lemonade-server` - Legacy shim (deprecated)
 - **Resources:** Automatically copied to `build/Release/resources/` on Windows, `build/resources/` on Linux/macOS (web UI files, model registry, backend version configuration)
 
 ### Building the Tauri Desktop App (Optional)
@@ -185,12 +182,12 @@ If not found, the "Open app" menu option is hidden but everything else works.
   - Installed binaries: `/opt/bin`
   - Downloaded backends (llama-server, ryzenai-server): `~/.cache/lemonade/bin/`
   - Model downloads: `~/.cache/huggingface/` (follows HF conventions)
-  - Runtime files (lock, log): `$XDG_RUNTIME_DIR/lemonade/` when set and writable, otherwise `/tmp/`
+  - Runtime files (lock, log): `$XDG_RUNTIME_DIR/lemonade/` on Linux when set and writable; on macOS, `lemonade` uses the per-user temporary directory
 
-**macOS (beta):**
+**macOS:**
 - Uses native system frameworks (Cocoa, Foundation)
 - ARM Macs use Metal backend by default for llama.cpp
-- macOS support is currently in beta; a signed and notarized `.pkg` installer is available from the [releases page](https://github.com/lemonade-sdk/lemonade/releases/latest)
+- A signed and notarized `.pkg` installer is available from the [releases page](https://github.com/lemonade-sdk/lemonade/releases/latest)
 - Local Release builds are ad-hoc codesigned (`codesign --sign -`) so they run without an Apple Developer certificate. To sign with a real Developer ID, export `DEVELOPER_ID_APPLICATION_IDENTITY` before configuring CMake (see [Building and Notarizing for Distribution](#building-and-notarizing-for-distribution)).
 
 ## Building Installers
@@ -242,8 +239,9 @@ Creates `lemonade-server_<VERSION>_amd64.deb` (e.g., `lemonade-server_9.0.3_amd6
 - Installs to `/opt/bin/` (executables)
 - Installs resources to `/opt/share/lemonade-server/`
 - Creates desktop entry in `/opt/share/applications/`
-- Declares dependencies: `libcurl4`, `libssl3`, `libz1`, `unzip`, `fonts-katex`
-- Recommends: `ffmpeg` for whisper.cpp audio resampling and/or transcoding, plus a Chromium-compatible browser for `lemonade-web-app`
+- Declares dependencies: `libcurl4`, `libssl3`, `libz1`, `unzip`, `fonts-katex`, `libcpp-httplib0.41`
+- Recommends: `ffmpeg` for whisper.cpp audio resampling and/or transcoding, `libxrt-npu2` for NPU acceleration,
+  plus a Chromium-compatible browser for `lemonade-web-app`
 - Package size: ~2.2 MB (clean, runtime-only package)
 - Includes postinst script that creates writable `/opt/share/lemonade-server/llama/` directory
 
@@ -268,9 +266,7 @@ lemonade --help
 lemond --help
 ```
 
-### Linux .rpm Package (Fedora, RHEL etc)
-
-Very similar to the Debian instructions above with minor changes
+### Linux .rpm Package (Fedora 43 & 44)
 
 **Building:**
 
@@ -281,14 +277,18 @@ cpack -G RPM
 
 **Package Output:**
 
-Creates `lemonade-server-<VERSION>.x86_64.rpm` (e.g., `lemonade-server-9.1.2.x86_64.rpm`) and
-resources are installed as per DEB version above
+Creates `lemonade-server-<VERSION>.x86_64.rpm` (e.g., `lemonade-server-9.1.2.x86_64.rpm`).
+The CI release pipeline builds two variants — `-fc43` and `-fc44` — and renames them
+accordingly. Resources are installed the same as the .deb package above.
 
 **Installation:**
 
 ```bash
-# Replace <VERSION> with the actual version (e.g., 9.0.0)
-sudo dnf install ./lemonade-server-<VERSION>.x86_64.rpm
+# Fedora 43
+sudo dnf install ./lemonade-server-<VERSION>-fc43.x86_64.rpm
+
+# Fedora 44
+sudo dnf install ./lemonade-server-<VERSION>-fc44.x86_64.rpm
 ```
 
 **Uninstallation:**
@@ -563,7 +563,7 @@ A pure HTTP server that:
 
 **Multi-Model Support:**
 - Router maintains multiple WrappedServer instances simultaneously
-- Separate LRU caches for LLM, embedding, reranking, and audio model types
+- Separate LRU caches for LLM, embedding, reranking, transcription, image, and TTS model types
 - NPU exclusivity: only one model can use NPU at a time
 - Configurable limits via `--max-loaded-models N` (default: 1)
 - Automatic eviction of least-recently-used models when limits reached
@@ -591,7 +591,7 @@ A GUI application for desktop users that exposes the server via a system tray ic
 The `lemonade` client communicates with `lemond` server via HTTP:
 - **Model operations:** `/api/v1/models`, `/api/v1/pull`, `/api/v1/delete`
 - **Model control:** `/api/v1/load`, `/api/v1/unload`
-- **Server management:** `/api/v1/health`, `/internal/shutdown`, `/internal/set`, `/internal/config`, `/internal/cleanup-cache`
+- **Server management:** `/api/v1/health`, `/internal/shutdown`, `/internal/set`, `/internal/config`, `/internal/cleanup-cache`, `/internal/pin`
 - **Inference:** `/api/v1/chat/completions`, `/api/v1/completions`, `/api/v1/audio/transcriptions`
 
 The client automatically:
@@ -616,7 +616,9 @@ The client automatically:
 
 > **These endpoints are for first-party Lemonade software only** (CLI, tray app, desktop app). They are not part of the public API, may change without notice, and must not be relied upon by third-party integrations.
 
-Internal endpoints are restricted to loopback (`127.0.0.1` / `::1`) — requests from non-localhost addresses receive `403 Forbidden`.
+Internal endpoints accept connections from any address, so first-party clients on other machines can manage a shared `lemond`. When `LEMONADE_ADMIN_API_KEY` is set (or `LEMONADE_API_KEY`, which the admin key defaults to), internal endpoints require the admin key as a Bearer token; with no keys set they are unauthenticated.
+
+> **Warning:** If `lemond` is bound to a non-loopback host (e.g. `0.0.0.0`), these control endpoints — including shutdown and config — are reachable from the network. `LEMONADE_API_KEY` secures all endpoints; `LEMONADE_ADMIN_API_KEY` on its own secures only `/internal/*` and leaves the inference and model-management endpoints (`/api`, `/v0`, `/v1`) open, so set `LEMONADE_API_KEY` to protect those too. `lemond` logs a startup warning when bound to a non-loopback host without the regular key.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -624,6 +626,7 @@ Internal endpoints are restricted to loopback (`127.0.0.1` / `::1`) — requests
 | `POST` | `/internal/set` | Unified config setter (see below) |
 | `GET`  | `/internal/config` | Returns the full runtime config snapshot |
 | `POST` | `/internal/cleanup-cache` | Cleans up orphaned files in the Hugging Face cache |
+| `POST` | `/internal/pin` | Pin or unpin a loaded model |
 
 #### `POST /internal/set`
 
@@ -656,7 +659,6 @@ Accepts a JSON object with one or more keys to update atomically. Returns `{"sta
 | `cfg_scale` | number |
 | `width` | int (positive) |
 | `height` | int (positive) |
-| `flm_args` | string |
 
 **Example:**
 ```bash
@@ -809,7 +811,7 @@ The C++ implementation is tested using the existing Python test suite.
 
 | Test File | Description |
 |-----------|-------------|
-| `server_cli.py` | CLI commands (version, list, pull, status, delete, serve, stop, run) |
+| `server_cli2.py` | CLI commands (version, status, list, export, backends, pull, import, load, unload, run, launch, delete) |
 | `server_endpoints.py` | HTTP endpoints (health, models, pull, load, unload, system-info, stats) |
 | `server_llm.py` | LLM inference (chat completions, embeddings, reranking) |
 | `server_whisper.py` | Audio transcription (whisper models) |
@@ -818,7 +820,7 @@ The C++ implementation is tested using the existing Python test suite.
 **Running tests:**
 ```bash
 # CLI tests (no inference backend needed)
-python test/server_cli.py
+python test/server_cli2.py
 
 # Endpoint tests (no inference backend needed)
 python test/server_endpoints.py
@@ -833,11 +835,11 @@ python test/server_whisper.py
 python test/server_sd.py
 ```
 
-The tests auto-discover the server binary from the build directory. Use `--server-binary` to override if needed.
+The tests auto-discover the `lemonade` CLI binary from the build directory. Use `--cli-binary` to override if needed.
 
 See the `.github/workflows/` directory for CI/CD test configurations.
 
-**Note:** The Python tests should now use `lemonade-server.exe` as the entry point since it provides the CLI interface.
+**Note:** The Python tests use the `lemonade` CLI binary as the entry point.
 
 ## Development
 
